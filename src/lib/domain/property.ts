@@ -64,6 +64,7 @@ export interface LandRecord {
   roadSideCodeNm: string | null;
   pblntfPclnd: number | null; // 공시지가 원/㎡
   stdrYear: string | null;
+  stdrMt?: string | null;
   lastUpdtDt: string | null; // 데이터 기준일자
 }
 

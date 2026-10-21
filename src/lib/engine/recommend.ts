@@ -153,8 +153,11 @@ export function recommend(options: OptionAnalysis[], input: EngineInput): Recomm
     };
   }
 
+  // 목적에 맞는데 정보가 없어 계산하지 못한 선택지가 있으면 강하게 추천하지 않는다
+  const uncomputedFit = purposeOk.filter((o) => !o.computable);
   let strength: Recommendation["strength"] = "moderate";
-  if (diff >= 2 * band && majorPending.length === 0 && top.checks.budget === "ok" && !userAssumedPrice) strength = "strong";
+  if (diff >= 2 * band && majorPending.length === 0 && top.checks.budget === "ok" && !userAssumedPrice && uncomputedFit.length === 0) strength = "strong";
+  if (uncomputedFit.length) cautions.unshift(`${uncomputedFit.map((o) => o.label).join(", ")}은(는) 정보가 부족해 비교에서 빠졌습니다. '계산 조건 수정'에서 시세·견적을 넣으면 함께 비교합니다.`);
   if (top.checks.budget === "unknown") cautions.push("투입 가능 현금이 미입력이라 실행 가능 여부가 확정되지 않았습니다.");
   if (majorPending.length) cautions.push(`반영하지 못한 항목: ${majorPending.join(", ")}`);
   if (userAssumedPrice) cautions.push("대안의 매각가·공사비는 견적과 현장 시세로 확인해야 하는 가정입니다.");

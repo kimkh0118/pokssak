@@ -147,3 +147,18 @@ describe("비교 사례와 비용 추정", () => {
     expect(d.lines.every((l) => l.source && l.asOf && l.region)).toBe(true);
   });
 });
+
+describe("실제 자료 특이값", () => {
+  it("실거래 건축년도 1900은 미상으로 처리", () => {
+    expect(mapTrade({ buildYear: "1900", dealYear: "2026", dealMonth: "9", dealDay: "1" }).buildYear).toBeNull();
+    expect(mapTrade({ buildYear: "1992", dealYear: "2026", dealMonth: "9", dealDay: "1" }).buildYear).toBe(1992);
+  });
+  it("브이월드 같은 연도 여러 행 중 최신 기준월 선택(실제 응답 형태)", () => {
+    const r = parseVworldLand(JSON.stringify({ landCharacteristicss: { resultCode: "", totalCount: "3", field: [
+      { pnu: "1", stdrYear: "2025", stdrMt: "07", lndpclAr: "100", pblntfPclnd: "1" },
+      { pnu: "1", stdrYear: "2026", stdrMt: "01", lndpclAr: "100", pblntfPclnd: "3" },
+      { pnu: "1", stdrYear: "2025", stdrMt: "01", lndpclAr: "100", pblntfPclnd: "2" },
+    ] } }));
+    expect(r.ok && r.data.pblntfPclnd).toBe(3);
+  });
+});

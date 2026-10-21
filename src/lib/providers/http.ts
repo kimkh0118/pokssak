@@ -38,11 +38,11 @@ export function err(kind: ProviderErrorKind, source: string, message: string, co
 
 export type FetchOutcome = { ok: true; status: number; text: string } | { ok: false; error: ProviderError };
 
-export async function fetchText(url: string, source: string): Promise<FetchOutcome> {
+export async function fetchText(url: string, source: string, extraHeaders: Record<string, string> = {}): Promise<FetchOutcome> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), env.timeoutMs());
   try {
-    const res = await fetch(url, { signal: ctrl.signal, cache: "no-store", headers: { Accept: "application/json, application/xml;q=0.9, */*;q=0.8" } });
+    const res = await fetch(url, { signal: ctrl.signal, cache: "no-store", headers: { Accept: "application/json, application/xml;q=0.9, */*;q=0.8", ...extraHeaders } });
     const text = await res.text();
     return { ok: true, status: res.status, text };
   } catch (e) {

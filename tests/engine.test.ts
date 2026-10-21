@@ -249,3 +249,18 @@ describe("추천 규칙", () => {
     expect(demo.checks.timing).toBe("exceeds");
   });
 });
+
+describe("계산하지 못한 선택지가 있을 때", () => {
+  it("목적에 맞는 선택지가 계산 보류면 강한 추천을 하지 않고 이유를 남긴다", () => {
+    const res = analyze(
+      engineInput({
+        landPrice: null,
+        asIsPrice: { low: 3 * 억, base: 3 * 억, high: 3 * 억 },
+        purpose: "best_price",
+      }),
+    );
+    expect(res.recommendation.verdict).toBe("recommend");
+    expect(res.recommendation.strength).not.toBe("strong");
+    expect(res.recommendation.cautions.join()).toContain("비교에서 빠졌습니다");
+  });
+});

@@ -3,7 +3,9 @@
 // 응답 필드(pnu, ldCodeNm, mnnmSlno, stdrYear, lndcgrCodeNm, lndpclAr, prposArea1Nm, prposArea2Nm, ladUseSittnNm,
 //   roadSideCodeNm, pblntfPclnd(원/㎡), lastUpdtDt)는 브이월드 개발자센터 API 상세 페이지에서 확인, 2026-10-21.
 // 오류 응답 형식 {"landCharacteristicss":{"resultCode":"INVALID_KEY", ...}} 은 실제 호출로 확인.
-// 정상 응답의 목록 노드는 landCharacteristicss.field 로 알려져 있으나 실제 키로는 아직 검증하지 못했다.
+// 정상 응답(2026-10-21 실제 키로 확인): landCharacteristicss{resultCode:"", totalCount, field:[...]}.
+//   기준연도 오름차순이며 같은 연도에 기준월(stdrMt)이 다른 행이 여러 개 올 수 있다.
+// 인증: 키 발급 시 등록한 서비스 URL과 요청의 Referer 가 맞아야 한다(domain 파라미터만으로는 INCORRECT_KEY).
 import "server-only";
 import type { LandRecord, ProviderResult } from "../domain/property";
 import { parseNumberOrNull } from "../domain/units";
@@ -33,13 +35,15 @@ export function mapLand(f: Record<string, unknown>): LandRecord {
     roadSideCodeNm: s("roadSideCodeNm"),
     pblntfPclnd: parseNumberOrNull(f.pblntfPclnd),
     stdrYear: s("stdrYear"),
+    stdrMt: s("stdrMt"),
     lastUpdtDt: s("lastUpdtDt"),
   };
 }
 
-/** 여러 기준연도 결과 중 최신 연도 1건 선택 */
+/** 여러 기준연도·기준월 결과 중 가장 최신 1건 선택(연도 → 월 → 데이터기준일자 순) */
 export function pickLatest(rows: LandRecord[]): LandRecord | null {
-  return [...rows].sort((a, b) => Number(b.stdrYear ?? 0) - Number(a.stdrYear ?? 0))[0] ?? null;
+  const key = (r: LandRecord) => `${(r.stdrYear ?? "0000").padStart(4, "0")}${(r.stdrMt ?? "00").padStart(2, "0")}${r.lastUpdtDt ?? ""}`;
+  return [...rows].sort((a, b) => key(b).localeCompare(key(a)))[0] ?? null;
 }
 
 export function parseVworldLand(text: string): ProviderResult<LandRecord> {
@@ -71,10 +75,10 @@ export function parseVworldLand(text: string): ProviderResult<LandRecord> {
 export async function getLandCharacteristics(pnu: string): Promise<ProviderResult<LandRecord>> {
   const key = env.vworldKey();
   if (!key) return { ok: false, error: err("not_configured", LAND_SOURCE, "VWORLD_API_KEY가 설정되지 않았습니다.") };
-  const qs = new URLSearchParams({ key, pnu, format: "json", numOfRows: "10", pageNo: "1" });
+  // 연도별 이력이 모두 오므로 최대 건수로 받아 최신 값을 고른다
+  const qs = new URLSearchParams({ key, pnu, format: "json", numOfRows: "1000", pageNo: "1" });
   const domain = env.vworldDomain();
-  if (domain) qs.set("domain", domain);
-  const r = await fetchText(`${ENDPOINT}?${qs}`, LAND_SOURCE);
+  const r = await fetchText(`${ENDPOINT}?${qs}`, LAND_SOURCE, domain ? { Referer: domain.endsWith("/") ? domain : `${domain}/` } : {});
   if (!r.ok) return r;
   return parseVworldLand(r.text);
 }

@@ -26,7 +26,11 @@ export function mapTrade(i: Record<string, unknown>): TradeRecord {
     floorArea: parseNumberOrNull(i.totalFloorAr),
     dealDate: `${y}-${m}-${d}`,
     amountWon: parseDealAmountManwonToWon(i.dealAmount),
-    buildYear: parseNumberOrNull(i.buildYear),
+    // 실제 자료에 건축년도 미상이 1900 등으로 들어오는 경우가 있어 1901년 미만은 미상(null)으로 본다
+    buildYear: (() => {
+      const y = parseNumberOrNull(i.buildYear);
+      return y !== null && y > 1900 ? y : null;
+    })(),
     cancelled: s("cdealType") === "O" || !!s("cdealDay"),
     dealingGbn: s("dealingGbn"),
   };

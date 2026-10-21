@@ -84,10 +84,36 @@ async def get(client: httpx.AsyncClient, url: str, params: dict, source: str, he
         return None, fail("network", source, "네트워크 오류로 조회하지 못했습니다.")
 
 
+# 기관 서버의 일시 장애(연결 실패·코드 04/05 등)는 잠깐 기다렸다가 다시 시도한다.
+# 인증 오류·결과 없음처럼 다시 해도 같은 결과인 오류는 재시도하지 않는다.
+RETRY_KINDS = ("network", "upstream")
+RETRY_DELAYS = (1.0, 2.5)
+
+
+def is_transient(result: dict) -> bool:
+    return not result.get("ok") and result.get("error", {}).get("kind") in RETRY_KINDS
+
+
+def retry_transient(fn):
+    async def wrapper(*args, **kwargs):
+        result = await fn(*args, **kwargs)
+        for delay in RETRY_DELAYS:
+            if not is_transient(result):
+                break
+            log.info("%s 일시 오류(%s) → %.1f초 후 다시 시도", result["error"]["source"], result["error"].get("code"), delay)
+            await asyncio.sleep(delay)
+            result = await fn(*args, **kwargs)
+        return result
+    wrapper.__name__ = fn.__name__
+    wrapper.__doc__ = fn.__doc__
+    return wrapper
+
+
 # ---------------------------------------------------------------- 1. 주소 검색
 JUSO_AUTH_CODES = {"E0001", "E0014"}  # 미승인 키, 개발키 만료
 
 
+@retry_transient
 async def search_address(keyword: str) -> dict:
     if not settings.juso_key:
         return fail("not_configured", JUSO_SOURCE, "JUSO_API_KEY가 설정되지 않았습니다.")
@@ -139,6 +165,7 @@ DATA_GO_KR_CODES = {
     "20": "auth", "30": "auth", "31": "auth", "32": "auth", "12": "auth",
     "22": "rate_limit",
     "10": "invalid_request", "11": "invalid_request",
+    "04": "upstream", "05": "upstream",  # HTTP 오류, 서비스 연결 실패(일시 장애)
 }
 
 
@@ -224,6 +251,7 @@ def building_from_item(i: dict) -> dict:
     }
 
 
+@retry_transient
 async def get_buildings(parcel: dict) -> dict:
     if not settings.data_go_kr_key:
         return fail("not_configured", BUILDING_SOURCE, "DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.")
@@ -315,10 +343,14 @@ async def get_trades(lawd_cd: str, months: list[str], kind: str = "house") -> di
         return fail("not_configured", source, "DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.")
 
     async with httpx.AsyncClient() as client:
-        async def one(ym: str):
+        @retry_transient
+        async def fetch_month(ym: str) -> dict:
             status, body = await get(client, url, {"serviceKey": settings.data_go_kr_key, "LAWD_CD": lawd_cd,
                                                    "DEAL_YMD": ym, "pageNo": 1, "numOfRows": 1000}, source)
-            return ym, (body if status is None else parse_data_go_kr(body, status, source))
+            return body if status is None else parse_data_go_kr(body, status, source)
+
+        async def one(ym: str):
+            return ym, await fetch_month(ym)
         results = await asyncio.gather(*(one(ym) for ym in months))
 
     failed = [(ym, r) for ym, r in results if not r["ok"]]
@@ -385,6 +417,7 @@ def parse_vworld_land(body: str) -> dict:
               missingFields=[k for k in LAND_KEY_FIELDS if latest[k] is None])
 
 
+@retry_transient
 async def get_land(pnu: str) -> dict:
     if not settings.vworld_key:
         return fail("not_configured", LAND_SOURCE, "VWORLD_API_KEY가 설정되지 않았습니다.")

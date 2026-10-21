@@ -123,8 +123,6 @@ def create_analysis(body: CreateAnalysis):
         raise HTTPException(404, "조회 기록을 찾을 수 없습니다. 주소부터 다시 진행해 주세요.")
     if prop["scope"]["status"] == "unsupported":
         raise HTTPException(422, f"지원 범위 밖의 물건입니다: {prop['scope']['reason']}")
-    if prop["scope"]["status"] == "unconfirmed" and not body.target.scopeConfirmedByUser:
-        raise HTTPException(422, "단독·다가구주택인지 확인이 필요합니다.")
     if len(prop["mainBuildings"]) > 1 and not body.target.buildingPk:
         raise HTTPException(422, "분석할 건물을 선택해 주세요.")
     saved = {

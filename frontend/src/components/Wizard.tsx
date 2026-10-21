@@ -30,7 +30,6 @@ export function Wizard({ mode }: { mode: Mode }) {
   const [loadingLookup, setLoadingLookup] = useState(false);
   const [lookup, setLookup] = useState<PropertyLookup | null>(null);
   const [buildingPk, setBuildingPk] = useState<string | null>(null);
-  const [scopeConfirmed, setScopeConfirmed] = useState(false);
   const [purpose, setPurpose] = useState<Purpose | null>(null);
   const [condition, setCondition] = useState<Condition | null>(null);
   const [delayReason, setDelayReason] = useState<DelayReason | null>(null);
@@ -60,7 +59,6 @@ export function Wizard({ mode }: { mode: Mode }) {
     setLoadingLookup(true);
     setLookup(null);
     setBuildingPk(null);
-    setScopeConfirmed(false);
     try {
       const res = await fetch("/api/property", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode, address: a }) });
       const body = await res.json();
@@ -79,7 +77,7 @@ export function Wizard({ mode }: { mode: Mode }) {
 
   const multi = (lookup?.mainBuildings.length ?? 0) > 1;
   const targetReady =
-    !!lookup && lookup.scope.status !== "unsupported" && (lookup.scope.status === "supported" || scopeConfirmed) && (!multi || !!buildingPk);
+    !!lookup && lookup.scope.status !== "unsupported" && (!multi || !!buildingPk);
 
   async function submit() {
     if (!lookup || !purpose || !condition || !delayReason) return;
@@ -91,7 +89,7 @@ export function Wizard({ mode }: { mode: Mode }) {
       const res = await fetch("/api/analyses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lookupId: lookup.id, answers, target: { buildingPk, scopeConfirmedByUser: scopeConfirmed } }),
+        body: JSON.stringify({ lookupId: lookup.id, answers, target: { buildingPk } }),
       });
       const body = await res.json();
       if (body.error) {
@@ -183,9 +181,9 @@ export function Wizard({ mode }: { mode: Mode }) {
           lookup={lookup}
           buildingPk={buildingPk}
           setBuildingPk={setBuildingPk}
-          scopeConfirmed={scopeConfirmed}
-          setScopeConfirmed={setScopeConfirmed}
           onBack={() => setStep("search")}
+          onRetry={lookup.land.ok && lookup.buildings.ok && lookup.trades.ok ? undefined : () => choose(lookup.address)}
+          retrying={loadingLookup}
           onNext={() => setStep("q1")}
           ready={targetReady}
         />
@@ -257,18 +255,18 @@ function TargetStep({
   lookup,
   buildingPk,
   setBuildingPk,
-  scopeConfirmed,
-  setScopeConfirmed,
   onBack,
   onNext,
+  onRetry,
+  retrying,
   ready,
 }: {
   lookup: PropertyLookup;
   buildingPk: string | null;
   setBuildingPk: (v: string) => void;
-  scopeConfirmed: boolean;
-  setScopeConfirmed: (v: boolean) => void;
   onBack: () => void;
+  onRetry?: () => void;
+  retrying?: boolean;
   onNext: () => void;
   ready: boolean;
 }) {
@@ -298,10 +296,11 @@ function TargetStep({
       {lookup.scope.status === "unconfirmed" && (
         <Notice tone="warn">
           <p>{lookup.scope.reason}</p>
-          <label className="mt-3 flex items-center gap-2 font-bold text-ink">
-            <input type="checkbox" className="h-5 w-5 accent-[var(--brand)]" checked={scopeConfirmed} onChange={(e) => setScopeConfirmed(e.target.checked)} />
-            단독·다가구주택(건물 전체 소유)이 맞아요
-          </label>
+          {onRetry && (
+            <button type="button" onClick={onRetry} disabled={retrying} className="mt-3 rounded-full bg-ink px-4 py-2 text-[13px] font-bold text-white disabled:opacity-50">
+              {retrying ? "다시 조회하는 중…" : "다시 조회"}
+            </button>
+          )}
         </Notice>
       )}
 

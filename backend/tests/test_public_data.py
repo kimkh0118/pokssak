@@ -112,3 +112,26 @@ def test_토지_실거래_항목_해석():
     t = land_trade_from_item({"dealAmount": "1,800", "dealArea": "3.31", "dealYear": "2026", "dealMonth": "9", "dealDay": "28",
                               "jimok": "도로", "landUse": "일반상업지역", "shareDealingType": "지분", "cdealType": " "})
     assert t["amountWon"] == 18_000_000 and t["landUse"] == "도로" and t["shareDeal"] and not t["cancelled"]
+
+
+def test_일시_오류는_다시_시도하고_인증오류는_안함(monkeypatch):
+    import asyncio
+    from app import public_data as p
+    monkeypatch.setattr(p, "RETRY_DELAYS", (0, 0))
+    calls = {"n": 0}
+
+    @p.retry_transient
+    async def flaky():
+        calls["n"] += 1
+        return p.fail("upstream", "t", "서비스 연결실패 에러", "05") if calls["n"] < 3 else {"ok": True, "data": 1}
+
+    assert asyncio.run(flaky())["ok"] and calls["n"] == 3
+
+    calls["n"] = 0
+
+    @p.retry_transient
+    async def auth():
+        calls["n"] += 1
+        return p.fail("auth", "t", "키 오류")
+
+    assert not asyncio.run(auth())["ok"] and calls["n"] == 1

@@ -119,7 +119,6 @@ class Overrides(BaseModel):
 
 class Target(BaseModel):
     buildingPk: str | None = None
-    scopeConfirmedByUser: bool = False
 
 
 class PropertyRequest(BaseModel):

@@ -6,6 +6,7 @@
 | 건축물대장   | 국토교통부 건축HUB(공공데이터포털) | apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo |
 | 실거래가     | 국토교통부 단독/다가구 매매(공공데이터포털) | apis.data.go.kr/1613000/RTMSDataSvcSHTrade/getRTMSDataSvcSHTrade |
 | 토지특성     | 국토교통부 브이월드            | api.vworld.kr/ned/data/getLandCharacteristics |
+| 토지 실거래  | 국토교통부 토지 매매(공공데이터포털) | apis.data.go.kr/1613000/RTMSDataSvcLandTrade/getRTMSDataSvcLandTrade |
 
 모든 함수는 {"ok": True, "data": ..., "meta": {...}} 또는 {"ok": False, "error": {...}} 를 돌려준다.
 오류 종류(kind): not_configured, auth, rate_limit, no_result, invalid_request, upstream, network, parse
@@ -30,6 +31,7 @@ log = logging.getLogger("public_data")
 JUSO_SOURCE = "행정안전부 주소기반산업지원서비스 도로명주소 검색 API"
 BUILDING_SOURCE = "국토교통부 건축HUB 건축물대장정보 서비스(표제부)"
 TRADE_SOURCE = "국토교통부 단독/다가구 매매 실거래가 자료"
+LAND_TRADE_SOURCE = "국토교통부 토지 매매 실거래가 자료"
 LAND_SOURCE = "국토교통부 브이월드 토지특성정보(토지특성속성조회)"
 
 
@@ -277,16 +279,46 @@ def recent_months(n: int, today: date | None = None) -> list[str]:
     return out
 
 
-async def get_trades(lawd_cd: str, months: list[str]) -> dict:
+def land_trade_from_item(i: dict) -> dict:
+    """토지 매매 실거래(15126466). 지목·용도지역·지분거래 여부를 함께 보관한다."""
+    amount = num(i.get("dealAmount"))
+    return {
+        "kind": "land",
+        "sggCd": text(i.get("sggCd")),
+        "umdNm": text(i.get("umdNm")),
+        "houseType": None,
+        "jibunPartial": text(i.get("jibun")),
+        "landArea": num(i.get("dealArea")),
+        "floorArea": None,
+        "dealDate": f"{text(i.get('dealYear')) or '0000'}-{(text(i.get('dealMonth')) or '1').zfill(2)}-{(text(i.get('dealDay')) or '1').zfill(2)}",
+        "amountWon": round(amount * 10_000) if amount is not None else None,
+        "buildYear": None,
+        "cancelled": text(i.get("cdealType")) == "O" or bool(text(i.get("cdealDay"))),
+        "dealingGbn": text(i.get("dealingGbn")),
+        "landUse": text(i.get("jimok")),  # 지목(대·전·답·도로 …)
+        "zoning": text(i.get("landUse")),  # 용도지역
+        "shareDeal": text(i.get("shareDealingType")) == "지분",
+    }
+
+
+async def get_trades(lawd_cd: str, months: list[str], kind: str = "house") -> dict:
+    """kind: house(단독/다가구 매매) | land(토지 매매). 지역·계약월 단위로 조회한다."""
+    if kind == "land":
+        source, url, mapper = (LAND_TRADE_SOURCE,
+                               "https://apis.data.go.kr/1613000/RTMSDataSvcLandTrade/getRTMSDataSvcLandTrade",
+                               land_trade_from_item)
+    else:
+        source, url, mapper = (TRADE_SOURCE,
+                               "https://apis.data.go.kr/1613000/RTMSDataSvcSHTrade/getRTMSDataSvcSHTrade",
+                               trade_from_item)
     if not settings.data_go_kr_key:
-        return fail("not_configured", TRADE_SOURCE, "DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.")
-    url = "https://apis.data.go.kr/1613000/RTMSDataSvcSHTrade/getRTMSDataSvcSHTrade"
+        return fail("not_configured", source, "DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.")
 
     async with httpx.AsyncClient() as client:
         async def one(ym: str):
             status, body = await get(client, url, {"serviceKey": settings.data_go_kr_key, "LAWD_CD": lawd_cd,
-                                                   "DEAL_YMD": ym, "pageNo": 1, "numOfRows": 1000}, TRADE_SOURCE)
-            return ym, (body if status is None else parse_data_go_kr(body, status, TRADE_SOURCE))
+                                                   "DEAL_YMD": ym, "pageNo": 1, "numOfRows": 1000}, source)
+            return ym, (body if status is None else parse_data_go_kr(body, status, source))
         results = await asyncio.gather(*(one(ym) for ym in months))
 
     failed = [(ym, r) for ym, r in results if not r["ok"]]
@@ -296,9 +328,9 @@ async def get_trades(lawd_cd: str, months: list[str]) -> dict:
             return r
     if len(failed) == len(results):
         return failed[0][1]
-    trades = [trade_from_item(i) for _, r in results if r["ok"] for i in r["items"]]
+    trades = [mapper(i) for _, r in results if r["ok"] for i in r["items"]]
     failed_months = [ym for ym, _ in failed]
-    result = ok(trades, TRADE_SOURCE, asOf=f"{months[-1]}~{months[0]} 계약분",
+    result = ok(trades, source, asOf=f"{months[-1]}~{months[0]} 계약분",
                 note=f"일부 월 조회 실패: {', '.join(failed_months)}" if failed_months else None)
     result.update(monthsQueried=months, failedMonths=failed_months)
     return result

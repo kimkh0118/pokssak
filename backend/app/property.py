@@ -81,12 +81,13 @@ async def lookup(mode: str, address: dict) -> dict:
         trades = sample_data.house_trades(parcel["sigunguCd"])
         land_trades = sample_data.land_trades(parcel["sigunguCd"])
     else:
-        buildings, land, trades = await asyncio.gather(
+        months = public_data.recent_months(12)
+        buildings, land, trades, land_trades = await asyncio.gather(
             public_data.get_buildings(parcel),
             public_data.get_land(parcel["pnu"]),
-            public_data.get_trades(parcel["sigunguCd"], public_data.recent_months(12)),
+            public_data.get_trades(parcel["sigunguCd"], months),
+            public_data.get_trades(parcel["sigunguCd"], months, kind="land"),
         )
-        # 토지 매매 실거래 API는 아직 연동하지 않음 → 철거 후 토지 매각가는 직접 입력 필요
 
     return {
         "id": str(uuid.uuid4()),

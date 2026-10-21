@@ -123,3 +123,8 @@ def test_수익창출과_재개발기대():
     remodel = next(o for o in a["result"]["options"] if o["id"] == "remodel")
     assert remodel["variant"] in ("remodel_sell", "remodel_rent")
     assert any("재개발" in c for c in a["result"]["recommendation"]["cautions"])
+
+
+def test_서버_로그에_인증키_주소가_찍히지_않음():
+    import logging
+    assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING

@@ -86,3 +86,29 @@ def test_금액표시():
     assert won(340_000_000) == "3억 4,000만 원"
     assert won(None) == "산정 불가"
     assert won(0) == "0원"
+
+
+def test_토지사례는_대지만_지분거래_제외():
+    base = {"umdNm": "가동", "landArea": 100, "amountWon": 500_000_000, "cancelled": False,
+            "dealingGbn": "중개거래", "landUse": "대", "zoning": "제2종일반주거지역", "shareDeal": False}
+    trades = [base, {**base, "amountWon": 600_000_000}, {**base, "amountWon": 400_000_000},
+              {**base, "landUse": "도로"}, {**base, "shareDeal": True}]
+    r = estimates.estimate_land_price({"landArea": 100, "umdNm": "가동", "zoning": "제2종일반주거지역"}, trades)
+    assert r["sampleSize"] == 3 and r["range"]["base"] == 500_000_000
+
+
+def test_리모델링_후_가치는_신축급_사례로만():
+    t = {"umdNm": "가동", "landArea": 100, "floorArea": 100, "amountWon": 800_000_000, "cancelled": False, "dealingGbn": "중개거래"}
+    old = [{**t, "buildYear": 1990, "amountWon": 400_000_000}] * 5
+    new = [{**t, "buildYear": 2018}, {**t, "buildYear": 2020, "amountWon": 900_000_000}, {**t, "buildYear": 2022, "amountWon": 700_000_000}]
+    subject = {"landArea": 100, "floorArea": 100, "buildYear": 1988, "umdNm": "가동"}
+    r = estimates.estimate_remodeled_value(subject, old + new, 2026)
+    assert r["sampleSize"] == 3 and r["range"]["base"] == 800_000_000
+    assert estimates.estimate_remodeled_value(subject, old, 2026)["range"] is None
+
+
+def test_토지_실거래_항목_해석():
+    from app.public_data import land_trade_from_item
+    t = land_trade_from_item({"dealAmount": "1,800", "dealArea": "3.31", "dealYear": "2026", "dealMonth": "9", "dealDay": "28",
+                              "jimok": "도로", "landUse": "일반상업지역", "shareDealingType": "지분", "cdealType": " "})
+    assert t["amountWon"] == 18_000_000 and t["landUse"] == "도로" and t["shareDeal"] and not t["cancelled"]

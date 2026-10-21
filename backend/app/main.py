@@ -34,6 +34,9 @@ from .schemas import Answers, ConsultationRequest, CreateAnalysis, Overrides, Pr
 from .settings import settings
 
 logging.basicConfig(level=logging.INFO)
+# httpx 기본 로그는 요청 주소 전체(인증키 포함)를 찍으므로 끈다. 실패는 public_data 가 키를 가려서 기록한다.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 app = FastAPI(title="집 선택 비교 API", version="1.0")
 app.add_middleware(CORSMiddleware, allow_origins=[settings.frontend_origin], allow_methods=["*"], allow_headers=["*"])
 
@@ -105,6 +108,7 @@ def compute(saved: dict) -> dict:
         "assumptions": built["assumptions"],
         "comps": built["comps"],
         "landComps": built["landComps"],
+        "remodelComps": built["remodelComps"],
         "costs": built["costs"],
         "subject": built["subject"],
         "result": analyze(built["engine"]),

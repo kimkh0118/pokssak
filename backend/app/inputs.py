@@ -89,13 +89,17 @@ def build(lookup: dict, answers: Answers, target: Target, ov: Overrides) -> dict
         fact("useAprDay", "사용승인일", building.get("useAprDay"), data_prov, bmeta["source"], **when)
 
     # ---- 가격·비용 추정
-    subject = {"landArea": land_area, "floorArea": floor_area, "buildYear": build_year, "umdNm": a.get("emdNm") or None}
+    subject = {"landArea": land_area, "floorArea": floor_area, "buildYear": build_year, "umdNm": a.get("emdNm") or None,
+               "zoning": (land or {}).get("prposArea1Nm")}
     trades = lookup["trades"]
     comps = estimates.estimate_from_trades(subject, trades["data"] if trades["ok"] else [])
     if not trades["ok"]:
         comps["withheldReason"] = f"거래 사례 조회 실패: {trades['error']['message']}"
     land_trades = lookup.get("landTrades")
-    land_comps = estimates.estimate_land_price(subject, land_trades["data"] if land_trades and land_trades["ok"] else None)
+    land_comps = estimates.estimate_land_price(
+        subject, land_trades["data"] if land_trades and land_trades["ok"] else None,
+        f"토지 거래 사례 조회 실패: {land_trades['error']['message']}" if land_trades and not land_trades["ok"] else None)
+    remodeled = estimates.estimate_remodeled_value(subject, trades["data"] if trades["ok"] else [], date.today().year)
 
     scope = ov.remodelScope or ("full" if answers.condition == "major_repair" else "partial")
     demolition = estimates.estimate_demolition(floor_area)
@@ -108,7 +112,7 @@ def build(lookup: dict, answers: Answers, target: Target, ov: Overrides) -> dict
 
     as_is_price, as_is_user = chosen(ov.asIsPrice, comps["range"])
     land_price, land_user = chosen(ov.landPrice, land_comps["range"])
-    remodel_price, remodel_user = chosen(ov.remodelPrice, sample_assumption and sample_assumption["price"])
+    remodel_price, remodel_user = chosen(ov.remodelPrice, (sample_assumption and sample_assumption["price"]) or remodeled["range"])
     remodel_rent, rent_user = chosen(ov.remodelRentMonthly, sample_assumption and sample_assumption["rent"])
     demolition_cost, demo_user = chosen(ov.demolitionCost, demolition["total"])
     remodel_cost, rem_user = chosen(ov.remodelCost, remodel["total"])
@@ -189,8 +193,9 @@ def build(lookup: dict, answers: Answers, target: Target, ov: Overrides) -> dict
         note="기존 주택 가격에 상승률을 곱해 만들지 않습니다.")
     add("remodelPrice", "가격", "리모델링 후 가치", _range_text(remodel_price),
         "user_input" if remodel_user else ("sample" if sample_assumption else "estimate"),
-        "계산 조건 수정에서 직접 입력" if remodel_user else ("예시 가정값" if sample_assumption else "근거 없음 — 직접 입력 필요"),
-        note="공사비만큼 집값이 오른다고 가정하지 않습니다.")
+        "계산 조건 수정에서 직접 입력" if remodel_user else ("예시 가정값" if sample_assumption else
+        (f"참고 추정: 주변 신축급 거래 {remodeled['sampleSize']}건의 대지㎡당 가격 분위수" if remodeled["range"] else remodeled["withheldReason"])),
+        note="공사비만큼 집값이 오른다고 가정하지 않습니다. 신축급 시세는 리모델링 후 가치의 상한에 가까운 참고값입니다.")
     add("remodelRent", "가격", "리모델링 후 월 임대료", _range_text(remodel_rent),
         "user_input" if rent_user else ("sample" if sample_assumption else "estimate"),
         "계산 조건 수정에서 직접 입력" if rent_user else ("예시 가정값" if sample_assumption else "근거 없음 — 직접 입력 필요"))
@@ -255,6 +260,7 @@ def build(lookup: dict, answers: Answers, target: Target, ov: Overrides) -> dict
         "assumptions": rows,
         "comps": comps,
         "landComps": land_comps,
+        "remodelComps": remodeled,
         "costs": {"demolition": demolition, "remodel": remodel},
         "subject": {**subject, "building": building},
     }

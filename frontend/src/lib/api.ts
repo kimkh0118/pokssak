@@ -202,6 +202,7 @@ export interface Analysis {
   assumptions: { key: string; group: string; label: string; display: string; provenance: Provenance; source: string; asOf?: string | null; note?: string | null }[];
   comps: CompEstimate;
   landComps: CompEstimate;
+  remodelComps: CompEstimate;
   costs: { demolition: CostEstimate; remodel: CostEstimate };
   subject: { landArea: number | null };
   result: { options: OptionResult[]; recommendation: Recommendation; globalPending: string[] };

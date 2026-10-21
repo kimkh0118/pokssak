@@ -118,13 +118,34 @@ def estimate_from_trades(subject: dict, trades: list[dict], use_building_filters
     }
 
 
-def estimate_land_price(subject: dict, land_trades: list[dict] | None) -> dict:
+def estimate_land_price(subject: dict, land_trades: list[dict] | None, unavailable_reason: str | None = None) -> dict:
+    """철거 후 토지 매각가: 같은 시군구 '대' 토지 거래(지분 거래 제외). 같은 용도지역 사례가 충분하면 그것만 쓴다."""
+    criteria = ["같은 시군구 토지 매매 사례(최근 12개월) 중 지목 '대'", "지분 거래 제외(일부 지분 가격은 시세와 다름)"]
     if land_trades is None:
-        return _withheld("토지 거래 사례 자료가 연동되지 않았습니다. 전문가 의견이나 직접 확인한 토지 시세를 입력하면 계산합니다.",
-                         ["같은 시군구 토지 매매 사례(지목 '대')", "해제된 거래·직거래 제외",
-                          "㎡당 가격의 25%·50%·75% 분위수 × 대상 토지 면적"])
-    plots = [t for t in land_trades if not t.get("landUse") or "대" in t["landUse"]]
-    return estimate_from_trades(subject, plots, use_building_filters=False)
+        return _withheld(unavailable_reason or "토지 거래 사례를 조회하지 못했습니다. 전문가 의견이나 직접 확인한 토지 시세를 입력하면 계산합니다.", criteria)
+    plots = [t for t in land_trades if (t.get("landUse") or "대") == "대" and not t.get("shareDeal")]
+    zoning = subject.get("zoning")
+    same_zone = [t for t in plots if zoning and t.get("zoning") == zoning]
+    if zoning and len(same_zone) >= MIN_COMPS * 2:
+        plots = same_zone
+        criteria.append(f"같은 용도지역({zoning}) 사례만 사용")
+    result = estimate_from_trades(subject, plots, use_building_filters=False)
+    result["criteria"] = criteria + result["criteria"][1:]
+    return result
+
+
+NEWER_BUILD_YEARS = 15
+
+
+def estimate_remodeled_value(subject: dict, trades: list[dict], this_year: int) -> dict:
+    """리모델링 후 가치 '참고 추정': 주변의 비교적 새 집(최근 15년 안에 지은) 거래의 대지㎡당 가격.
+    리모델링한 집이 신축과 같지는 않으므로 상한에 가까운 참고값이다. 공사비만큼 오른다고 보지 않는다."""
+    newer = [t for t in trades if t.get("buildYear") and t["buildYear"] >= this_year - NEWER_BUILD_YEARS]
+    result = estimate_from_trades({**subject, "buildYear": None}, newer)
+    result["criteria"] = [f"같은 시군구 단독·다가구 매매 중 최근 {NEWER_BUILD_YEARS}년 안에 지은 집(신축급)"] + result["criteria"][1:]
+    if result["withheldReason"]:
+        result["withheldReason"] = "주변 신축급 거래가 부족해 리모델링 후 가치를 추정하지 않았습니다. 중개사 의견 등을 '계산 조건 수정'에 입력하면 계산합니다."
+    return result
 
 
 # ---------------------------------------------------------------- 철거·리모델링 비용

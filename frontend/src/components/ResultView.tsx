@@ -408,6 +408,7 @@ function SourcesPanel({ data: built }: { data: Analysis }) {
       ))}
       <CompsTable title="현상태 매각가 비교 사례" est={built.comps} subjectArea={built.subject.landArea} />
       <CompsTable title="토지 매각가 비교 사례" est={built.landComps} subjectArea={built.subject.landArea} />
+      <CompsTable title="리모델링 후 가치 참고 사례(주변 신축급)" est={built.remodelComps} subjectArea={built.subject.landArea} />
     </Card>
   );
 }

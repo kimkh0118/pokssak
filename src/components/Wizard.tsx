@@ -6,6 +6,7 @@ import type { Answers, Condition, DataMode, MoneyInput, Occupancy, Purpose, Timi
 import { CONDITION_LABEL, OCCUPANCY_LABEL, PURPOSE_LABEL, TIMING_LABEL } from "@/lib/domain/types";
 import type { AddressCandidate, PropertyLookup, ProviderResult } from "@/lib/domain/property";
 import { formatArea } from "@/lib/domain/units";
+import { addHistory } from "@/lib/history";
 import { BottomBar, Button, ChoiceGroup, MoneyField, Notice, Pill, ProvenanceBadge, ProviderErrorBox, SampleBanner } from "./ui";
 
 type Step = "search" | "target" | "q1" | "q2" | "q3";
@@ -120,7 +121,10 @@ export function Wizard({ mode }: { mode: DataMode }) {
       if (body.error) {
         setSubmitError(body.error);
         setSubmitting(false);
-      } else router.push(`/analyses/${body.id}`);
+      } else {
+        addHistory({ id: body.id, address: lookup.address.roadAddr, mode });
+        router.push(`/analyses/${body.id}`);
+      }
     } catch {
       setSubmitError("서버에 연결하지 못했습니다.");
       setSubmitting(false);

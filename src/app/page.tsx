@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { env } from "@/lib/providers/http";
 
+const TICKER = [
+  ["공시지가 말고", "실거래 사례로"],
+  ["세금은", "확인한 금액만"],
+  ["모르면", "판단 보류로 솔직하게"],
+  ["업체 수수료는", "순위에 반영 안 함"],
+];
+
 export const dynamic = "force-dynamic";
 
 const OPTIONS = [
@@ -18,7 +25,17 @@ export default function Home() {
   ];
   const ready = keys.every((k) => k.ok);
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
+      <div className="-mx-4 -mt-6 overflow-hidden bg-ink py-2.5 text-[14px] font-bold text-white" aria-label="서비스 원칙">
+        <div className="ticker flex w-max gap-10 whitespace-nowrap">
+          {[...TICKER, ...TICKER].map(([a, b], i) => (
+            <span key={i} aria-hidden={i >= TICKER.length}>
+              {a} <span className="text-brand-2">{b}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="mx-auto max-w-3xl space-y-12">
       <section className="pt-2">
         <h1 className="text-[30px] font-extrabold leading-[1.25] tracking-tight sm:text-[38px]">
           우리 집, 팔까 고칠까?
@@ -87,6 +104,7 @@ export default function Home() {
           ))}
         </ol>
       </section>
+      </div>
     </div>
   );
 }

@@ -1,20 +1,25 @@
 import type { Metadata, Viewport } from "next";
-import Link from "next/link";
 import "./globals.css";
+import { SITE } from "@/lib/site";
+import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
-  title: "집 선택 비교",
-  description: "단독·다가구주택의 매각·철거·리모델링·유지 선택지를 같은 기준으로 비교합니다.",
+  metadataBase: new URL(SITE.url),
+  title: { default: `${SITE.name} — 팔까, 고칠까, 그대로 둘까`, template: `%s | ${SITE.name}` },
+  description: SITE.description,
+  applicationName: SITE.name,
+  openGraph: {
+    type: "website",
+    locale: "ko_KR",
+    siteName: SITE.name,
+    title: `${SITE.name} — 우리 집, 얼마 남는지 비교`,
+    description: SITE.description,
+  },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = { themeColor: "#ffffff" };
-
-const TICKER = [
-  ["공시지가 말고", "실거래 사례로"],
-  ["세금은", "확인한 금액만"],
-  ["모르면", "판단 보류로 솔직하게"],
-  ["업체 수수료는", "순위에 반영 안 함"],
-];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,31 +28,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
       </head>
       <body className="flex min-h-full flex-col">
-        <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur">
-          <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
-            <Link href="/" className="flex items-center gap-2 text-[17px] font-extrabold tracking-tight text-ink">
-              <span aria-hidden className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-brand-2 to-brand text-[13px] text-white">집</span>
-              집 선택 비교
-            </Link>
-            <Link href="/analyze?mode=sample" className="rounded-full bg-fill px-3 py-1.5 text-[13px] font-bold text-muted hover:bg-fill-strong">
-              예시로 체험
-            </Link>
-          </div>
-        </header>
-        <div className="overflow-hidden bg-ink py-2.5 text-[14px] font-bold text-white" aria-label="서비스 원칙">
-          <div className="ticker flex w-max gap-10 whitespace-nowrap">
-            {[...TICKER, ...TICKER].map(([a, b], i) => (
-              <span key={i} aria-hidden={i >= TICKER.length}>
-                {a} <span className="text-brand-2">{b}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-        <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-28 pt-6">{children}</main>
-        <footer className="bg-fill px-4 py-6 text-center text-[12px] leading-relaxed text-subtle">
-          계산 결과는 공개 자료와 가정에 기반한 참고용 추정이며,
-          <br className="sm:hidden" /> 세금·법률·안전진단 판단을 대신하지 않습니다.
-        </footer>
+        <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-ink focus:px-4 focus:py-2 focus:text-white">
+          본문으로 건너뛰기
+        </a>
+        <SiteHeader />
+        <main id="main" className="mx-auto w-full max-w-5xl flex-1 px-4 pb-28 pt-6">
+          {children}
+        </main>
+        <SiteFooter />
       </body>
     </html>
   );

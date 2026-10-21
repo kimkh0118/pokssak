@@ -13,6 +13,8 @@ import { formatArea, formatMonths, formatWon } from "@/lib/domain/units";
 import { Card, Notice, Pill, ProvenanceBadge, SampleBanner, Stat } from "./ui";
 import { ConditionEditor } from "./ConditionEditor";
 import { ConsultPanel } from "./ConsultPanel";
+import { ShareButton } from "./ShareButton";
+import { addHistory } from "@/lib/history";
 
 type Loaded = StoredAnalysis & { consultations: { id: string; option_id: string; partner_type: string; status: string; created_at: string }[] };
 
@@ -26,7 +28,11 @@ export function ResultView({ id }: { id: string }) {
   useEffect(() => {
     fetch(`/api/analyses/${id}`)
       .then((r) => r.json())
-      .then((b) => (b.error ? setError(b.error) : setData(b)))
+      .then((b) => {
+        if (b.error) return setError(b.error);
+        setData(b);
+        addHistory({ id: b.id, address: b.lookup.address.roadAddr, mode: b.mode });
+      })
       .catch(() => setError("서버에 연결하지 못했습니다."));
   }, [id]);
 
@@ -48,8 +54,26 @@ export function ResultView({ id }: { id: string }) {
     [id],
   );
 
-  if (error && !data) return <Notice tone="bad">{error}</Notice>;
-  if (!data) return <p className="text-sm text-muted" aria-live="polite">결과를 불러오는 중…</p>;
+  if (error && !data)
+    return (
+      <div className="mx-auto max-w-xl py-10 text-center">
+        <p className="text-[20px] font-extrabold">결과를 열 수 없어요</p>
+        <p className="mt-2 text-[15px] text-muted">{error}</p>
+        <Link href="/history" className="mt-6 inline-flex h-12 items-center rounded-xl bg-brand px-5 text-[15px] font-bold text-white">내 분석으로</Link>
+      </div>
+    );
+  if (!data)
+    return (
+      <div className="mx-auto max-w-3xl space-y-4" aria-busy="true" aria-live="polite">
+        <span className="sr-only">결과를 불러오는 중</span>
+        <div className="h-6 w-40 animate-pulse rounded bg-fill" />
+        <div className="h-8 w-3/4 animate-pulse rounded bg-fill" />
+        <div className="h-64 animate-pulse rounded-3xl bg-fill" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="h-44 animate-pulse rounded-2xl bg-fill" />)}
+        </div>
+      </div>
+    );
 
   const { result, built, lookup, answers } = data;
   const rec = result.recommendation;
@@ -59,10 +83,13 @@ export function ResultView({ id }: { id: string }) {
   const strength = rec.strength === "strong" ? "추천 강도 높음" : rec.strength === "moderate" ? "추천 강도 보통" : rec.strength === "weak" ? "추천 강도 낮음" : null;
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-3xl space-y-8">
       {data.mode === "sample" && <SampleBanner />}
       <div>
-        <p className="text-[13px] font-semibold text-subtle">{new Date(data.updatedAt).toLocaleString("ko-KR")} 기준 분석</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[13px] font-semibold text-subtle">{new Date(data.updatedAt).toLocaleString("ko-KR")} 기준 분석</p>
+          <ShareButton />
+        </div>
         <h1 className="mt-1 text-[22px] font-extrabold leading-tight tracking-tight">{lookup.address.roadAddr}</h1>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Pill>{PURPOSE_LABEL[answers.purpose]}</Pill>
@@ -87,7 +114,7 @@ export function ResultView({ id }: { id: string }) {
         ) : (
           <h2 id="verdict" className="mt-4 text-[22px] font-extrabold leading-snug">{rec.headline}</h2>
         )}
-        {top && top.computable && <p className="mt-4 text-[15px] font-semibold leading-relaxed">{rec.headline}</p>}
+        {top && top.computable && rec.verdict !== "recommend" && <p className="mt-4 text-[15px] font-semibold leading-relaxed">{rec.headline}</p>}
         <ul className="mt-4 space-y-1.5 border-t border-white/20 pt-4 text-[14px] leading-relaxed text-white/90">
           {rec.reasons.map((r) => (
             <li key={r} className="flex gap-2"><span aria-hidden>·</span><span>{r}</span></li>

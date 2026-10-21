@@ -1,0 +1,88 @@
+"""공공 API 응답 해석. 오류 본문은 2026-10-21 실제 호출(잘못된 키)로 받은 것."""
+
+import json
+from datetime import date
+
+from app import estimates
+from app.labels import won
+from app.public_data import (
+    address_from_juso, parse_data_go_kr, parse_vworld_land, recent_months, to_parcel, trade_from_item,
+)
+
+GATEWAY_JSON = '{"OpenAPI_ServiceResponse":{"cmmMsgHeader":{"errMsg":"SERVICE_KEY_IS_NOT_REGISTERED_ERROR","returnAuthMsg":"등록되지 않은 서비스키","returnReasonCode":"30"}}}'
+GATEWAY_XML = '<?xml version="1.0" encoding="UTF-8"?><OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</errMsg><returnAuthMsg>등록되지 않은 서비스키</returnAuthMsg><returnReasonCode>30</returnReasonCode></cmmMsgHeader></OpenAPI_ServiceResponse>'
+
+
+def test_공공데이터포털_인증오류_JSON_XML():
+    for body in (GATEWAY_JSON, GATEWAY_XML):
+        r = parse_data_go_kr(body, 403, "t")
+        assert not r["ok"] and r["error"]["kind"] == "auth"
+
+
+def test_호출제한():
+    assert parse_data_go_kr(GATEWAY_JSON.replace('"30"', '"22"'), 200, "t")["error"]["kind"] == "rate_limit"
+
+
+def test_정상_단건과_결과없음():
+    one = parse_data_go_kr('{"response":{"header":{"resultCode":"00"},"body":{"items":{"item":{"a":"1"}}}}}', 200, "t")
+    assert one["items"] == [{"a": "1"}]
+    none = parse_data_go_kr('{"response":{"header":{"resultCode":"00"},"body":{"items":""}}}', 200, "t")
+    assert none["items"] == []
+
+
+def test_실거래가_XML_해석():
+    xml = ("<response><header><resultCode>000</resultCode></header><body><items>"
+           "<item><dealAmount>  85,000</dealAmount><plottageAr>165.2</plottageAr><dealYear>2026</dealYear>"
+           "<dealMonth>3</dealMonth><dealDay>7</dealDay><buildYear>1900</buildYear><cdealType></cdealType></item>"
+           "<item><dealAmount>70,000</dealAmount><cdealType>O</cdealType><buildYear>1992</buildYear></item>"
+           "</items></body></response>")
+    trades = [trade_from_item(i) for i in parse_data_go_kr(xml, 200, "t")["items"]]
+    assert trades[0]["amountWon"] == 850_000_000  # 만원 → 원
+    assert trades[0]["dealDate"] == "2026-03-07"
+    assert trades[0]["buildYear"] is None  # 실제 자료의 1900은 미상
+    assert trades[1]["cancelled"] and trades[1]["landArea"] is None and trades[1]["buildYear"] == 1992
+
+
+def test_브이월드_오류와_최신연도_선택():
+    err = parse_vworld_land('{"landCharacteristicss" : {"resultCode" : "INCORRECT_KEY", "resultMsg" : "x"}}')
+    assert err["error"]["kind"] == "auth"
+    rows = [{"stdrYear": "2025", "stdrMt": "07", "pblntfPclnd": "1"}, {"stdrYear": "2026", "stdrMt": "01", "pblntfPclnd": "3"},
+            {"stdrYear": "2025", "stdrMt": "01", "pblntfPclnd": "2"}]
+    r = parse_vworld_land(json.dumps({"landCharacteristicss": {"resultCode": "", "field": rows}}))
+    assert r["data"]["pblntfPclnd"] == 3
+    assert "lndpclAr" in r["meta"]["missingFields"]
+
+
+def test_주소에서_PNU_만들기():
+    p = to_parcel(address_from_juso({"admCd": "1111010100", "mtYn": "1", "lnbrMnnm": "12", "lnbrSlno": "3"}))
+    assert p == {"admCd": "1111010100", "sigunguCd": "11110", "bjdongCd": "10100", "platGbCd": "1",
+                 "bun": "0012", "ji": "0003", "pnu": "1111010100200120003"}
+
+
+def test_조회월():
+    assert recent_months(3, date(2026, 1, 15)) == ["202512", "202511", "202510"]
+
+
+def test_비교사례_선정과_보류():
+    t = {"kind": "house", "umdNm": "가동", "landArea": 100, "floorArea": 100, "amountWon": 500_000_000,
+         "buildYear": 1990, "cancelled": False, "dealingGbn": "중개거래"}
+    subject = {"landArea": 100, "floorArea": 100, "buildYear": 1990, "umdNm": "가동"}
+    r = estimates.estimate_from_trades(subject, [t, {**t, "cancelled": True}, {**t, "dealingGbn": "직거래"}, {**t, "landArea": 300}])
+    assert r["range"] is None and "미만" in r["withheldReason"]
+    assert [d["reason"] for d in r["decisions"] if not d["included"]] == ["해제된 거래", "직거래", "대지면적 차이 큼(3.00배)"]
+    ok = estimates.estimate_from_trades({**subject, "landArea": 200, "floorArea": 150},
+                                        [{**t, "amountWon": m * 100_000_000} for m in (4, 5, 6)])
+    assert ok["range"] == {"low": 900_000_000, "base": 1_000_000_000, "high": 1_100_000_000}
+
+
+def test_토지사례_없으면_보류_비용_합계():
+    assert estimates.estimate_land_price({"landArea": 100}, None)["range"] is None
+    d = estimates.estimate_demolition(100)
+    assert d["total"]["base"] == sum(line["amount"]["base"] for line in d["lines"])
+    assert estimates.estimate_demolition(None)["total"] is None
+
+
+def test_금액표시():
+    assert won(340_000_000) == "3억 4,000만 원"
+    assert won(None) == "산정 불가"
+    assert won(0) == "0원"

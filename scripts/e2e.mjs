@@ -1,5 +1,5 @@
 // 실행 중인 서버에 HTTP로 주소 입력 → 결과 확인 → 조건 수정 → 상담 신청까지 전체 흐름을 검사한다.
-// 사용: BASE_URL=http://localhost:3000 node scripts/e2e.mjs
+// 사용: 백엔드·프런트엔드를 켠 뒤 node scripts/e2e.mjs (BASE_URL 기본값 http://localhost:3000, /api 는 백엔드로 전달됨)
 const BASE = process.env.BASE_URL || "http://localhost:3000";
 let failures = 0;
 const check = (name, cond, extra = "") => {
@@ -54,7 +54,7 @@ check("보유 시 집값은 현금 수지에 없음", !keep.scenarios.base.flows
 
 // 3) 계산 조건 수정 → 재계산
 const up = await j(`/api/analyses/${cr.body.id}`, { method: "PUT", body: JSON.stringify({ overrides: { taxes: { asIsSale: 30_000_000 }, horizonMonths: 48 } }) });
-check("조건 수정 재계산", up.body.built.engineInput.horizonMonths === 48 && up.body.built.engineInput.taxes.asIsSale === 30_000_000);
+check("조건 수정 재계산", up.body.current.horizonMonths === 48);
 const sell = up.body.result.options.find((o) => o.id === "sell_as_is");
 check("입력한 세금이 매각 정산에 반영", sell.scenarios.base.saleSettlement.tax === 30_000_000);
 const bad = await j(`/api/analyses/${cr.body.id}`, { method: "PUT", body: JSON.stringify({ overrides: { asIsPrice: { low: 3, base: 2, high: 1 } } }) });

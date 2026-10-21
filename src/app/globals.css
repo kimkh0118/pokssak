@@ -1,66 +1,84 @@
 @import "tailwindcss";
 
+/* 밝은 앱형 화면: 진한 검정 글자 + 파란 포인트 + 회색 채움 */
 :root {
-  --bg: #f6f7f4;
+  color-scheme: light;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --ink: #1b2420;
-  --muted: #5d6a63;
-  --line: #dfe3dc;
-  --brand: #1f6f5c;
+  --fill: #f3f4f7;
+  --fill-strong: #e9ebf0;
+  --ink: #0c0d11;
+  --muted: #4a5163;
+  --subtle: #8a92a6;
+  --line: #e8eaef;
+  --brand: #396eff;
+  --brand-strong: #2456e6;
   --brand-ink: #ffffff;
-  --brand-soft: #e3f0eb;
-  --warn: #9a5b00;
-  --warn-soft: #fff3dc;
-  --bad: #a3322a;
-  --bad-soft: #fde9e6;
-  --sample: #6b3fa0;
-  --sample-soft: #f1eafa;
+  --brand-soft: #eef2ff;
+  --brand-2: #7290ff;
+  --warn: #d97706;
+  --warn-soft: #fff6e6;
+  --bad: #ff4d52;
+  --bad-soft: #fff0f0;
+  --good: #12b76a;
+  --sample: #7a5af8;
+  --sample-soft: #f4f1ff;
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
+  --color-fill: var(--fill);
+  --color-fill-strong: var(--fill-strong);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
   --color-line: var(--line);
   --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
   --color-brand-ink: var(--brand-ink);
   --color-brand-soft: var(--brand-soft);
+  --color-brand-2: var(--brand-2);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
   --color-bad: var(--bad);
   --color-bad-soft: var(--bad-soft);
+  --color-good: var(--good);
   --color-sample: var(--sample);
   --color-sample-soft: var(--sample-soft);
-  --font-sans: var(--font-noto), system-ui, sans-serif;
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #121614;
-    --surface: #1a201d;
-    --ink: #e8ece9;
-    --muted: #9aa69f;
-    --line: #2d3531;
-    --brand: #5fbfa5;
-    --brand-ink: #0d1411;
-    --brand-soft: #1d332c;
-    --warn: #f0b75c;
-    --warn-soft: #3a2c14;
-    --bad: #f08a80;
-    --bad-soft: #3d1d1a;
-    --sample: #c4a3ef;
-    --sample-soft: #2c2240;
-  }
-}
-
+html,
 body {
   background: var(--bg);
   color: var(--ink);
+}
+
+body {
   font-family: var(--font-sans);
   word-break: keep-all;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+@keyframes ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.ticker {
+  animation: ticker 28s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticker {
+    animation: none;
+  }
 }

@@ -10,7 +10,7 @@ import { FLOW_CATEGORY_LABEL, type FlowCategory } from "@/lib/engine/cashflow";
 import { VERDICT_LABEL } from "@/lib/engine/recommend";
 import { PURPOSE_LABEL, TIMING_LABEL, OCCUPANCY_LABEL, CONDITION_LABEL } from "@/lib/domain/types";
 import { formatArea, formatMonths, formatWon } from "@/lib/domain/units";
-import { Card, Notice, ProvenanceBadge, SampleBanner, Stat } from "./ui";
+import { Card, Notice, Pill, ProvenanceBadge, SampleBanner, Stat } from "./ui";
 import { ConditionEditor } from "./ConditionEditor";
 import { ConsultPanel } from "./ConsultPanel";
 
@@ -54,50 +54,84 @@ export function ResultView({ id }: { id: string }) {
   const { result, built, lookup, answers } = data;
   const rec = result.recommendation;
   const sell = result.options.find((o) => o.id === "sell_as_is")!;
-  const verdictTone = rec.verdict === "recommend" ? "border-brand bg-brand-soft" : rec.verdict === "needs_quotes" ? "border-warn bg-warn-soft" : "border-bad bg-bad-soft";
+  const top = result.options.find((o) => o.id === rec.optionId) ?? null;
+  const heroTone = rec.verdict === "recommend" ? "bg-brand" : rec.verdict === "needs_quotes" ? "bg-ink" : "bg-[#2b2f3a]";
+  const strength = rec.strength === "strong" ? "추천 강도 높음" : rec.strength === "moderate" ? "추천 강도 보통" : rec.strength === "weak" ? "추천 강도 낮음" : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {data.mode === "sample" && <SampleBanner />}
       <div>
-        <p className="text-xs text-muted">분석 결과 · {new Date(data.updatedAt).toLocaleString("ko-KR")}</p>
-        <h1 className="text-xl font-bold">{lookup.address.roadAddr}</h1>
-        <p className="text-sm text-muted">
-          {PURPOSE_LABEL[answers.purpose]} · {TIMING_LABEL[answers.timing]} · {OCCUPANCY_LABEL[answers.occupancy]} · 상태 {CONDITION_LABEL[answers.condition]}
-        </p>
+        <p className="text-[13px] font-semibold text-subtle">{new Date(data.updatedAt).toLocaleString("ko-KR")} 기준 분석</p>
+        <h1 className="mt-1 text-[22px] font-extrabold leading-tight tracking-tight">{lookup.address.roadAddr}</h1>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <Pill>{PURPOSE_LABEL[answers.purpose]}</Pill>
+          <Pill>{TIMING_LABEL[answers.timing]}</Pill>
+          <Pill>{OCCUPANCY_LABEL[answers.occupancy]}</Pill>
+          <Pill>상태 {CONDITION_LABEL[answers.condition]}</Pill>
+        </div>
       </div>
 
-      <section className={`rounded-xl border-2 p-5 ${verdictTone}`} aria-labelledby="verdict">
-        <p className="text-xs font-bold uppercase tracking-wide">{VERDICT_LABEL[rec.verdict]}{rec.strength ? ` · 추천 강도 ${rec.strength === "strong" ? "높음" : rec.strength === "moderate" ? "보통" : "낮음"}` : ""}</p>
-        <h2 id="verdict" className="mt-1 text-lg font-bold text-ink">{rec.headline}</h2>
-        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-ink">{rec.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
-        {rec.cautions.length > 0 && (
-          <ul className="mt-3 space-y-1 text-sm text-muted">{rec.cautions.map((c) => <li key={c}>· {c}</li>)}</ul>
+      <section className={`rounded-3xl p-6 text-white ${heroTone}`} aria-labelledby="verdict">
+        <div className="flex flex-wrap items-center gap-2 text-[13px] font-bold">
+          <span className="rounded-full bg-white/15 px-2.5 py-1">{VERDICT_LABEL[rec.verdict]}</span>
+          {strength && <span className="text-white/70">{strength}</span>}
+        </div>
+        {top && top.computable ? (
+          <>
+            <p className="mt-4 text-[15px] font-semibold text-white/75">{rec.verdict === "recommend" ? "가장 유리한 선택" : "근소하게 앞선 선택"}</p>
+            <h2 id="verdict" className="text-[28px] font-extrabold leading-tight tracking-tight">{top.variantLabel}</h2>
+            <p className="tabular mt-3 text-[34px] font-extrabold leading-none tracking-tight">{formatWon(top.scenarios.base.comparisonValue)}</p>
+            <p className="mt-1 text-[13px] text-white/70">비교가치 · {built.engineInput.horizonMonths}개월 기준 현재가치</p>
+          </>
+        ) : (
+          <h2 id="verdict" className="mt-4 text-[22px] font-extrabold leading-snug">{rec.headline}</h2>
         )}
+        {top && top.computable && <p className="mt-4 text-[15px] font-semibold leading-relaxed">{rec.headline}</p>}
+        <ul className="mt-4 space-y-1.5 border-t border-white/20 pt-4 text-[14px] leading-relaxed text-white/90">
+          {rec.reasons.map((r) => (
+            <li key={r} className="flex gap-2"><span aria-hidden>·</span><span>{r}</span></li>
+          ))}
+        </ul>
       </section>
 
-      {result.globalPending.length > 0 && (
-        <div className="flex flex-wrap gap-2" aria-label="반영하지 못한 항목">
-          {result.globalPending.map((p) => (
-            <span key={p} className="rounded-full border border-warn bg-warn-soft px-3 py-1 text-xs text-warn">{p}</span>
-          ))}
-        </div>
+      {(rec.cautions.length > 0 || result.globalPending.length > 0) && (
+        <section className="space-y-3">
+          {result.globalPending.length > 0 && (
+            <div className="flex flex-wrap gap-1.5" aria-label="반영하지 못한 항목">
+              {result.globalPending.map((p) => <Pill key={p} tone="orange">{p}</Pill>)}
+            </div>
+          )}
+          {rec.cautions.length > 0 && (
+            <ul className="space-y-1.5 rounded-2xl bg-fill p-4 text-[14px] text-muted">
+              {rec.cautions.map((c) => <li key={c}>· {c}</li>)}
+            </ul>
+          )}
+        </section>
       )}
 
-      <Card className="overflow-x-auto p-0">
-        <div className="p-5 pb-2">
-          <h2 className="font-bold">선택지 비교</h2>
-          <p className="text-xs text-muted">기준 시나리오. 비교가치 = 기간 내 월 순현금흐름 현재가치 + 기간 말 보유 순자산 현재가치({built.engineInput.horizonMonths}개월, 할인율 {(built.engineInput.discountRateAnnual * 100).toFixed(1)}%)</p>
+      <section>
+        <h2 className="text-[20px] font-extrabold tracking-tight">선택지별로 보면</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {result.options.map((o) => <OptionCard key={o.id} o={o} isTop={rec.optionId === o.id} isRecommend={rec.verdict === "recommend"} />)}
         </div>
-        <table className="tabular w-full min-w-[860px] text-sm">
+      </section>
+
+      <section className="overflow-hidden rounded-2xl ring-1 ring-line">
+        <div className="p-5 pb-3">
+          <h2 className="text-[18px] font-extrabold">한눈에 표로 비교</h2>
+          <p className="mt-1 text-[13px] text-subtle">기준 시나리오 · 비교가치 = 기간 내 월 순현금흐름 현재가치 + 기간 말 보유 순자산 현재가치 ({built.engineInput.horizonMonths}개월, 할인율 {(built.engineInput.discountRateAnnual * 100).toFixed(1)}%)</p>
+        </div>
+        <div className="overflow-x-auto">
+        <table className="tabular w-full min-w-[860px] text-[14px]">
           <thead>
-            <tr className="border-y border-line bg-bg text-left text-xs text-muted">
-              <th scope="col" className="p-3">항목</th>
+            <tr className="bg-fill text-left text-[13px] text-subtle">
+              <th scope="col" className="p-3 font-bold">항목</th>
               {result.options.map((o) => (
-                <th key={o.id} scope="col" className={`p-3 ${rec.optionId === o.id ? "text-brand" : ""}`}>
+                <th key={o.id} scope="col" className={`p-3 font-bold ${rec.optionId === o.id ? "text-brand" : "text-ink"}`}>
                   {o.label}
-                  {rec.optionId === o.id && <span className="ml-1 rounded bg-brand px-1 text-[10px] text-brand-ink">{rec.verdict === "recommend" ? "추천" : "선두"}</span>}
-                  <span className="block font-normal">{o.variantLabel}</span>
+                  {rec.optionId === o.id && <span className="ml-1 rounded bg-brand px-1.5 py-0.5 text-[10px] text-white">{rec.verdict === "recommend" ? "추천" : "선두"}</span>}
+                  <span className="block font-normal text-subtle">{o.variantLabel}</span>
                 </th>
               ))}
             </tr>
@@ -115,14 +149,15 @@ export function ResultView({ id }: { id: string }) {
             <TRow label="목적·기간·예산" cells={result.options.map((o) => checksCell(o))} />
           </tbody>
         </table>
-        <p className="p-3 text-xs text-muted">보수적·낙관적 범위는 매각가·공사비·기간을 함께 바꾼 가정의 폭이며, 통계적으로 검증된 확률이 아닙니다. 업체 수수료·제휴 여부는 계산에 쓰이지 않습니다.</p>
-      </Card>
+        </div>
+        <p className="p-4 text-[12px] text-subtle">보수적·낙관적 범위는 매각가·공사비·기간을 함께 바꾼 가정의 폭이며, 통계적으로 검증된 확률이 아니에요. 업체 수수료·제휴 여부는 계산에 쓰이지 않아요.</p>
+      </section>
 
       {error && <Notice tone="bad">{error}</Notice>}
       <ConditionEditor data={data} saving={saving} onApply={recalc} />
 
       <section className="space-y-3">
-        <h2 className="font-bold">선택지별 계산 근거</h2>
+        <h2 className="text-[20px] font-extrabold tracking-tight">계산 근거 자세히 보기</h2>
         {result.options.map((o) => (
           <OptionDetail key={o.id} o={o} built={built} sellBase={sell} />
         ))}
@@ -139,12 +174,45 @@ export function ResultView({ id }: { id: string }) {
   );
 }
 
+function OptionCard({ o, isTop, isRecommend }: { o: OptionAnalysis; isTop: boolean; isRecommend: boolean }) {
+  const b = o.scenarios.base;
+  return (
+    <article className={`rounded-2xl p-5 ${isTop ? "bg-brand-soft ring-2 ring-brand" : "bg-fill"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h3 className="text-[17px] font-extrabold">{o.label}</h3>
+          <p className="text-[13px] text-subtle">{o.variantLabel}</p>
+        </div>
+        {isTop && <Pill tone="blue">{isRecommend ? "추천" : "선두"}</Pill>}
+        {!isTop && o.checks.excludedReason && o.computable && <Pill tone="red">제외</Pill>}
+      </div>
+      {o.computable ? (
+        <>
+          <p className={`tabular mt-3 text-[24px] font-extrabold tracking-tight ${isTop ? "text-brand" : "text-ink"}`}>{formatWon(b.comparisonValue)}</p>
+          <p className="text-[12px] text-subtle">
+            {o.vsSellAsIs === null || o.id === "sell_as_is" ? "비교 기준" : <>현상태 매각 대비 <span className={o.vsSellAsIs >= 0 ? "font-bold text-brand" : "font-bold text-bad"}>{formatWon(o.vsSellAsIs, { signed: true })}</span></>}
+          </p>
+          <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+            <dt className="text-subtle">순현금 수지</dt><dd className="tabular text-right font-bold">{formatWon(b.netCash, { signed: true })}</dd>
+            <dt className="text-subtle">보유 순자산</dt><dd className="tabular text-right font-bold">{b.terminal ? formatWon(b.terminal.net) : "없음(매각)"}</dd>
+            <dt className="text-subtle">최대 선투입</dt><dd className={`tabular text-right font-bold ${o.checks.budget === "exceeds" ? "text-bad" : ""}`}>{formatWon(b.maxUpfront)}</dd>
+            <dt className="text-subtle">소요 기간</dt><dd className="text-right font-bold">{o.id === "keep" ? "실행 없음" : formatMonths(b.completionMonth)}</dd>
+          </dl>
+          {o.checks.excludedReason && <p className="mt-3 text-[12px] font-semibold text-bad">{o.checks.excludedReason}</p>}
+        </>
+      ) : (
+        <p className="mt-3 text-[14px] font-semibold text-warn">계산 보류 · {o.missing.join(" / ")}</p>
+      )}
+    </article>
+  );
+}
+
 function TRow({ label, hint, cells }: { label: string; hint?: string; cells: React.ReactNode[] }) {
   return (
-    <tr className="border-b border-line align-top">
-      <th scope="row" className="p-3 text-left font-medium">
+    <tr className="border-t border-line align-top">
+      <th scope="row" className="p-3 text-left font-bold">
         {label}
-        {hint && <span className="block text-xs font-normal text-muted">{hint}</span>}
+        {hint && <span className="block text-[12px] font-normal text-subtle">{hint}</span>}
       </th>
       {cells.map((c, i) => <td key={i} className="p-3">{c}</td>)}
     </tr>
@@ -179,10 +247,10 @@ function OptionDetail({ o, built }: { o: OptionAnalysis; built: StoredAnalysis["
   for (const f of b.flows) byCat.set(f.category, (byCat.get(f.category) ?? 0) + f.amount);
   const costLines = o.id === "demolish_sell_land" ? built.demolition : o.id === "remodel" ? built.remodel : null;
   return (
-    <details className="rounded-xl border border-line bg-surface p-4 open:pb-5">
-      <summary className="cursor-pointer list-none">
-        <span className="font-bold">{o.label}</span> <span className="text-sm text-muted">· {o.variantLabel}</span>
-        <span className="float-right text-sm">{o.computable ? formatWon(b.comparisonValue) : <span className="text-bad">계산 보류</span>}</span>
+    <details className="rounded-2xl bg-fill/60 p-5 ring-1 ring-line">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+        <span><span className="text-[16px] font-extrabold">{o.label}</span> <span className="text-[13px] text-subtle">· {o.variantLabel}</span></span>
+        <span className="tabular text-[15px] font-bold">{o.computable ? formatWon(b.comparisonValue) : <span className="text-bad">계산 보류</span>}</span>
       </summary>
       <div className="mt-4 space-y-4 text-sm">
         {!o.computable && <Notice tone="warn">{o.missing.join(" / ")}</Notice>}
@@ -282,7 +350,7 @@ function SourcesPanel({ data }: { data: Loaded }) {
   const groups = [...new Set(built.assumptions.map((a) => a.group))];
   return (
     <Card className="space-y-5">
-      <h2 className="font-bold">출처 · 가정 · 비교 사례</h2>
+      <h2 className="text-[20px] font-extrabold tracking-tight">출처 · 가정 · 비교 사례</h2>
       <div>
         <h3 className="mb-1 text-sm font-medium">물건 기본 정보</h3>
         <table className="w-full text-sm">

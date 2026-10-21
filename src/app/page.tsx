@@ -3,65 +3,89 @@ import { env } from "@/lib/providers/http";
 
 export const dynamic = "force-dynamic";
 
+const OPTIONS = [
+  { t: "현상태로 매각", d: "지금 그대로 팔면 남는 돈" },
+  { t: "철거 후 토지 매각", d: "허물고 땅으로 팔면" },
+  { t: "리모델링", d: "고쳐서 팔거나·세주거나·살거나" },
+  { t: "현상태 유지", d: "그대로 두면 3년 뒤 내 자산" },
+];
+
 export default function Home() {
   const keys = [
-    { name: "주소 검색(주소기반산업지원서비스)", ok: !!env.jusoKey(), env: "JUSO_API_KEY" },
-    { name: "건축물대장·실거래가(공공데이터포털)", ok: !!env.dataGoKrKey(), env: "DATA_GO_KR_SERVICE_KEY" },
-    { name: "토지특성·공시지가(브이월드)", ok: !!env.vworldKey(), env: "VWORLD_API_KEY" },
+    { name: "주소 검색", ok: !!env.jusoKey() },
+    { name: "건축물대장·실거래가", ok: !!env.dataGoKrKey() },
+    { name: "토지특성·공시지가", ok: !!env.vworldKey() },
   ];
-  const allLive = keys.every((k) => k.ok);
+  const ready = keys.every((k) => k.ok);
   return (
-    <div className="space-y-8">
-      <section className="space-y-3 pt-4">
-        <h1 className="text-2xl font-bold leading-snug sm:text-3xl">
-          이 집, 팔까요? 고칠까요? 그대로 둘까요?
+    <div className="space-y-10">
+      <section className="pt-2">
+        <h1 className="text-[30px] font-extrabold leading-[1.25] tracking-tight sm:text-[38px]">
+          우리 집, 팔까 고칠까?
+          <br />
+          <span className="text-brand">얼마 남는지</span> 비교해 드려요
         </h1>
-        <p className="max-w-2xl text-muted">
-          주소와 질문 3개로 <strong className="text-ink">현상태 매각 · 철거 후 토지 매각 · 리모델링 · 현상태 유지</strong>를 같은 기준으로 비교합니다.
-          비용을 빼고 얼마가 남는지, 어느 가격·공사비부터 다른 선택이 유리해지는지 근거와 함께 보여드립니다.
-        </p>
+        <p className="mt-3 text-[16px] leading-relaxed text-muted">주소 하나와 질문 3개면 충분해요. 단독·다가구주택만 지원합니다.</p>
+
+        <Link
+          href="/analyze?mode=live"
+          className="mt-6 flex h-16 items-center gap-3 rounded-2xl bg-fill px-5 text-[17px] font-bold text-subtle transition hover:bg-fill-strong"
+        >
+          <svg aria-hidden width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" className="text-ink">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          집 주소를 입력해 주세요
+        </Link>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px]">
+          {keys.map((k) => (
+            <span key={k.name} className={`rounded-full px-2.5 py-1 font-bold ${k.ok ? "bg-brand-soft text-brand" : "bg-fill text-subtle"}`}>
+              {k.ok ? "✓" : "–"} {k.name}
+            </span>
+          ))}
+          {!ready && <span className="text-subtle">인증키가 없는 항목은 조회 오류로 안내돼요</span>}
+        </div>
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-xl border border-line bg-surface p-5">
-          <h2 className="font-bold">실제 공공데이터로 분석</h2>
-          <p className="mt-1 text-sm text-muted">주소 검색, 건축물대장, 토지특성, 단독·다가구 실거래가를 조회합니다.</p>
-          <ul className="mt-3 space-y-1 text-sm">
-            {keys.map((k) => (
-              <li key={k.env} className="flex items-center justify-between gap-2">
-                <span>{k.name}</span>
-                <span className={k.ok ? "text-brand" : "text-bad"}>{k.ok ? "인증키 설정됨" : "인증키 없음"}</span>
-              </li>
-            ))}
-          </ul>
-          {!allLive && <p className="mt-3 text-xs text-bad">인증키가 없는 항목은 조회 시 &lsquo;인증키 미설정&rsquo; 오류로 표시됩니다(예시 데이터로 바꾸지 않음).</p>}
-          <Link href="/analyze?mode=live" className="mt-4 inline-flex min-h-10 items-center rounded-lg bg-brand px-4 text-sm font-medium text-brand-ink">
-            실제 주소로 시작
-          </Link>
-        </div>
-        <div className="rounded-xl border border-sample bg-sample-soft p-5">
-          <h2 className="font-bold text-sample">예시 데이터로 체험</h2>
-          <p className="mt-1 text-sm text-muted">인증키 없이 가상의 &lsquo;예시시 예시구&rsquo; 주소와 거래 사례로 전체 흐름을 확인합니다. 모든 화면에 예시 표시가 붙습니다.</p>
-          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
-            <li>예시로 12 — 단독주택</li>
-            <li>예시로 34 — 다가구주택(임차인 거주 예시에 적합)</li>
-            <li>샘플길 7 — 한 지번에 건물 2개(분석 대상 확인)</li>
-            <li>예시아파트 — 지원 범위 밖 안내</li>
-          </ul>
-          <Link href="/analyze?mode=sample" className="mt-4 inline-flex min-h-10 items-center rounded-lg bg-sample px-4 text-sm font-medium text-white">
-            예시로 체험
-          </Link>
-        </div>
-      </div>
+      <Link href="/analyze?mode=sample" className="flex items-center justify-between rounded-2xl bg-ink p-5 text-white transition hover:opacity-95">
+        <span>
+          <span className="text-[13px] font-bold text-brand-2">인증키 없이 1분 체험</span>
+          <span className="mt-1 block text-[19px] font-extrabold">예시 집으로 먼저 해보기</span>
+          <span className="mt-1 block text-[13px] text-white/60">가상의 &lsquo;예시시 예시구&rsquo; 주소와 거래 사례예요</span>
+        </span>
+        <span aria-hidden className="text-[26px]">›</span>
+      </Link>
 
-      <section className="rounded-xl border border-line bg-surface p-5 text-sm">
-        <h2 className="font-bold">이 서비스가 하지 않는 것</h2>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-muted">
-          <li>공시지가를 시장 매각가로 쓰지 않습니다.</li>
-          <li>개인별 세금을 임의로 계산하지 않습니다. 입력하지 않으면 &lsquo;세금 반영 전&rsquo;으로 표시합니다.</li>
-          <li>노후도만으로 철거를 추천하지 않고, 정보가 부족하면 현상태 유지가 아니라 &lsquo;판단 보류&rsquo;로 안내합니다.</li>
-          <li>분석만으로 연락처를 업체에 전달하지 않습니다. 직접 신청한 경우에만 확인한 항목을 저장합니다.</li>
+      <section>
+        <h2 className="text-[22px] font-extrabold tracking-tight">4가지 선택을 같은 기준으로</h2>
+        <ul className="mt-4 grid grid-cols-2 gap-2">
+          {OPTIONS.map((o, i) => (
+            <li key={o.t} className="rounded-2xl bg-fill p-4">
+              <span className="text-[13px] font-extrabold text-brand">0{i + 1}</span>
+              <p className="mt-1 text-[16px] font-extrabold">{o.t}</p>
+              <p className="mt-0.5 text-[13px] text-subtle">{o.d}</p>
+            </li>
+          ))}
         </ul>
+      </section>
+
+      <section>
+        <h2 className="text-[22px] font-extrabold tracking-tight">이렇게 계산해요</h2>
+        <ol className="mt-4 space-y-3">
+          {[
+            ["비용 빼고 남는 돈", "공사비·중개보수·대출·보증금까지 빼고, 아직 안 판 집은 현금이 아닌 '보유 자산'으로 따로 보여드려요."],
+            ["어디서부터 유리해지는지", "손익분기 매각가와 최대 허용 공사비를 알려드려요."],
+            ["모르면 모른다고", "정보가 부족하면 '현상태 유지'가 아니라 '판단 보류'로 안내해요. 세금은 확인한 금액만 반영해요."],
+          ].map(([t, d], i) => (
+            <li key={t} className="flex gap-3">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand text-[13px] font-extrabold text-white">{i + 1}</span>
+              <span>
+                <span className="block text-[16px] font-bold">{t}</span>
+                <span className="block text-[14px] leading-relaxed text-muted">{d}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
       </section>
     </div>
   );

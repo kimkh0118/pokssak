@@ -1,95 +1,118 @@
-# 집 선택 비교
+# 부산 빈집 처리 비교
 
-단독·다가구주택 주소와 질문 3개(어떻게 하고 싶은지·집 상태·미룬 이유)로 **현상태 매각 · 철거 후 토지 매각 · 리모델링 · 현상태 유지**를 같은 기준으로 비교합니다.
-비용을 빼고 얼마가 남는지, 어느 가격·공사비부터 다른 선택이 유리해지는지 근거와 함께 보여줍니다.
+부산 빈집 소유자가 주소를 입력하면 공공데이터 6종을 조회하고, 네 질문과 상담·견적 정보를 반영해
+**현 상태 판매**와 **철거 후 토지 판매**의 처리 비용을 뺀 예상 회수액·철거비 손익분기점을 비교합니다.
+보유·리모델링 비용 안내, 지원사업 후보(주간 수집), 맞춤형 철거 플랜, 관심자산 저장과 알림을 제공합니다.
+
+> 추천은 입력한 조건에서의 비교 결과입니다. 실제 판매가격·거래 성사·최소 손실·지원금 수령을 보장하지 않습니다.
 
 ## 구조
 
 ```
-부웅산/
-├─ backend/            FastAPI (Python) — 공공데이터 조회, 계산, 추천, 저장
-│  ├─ app/
-│  │  ├─ main.py          API 주소 목록(라우트)
-│  │  ├─ public_data.py   공공 API 4종 호출·응답 해석
-│  │  ├─ sample_data.py   예시 모드용 가상 데이터
-│  │  ├─ property.py      주소 → 토지·건축물·거래 조회, 지원 범위 판정
-│  │  ├─ estimates.py     매각가(비교 사례)·철거/리모델링 비용 추정
-│  │  ├─ inputs.py        조회 결과 + 답변 + 수정값 → 계산 입력, 출처 목록
-│  │  ├─ calculator.py    월 현금흐름·비교가치·손익분기점·중개보수
-│  │  ├─ analysis.py      4개 선택지 × 3개 시나리오, 추천 규칙
-│  │  ├─ schemas.py       요청 검증(0원 / 모름 / 미입력 구분)
-│  │  ├─ storage.py       SQLite 저장
-│  │  ├─ labels.py        한국어 이름·금액 표시
-│  │  └─ settings.py      환경변수(.env)
-│  ├─ tests/              pytest
-│  ├─ requirements.txt
-│  └─ .env.example
-├─ frontend/           Next.js (React) — 화면만. 계산하지 않고 백엔드 결과를 보여줌
-│  └─ src/
-│     ├─ app/             페이지(폴더 이름 = 주소)
-│     ├─ components/      화면 조각(질문 흐름, 결과, 메뉴 등)
-│     └─ lib/             api.ts(응답 타입·호출), labels.ts, format.ts, history.ts, site.ts
-├─ scripts/e2e.mjs     전체 흐름 HTTP 점검
-└─ dev.sh              백엔드 + 프런트엔드 함께 실행
+backend/   FastAPI · SQLite
+  app/
+    adapters/   공공 API 어댑터(기관별): juso · building · trades(주택·토지, 전체 페이지) · vworld(토지특성·토지이용계획) · sample
+    codes.py    PNU·산 구분·단위 변환        clock.py   한국 시간(테스트에서 주입)
+    property.py 주소→6종 조회·공공 점검       comps.py   실거래 정제·유사 사례·참고가격
+    eligibility.py 네 질문→분석 경로         engine.py  회수액·K·D*·민감도·추천 상태(규칙 버전)
+    explain.py  AI 설명(검증·규칙 기반 대체)   plan.py    맞춤형 철거 플랜
+    programs.py 공고 원문·추출·LLM 구조화·근거 검증·검토·발행·매칭
+    jobs.py     주간 예약·잠금·재시도·실행 기록   notify.py 알림·outbox·전송
+    auth.py     회원·세션                    analyses.py 분석·접근 권한·관심자산
+    main.py     API 라우트                   migrations/ DB 스키마(SQL)   seed.py 예시 자료
+  tests/      pytest
+frontend/  Next.js(React) — 화면만. /api/* 는 백엔드로 전달
+scripts/e2e.mjs  서버를 켠 상태에서 전체 흐름 HTTP 점검
+dev.sh     백엔드+화면 함께 실행
 ```
 
-화면의 `/api/*` 요청은 `frontend/next.config.ts`의 rewrite로 백엔드(기본 `http://localhost:8000`)에 전달됩니다. 인증키는 백엔드에만 있습니다.
+## 설치·실행
 
-## 실행
-
-필요: Python 3.11+ , Node.js 20+
+필요: Python 3.11+, Node.js 20+
 
 ```bash
-cp backend/.env.example backend/.env   # 인증키 입력(없어도 예시 모드는 동작)
-./dev.sh                               # 처음 실행 시 패키지 자동 설치
+cp backend/.env.example backend/.env    # 키 입력(없어도 예시 모드 동작)
+./dev.sh                                # 또는 VS Code에서 backend/run.py ▶
 ```
 
-- 화면: http://localhost:3000
-- API 문서(자동 생성): http://localhost:8000/docs
-
-따로 실행하려면:
-
-```bash
-backend/.venv/bin/python backend/run.py   # 백엔드(:8000)
-cd frontend && npm run dev                # 화면(:3000)
-```
-
-`backend/app/main.py`는 패키지 안의 모듈이라 직접 실행하지 않습니다(상대 import 오류). 백엔드는 항상 `backend/run.py`나 `uvicorn app.main:app`으로 실행합니다.
-
-**VS Code**: `부웅산` 폴더 전체를 연 뒤 실행 및 디버그(⇧⌘D)에서 **"전체 실행 (백엔드 + 프런트엔드)"**을 선택해 ▶. 파이썬 인터프리터는 `.vscode/settings.json`에서 `backend/.venv`로 지정되어 있습니다.
+- 화면 http://localhost:3000 · API 문서 http://localhost:8000/docs
+- **예시 모드**: 첫 화면 "예시 빈집으로 전체 흐름 보기". 가상의 `부산광역시(예시) 예시구` 주소·거래·지원사업. 실제 조회가 실패해도 예시 데이터로 바꾸지 않습니다.
+- **관리자**: `ADMIN_EMAILS`에 적은 이메일로 가입 → `/admin`
+- DB 마이그레이션은 서버 시작 시 `backend/app/migrations/*.sql`을 순서대로 자동 적용합니다.
 
 ## 검증
 
 ```bash
-cd backend && .venv/bin/python -m pytest      # 계산·응답 해석·API 흐름 테스트
-cd frontend && npm run typecheck && npm run lint
-node scripts/e2e.mjs                           # 서버를 켠 상태에서 전체 흐름 점검
+cd backend && .venv/bin/python -m pytest      # 계산·데이터·지원사업·작업·알림·권한·전체 흐름
+cd frontend && npm run typecheck && npm run lint && npm run build
+node scripts/e2e.mjs                           # 서버 실행 중
 ```
 
-## API 인증키 (`backend/.env`)
+## 공공 API와 필드 매핑 (2026-10 공식 문서·실제 호출로 확인)
 
-| 환경변수 | 발급처 | 신청할 서비스 |
+서비스 6개, 인증키 3종. 공공데이터포털은 계정 키 1개로 서비스마다 활용신청이 필요합니다.
+
+| 서비스 | 엔드포인트 | 요청 | 쓰는 응답 필드 |
+|---|---|---|---|
+| 도로명주소 검색(행정안전부) | `business.juso.go.kr/addrlink/addrLinkApi.do` | confmKey, keyword, resultType=json | roadAddr, jibunAddr, admCd(법정동 10자리), mtYn(0 대지/1 산), lnbrMnnm·lnbrSlno(지번), buldMnnm(건물번호, PNU에 미사용), bdKdcd |
+| 건축물대장 표제부(건축HUB, 15134735) | `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` | sigunguCd, bjdongCd, platGbCd(0/1), bun, ji, _type=json | mainPurpsCd(Nm), strctCdNm, platArea·totArea(㎡), grndFlrCnt, useAprDay, mainAtchGbCdNm, regstrKindCdNm, bylotCnt |
+| 단독·다가구 매매(15126465) | `apis.data.go.kr/1613000/RTMSDataSvcSHTrade/getRTMSDataSvcSHTrade` | LAWD_CD(시군구 5), DEAL_YMD, pageNo, numOfRows | dealAmount(만원), plottageAr·totalFloorAr(㎡), buildYear(1900=미상), umdNm, jibun(일부 가림), cdealType·cdealDay, houseType, totalCount |
+| 토지 매매(15126466) | `apis.data.go.kr/1613000/RTMSDataSvcLandTrade/getRTMSDataSvcLandTrade` | 위와 같음 | dealAmount(만원), dealArea(㎡), jimok, landUse(용도지역), shareDealingType(지분), cdealType |
+| 토지특성(브이월드) | `api.vworld.kr/ned/data/getLandCharacteristics` | key, pnu, format=json + Referer | lndpclAr, lndcgrCodeNm, prposArea1Nm, roadSideCodeNm, tpgrphHg/FrmCodeNm, pblntfPclnd, stdrYear·stdrMt(최신 선택) |
+| 토지이용계획(브이월드) | `api.vworld.kr/ned/data/getLandUseAttr` | key, pnu, format=json + Referer | prposAreaDstrcCodeNm, cnflcAtNm, lastUpdtDt (응답 노드 `landUses`) |
+
+- PNU 19자리 = 법정동코드 10 + 대장구분 1(주소 mtYn 0→1 일반, 1→2 산) + 본번 4 + 부번 4. 주소 API는 PNU를 주지 않아 직접 조합합니다.
+- 실거래는 `totalCount`로 모든 페이지를 모읍니다. 한 페이지라도 실패한 달은 "조회 실패한 달"로 표시하고 0건으로 보지 않습니다.
+- 오류 구분: 키 미설정·인증·호출 제한·결과 없음·기관 일시 오류(코드 04/05 자동 재시도)·네트워크·응답 해석. 서버 로그에 키가 남지 않게 했습니다.
+
+## 계산·추천 규칙 (`engine.py`, 규칙 버전 `busan-vacant-2026.10.1`)
+
+```
+N_H = H − M_H − C_H                 N_L = L − D − M_L − C_L + G      Δ = N_L − N_H
+K  = L − H − (M_L − M_H)  (추가비용 기준)    D* = K − (C_L − C_H) + G  (철거비 손익분기점)    Δ = D* − D
+```
+- 금액은 원, 면적은 ㎡. 반올림은 표시 단계에서만.
+- 중개보수: 공인중개사법 시행규칙 별표1 상한요율(2021-10-19 시행). 가격이 바뀌면 다시 계산하고, 실제 협의액을 입력하면 그 값을 사용.
+- 기본 비교는 지원금 미반영(G=0). 확인된 현금 지원만 별도 시나리오로 반영. 직접 수행·세제·매각 상충·중복 미확인 지원은 G에서 제외.
+- 참고가격: 같은 법정동 최근 12개월, 면적 70~130%, 주택 건축연도 ±10년(개발 설정). 0건 보류, 1건 단일 사례, 여러 건 중앙값과 관측 범위(예측구간 아님). 24개월 집단은 별도, 인접동은 경계자료가 없어 미사용.
+- 민감도: H·L·D 각 ±10% 8개 조합(범위 입력은 양 끝에 적용, 중개보수 재계산). 개발 점검 가정이며 확률이 아님.
+- 상태: **조건부 추천**(상담 가격·견적·비용·기간 확인, 범위 비중첩, 8개 점검 모두 같은 우세) / **우열 불확실** / **추천 보류**. 철거 후 판매 실행 추천은 선지출 자금 확인이 필요(사후 지급 지원은 제외). 계산상 우세(`computedLeader`)와 실행 추천(`executionRecommendation`)은 별도 필드.
+- 분석 경로: 부산 단독·다가구, 동일 개인 단독소유(법인·불일치 제외), 전체 미사용(짐 보관은 추가 확인), 범위 명확, 대장·토지 일치일 때만 자동 금액 추천.
+
+## 지원사업 수집·검토·발행·예약
+
+- 파이프라인: 공식 공고 → 원문·해시 → 텍스트 추출(HTML·PDF·HWPX, HWP는 미지원으로 기록) → LLM 구조화(키 없으면 예시 추출기) → 원문 근거 검증 → 검토 대기 → 승인·버전 발행 → 매칭 → 알림.
+- 같은 해시는 다시 처리하지 않음. 중요 항목(금액·기간·대상·공공활용·사전승인·직접 수행) 변경은 검토 후 발행, 그동안 "변경 확인 중".
+- 예약: 매주 `PROGRAM_SCHEDULE`(기본 월 09:00 KST). 잠금·재시도·실행 기록. 수동 실행: `/admin`의 "지금 수집 실행" 또는
+  ```bash
+  cd backend && .venv/bin/python -m app.jobs weekly
+  ```
+- 자동 수집은 이용 조건을 확인해 `auto_fetch_allowed=1`로 바꾼 출처만, robots.txt가 허용할 때만. 그 밖에는 `/admin` 수동 등록.
+
+## 요구사항별 현황
+
+| 영역 | 구현 | 검증 |
 |---|---|---|
-| `JUSO_API_KEY` | [주소기반산업지원서비스](https://business.juso.go.kr/) | 도로명주소 **검색 API** |
-| `DATA_GO_KR_SERVICE_KEY` | [공공데이터포털](https://www.data.go.kr/) (Decoding 키) | [건축HUB 건축물대장정보(15134735)](https://www.data.go.kr/data/15134735/openapi.do), [단독/다가구 매매 실거래가(15126465)](https://www.data.go.kr/data/15126465/openapi.do), [토지 매매 실거래가(15126466)](https://www.data.go.kr/data/15126466/openapi.do) |
-| `VWORLD_API_KEY`, `VWORLD_DOMAIN` | [브이월드](https://www.vworld.kr/) | 국가중점데이터 토지특성정보. 발급 때 등록한 서비스 URL을 `VWORLD_DOMAIN`에 넣어야 함(Referer로 전송) |
+| 주소→6종 조회·PNU·범위 점검 | ✅ | 실제 키로 부산 수영구 주소 6종 조회 성공(2026-10-22), 단위 테스트 |
+| 네 질문·분석 경로(소유·점유·짐 보관·범위) | ✅ | 테스트 |
+| 참고가격(0/1/여러 건, 부분 실패, 제외 사유) | ✅ | 테스트, 실제 자료로 산출 확인 |
+| 명세 예시(K=5,950만·D*=5,650만·N_H=9,650만·N_L=1억3,300만·Δ=3,650만) | ✅ | 테스트 |
+| 민감도·범위 중첩·동률·음수 D*·선지출·견적 할증 중복 방지 | ✅ | 테스트 |
+| 지원금 구분(상한·확정·직접 수행·사후 지급·매각 상충·중복) | ✅ | 테스트 |
+| 공고 파이프라인·근거 검증·미검토 발행 방지·버전 보존·HWP 실패 | ✅(예시 추출기) | 테스트, 관리자 화면 |
+| 신청기간·한국 시간 마감 재평가(시각 주입) | ✅ | 테스트 |
+| 주간 예약·잠금·재시도·실패 기록·수동 실행 | ✅ | 테스트, 관리자 화면 수동 실행 |
+| 회원·관심자산 자동 저장·중복 방지·삭제·권한 | ✅ | 테스트, 브라우저 |
+| 알림(새 후보·접수 시작·변경·마감)·중복 방지·outbox·재시도·수신 해제 | ✅(앱 내) | 테스트, 브라우저 |
+| AI 설명 검증·규칙 기반 대체 | ✅ | 검증 함수 테스트 |
+| 화면 9종·모바일 | ✅ | 브라우저(데스크톱·375px) |
 
-연동 확인(2026-10-21, 실제 키): 주소 검색·건축물대장·단독/다가구 실거래가·토지 실거래가·토지특성 모두 정상 조회. 인증 오류·호출 제한·결과 없음·필드 누락·일부 월 실패를 각각 구분해 표시하며, 실제 조회 실패를 예시 데이터로 바꾸지 않습니다.
+## 실제 연동에 필요한 것과 확인하지 못한 것
 
-## 계산 원칙
-
-- 팔지 않은 집은 현금이 아니라 **기간 말 보유 순자산**으로 따로 표시.
-- **비교가치** = 월 순현금흐름 현재가치 합 + 기간 말 보유 순자산 현재가치 (기본 36개월, 할인율 3.5%, 수정 가능).
-- 대출·보증금은 한 번만 정산. 대출은 이자만 내다가 매각·기간 말에 원금 정산 가정.
-- 세금·대출·보증금을 모르면 0원으로 치지 않고 "세금 반영 전"처럼 표시. 자금·대출은 결과 화면 '계산 조건 수정'에서 선택 입력.
-- 현상태 매각가는 주변 실거래 사례(해제·직거래 제외, 면적 0.5~2배, 건축년도 ±15년)의 대지㎡당 가격 분위수. 3건 미만이면 보류. 공시지가는 매각가로 쓰지 않음.
-- 철거 후 토지가: 국토부 토지 매매 실거래(지목 '대', 지분 거래 제외, 같은 용도지역 우선) 사례로 추정. 3건 미만이면 보류.
-- 리모델링 후 가치: 주변의 최근 15년 안에 지은(신축급) 단독·다가구 거래로 '참고 추정'(상한에 가까운 값). 3건 미만이면 보류, 직접 입력 가능.
-- 손익분기 매각가·최대 허용 공사비는 `대안 − 기준안 = 0`을 이분법으로 탐색, 해가 없으면 숫자를 내지 않음.
-- 추천: 목적 → 예산·시점 → 실행 가능성 → 경제성 → 불확실성. 차이가 추정 범위보다 작으면 "추가 견적·확인 필요", 정보 부족은 "판단 보류"(현상태 유지 추천과 다름).
-
-## 미연동·가정
-
-- 철거·리모델링 단가, 보유비, 공사·매각 기간: 서비스 가정값(공식 단가 아님). 견적으로 바꿔야 함.
-- 세금 자동 계산 없음(입력값만 반영). 업체 연동 없음(상담 신청은 저장만, "신청 접수").
-- 회원 기능 없음. 결과 링크를 아는 사람은 결과를 볼 수 있음. 이용약관·개인정보처리방침은 초안.
+- **실제 API**: 주소·건축물대장·주택/토지 실거래·토지특성·토지이용계획 모두 실제 키로 정상 조회 확인.
+- **실제 공고 수집·추출**: ❌ 미확인. 부산시·구·군 공고의 이용 조건·자동 수집 허용 여부를 확인하지 못해 자동 수집을 꺼 두었습니다. 출처별 목록 페이지 구조에 맞는 링크 추출기가 필요합니다. 현재는 예시 공고와 관리자 수동 등록으로 흐름을 검증했습니다.
+- **LLM 구조화·AI 설명**: ❌ 실제 호출 미확인(`ANTHROPIC_API_KEY` 없음). 키가 없으면 예시 추출기·규칙 기반 설명으로 동작.
+- **이메일·문자·푸시 발송**: ❌ 공급자 미설정. 앱 내 알림함만 실제 동작. 공급자 주소를 넣으면 outbox가 POST로 전송·재시도(실제 발송 미확인).
+- **운영 예약 실행**: 앱 실행 중 백그라운드 스레드로 동작. 실제 월요일 09:00 실행은 미관찰(시각 계산·잠금은 테스트로 확인).
+- **실제 주소·견적 검증**: 사용자가 입력한 상담 가격·견적의 진위는 확인하지 않으며 화면에도 인증이 아님을 표시합니다.
+- 이용약관·개인정보처리방침은 초안(운영 주체·보관 기간 미정).

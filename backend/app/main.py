@@ -1,15 +1,4 @@
-"""FastAPI 앱: 화면(frontend)이 부르는 모든 API.
-
-GET  /api/status                       인증키 설정 여부(값은 노출하지 않음)
-GET  /api/address?mode=&q=             주소 검색
-POST /api/property                     토지·건축물·거래 사례 조회
-POST /api/analyses                     분석 생성
-GET  /api/analyses/{id}                분석 결과(열 때마다 같은 함수로 다시 계산)
-PUT  /api/analyses/{id}                계산 조건 수정 → 재계산
-GET  /api/analyses/summary?ids=a,b     내 분석 목록 요약
-GET  /api/partners                     상담 연결 대상(예시 업체)
-POST /api/consultations                상담 신청 저장('신청 접수')
-"""
+"""FastAPI 앱. 화면은 /api/* 만 호출한다. 관리자 기능과 사용자별 자료 접근은 서버에서 권한을 검사한다."""
 
 from __future__ import annotations
 
@@ -17,31 +6,40 @@ if __name__ == "__main__":  # 직접 실행하면 아래 상대 import가 실패
     raise SystemExit("app/main.py 는 직접 실행하지 않습니다. 대신:  backend/.venv/bin/python backend/run.py")
 
 import logging
-import re
-import uuid
-from datetime import datetime, timezone
+import os
+import secrets
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import ValidationError
 
-from . import storage
-from .analysis import analyze
-from .inputs import build
-from .property import lookup, search
-from .schemas import Answers, ConsultationRequest, CreateAnalysis, Overrides, PropertyRequest, Target, UpdateAnalysis
+from . import analyses, auth, db as dbm, jobs, notify, programs, property as prop
+from .clock import now, now_iso
+from .schemas import (
+    Answers, CreateAnalysis, Credentials, Evidence, LookupRequest, ManualNotice, NotificationSettings, ReviewAction, UpdateAnalysis,
+)
 from .settings import settings
 
 logging.basicConfig(level=logging.INFO)
-# httpx 기본 로그는 요청 주소 전체(인증키 포함)를 찍으므로 끈다. 실패는 public_data 가 키를 가려서 기록한다.
-logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)  # 요청 주소(인증키 포함)를 로그에 남기지 않음
 logging.getLogger("httpcore").setLevel(logging.WARNING)
-app = FastAPI(title="집 선택 비교 API", version="1.0")
-app.add_middleware(CORSMiddleware, allow_origins=[settings.frontend_origin], allow_methods=["*"], allow_headers=["*"])
 
 
-# 화면이 쓰기 쉽게 오류는 항상 {"error": "한국어 메시지"} 형태로 돌려준다
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    dbm.connect().close()  # 마이그레이션
+    if os.getenv("SEED_SAMPLE", "1") == "1":
+        from .seed import seed_sample
+        seed_sample()
+    jobs.start_scheduler()
+    yield
+
+
+app = FastAPI(title="부산 빈집 처리 비교 API", version="2.0", lifespan=lifespan)
+
+
 @app.exception_handler(HTTPException)
 async def http_error(_: Request, e: HTTPException):
     return JSONResponse({"error": e.detail}, status_code=e.status_code)
@@ -51,176 +49,316 @@ async def http_error(_: Request, e: HTTPException):
 async def validation_error(_: Request, e: RequestValidationError):
     first = e.errors()[0] if e.errors() else {}
     where = ".".join(str(x) for x in first.get("loc", [])[1:])
-    message = str(first.get("msg", "입력값이 올바르지 않습니다.")).removeprefix("Value error, ")
-    return JSONResponse({"error": f"입력값이 올바르지 않습니다({where}): {message}"}, status_code=400)
+    return JSONResponse({"error": f"입력값을 확인해 주세요({where}): {str(first.get('msg', '')).removeprefix('Value error, ')}"}, 400)
 
 
-def now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+# ---------------------------------------------------------------- 사용자 식별
+def user_of(request: Request) -> dict | None:
+    return auth.current_user(request.cookies.get(auth.SESSION_COOKIE))
 
 
-# ---------------------------------------------------------------- 조회
+def guest_of(request: Request) -> str | None:
+    return request.cookies.get(auth.GUEST_COOKIE)
+
+
+def require_user(request: Request) -> dict:
+    u = user_of(request)
+    if not u:
+        raise HTTPException(401, "로그인이 필요합니다.")
+    return u
+
+
+def require_admin(request: Request) -> dict:
+    u = require_user(request)
+    if not u["isAdmin"]:
+        raise HTTPException(403, "관리자만 사용할 수 있습니다.")
+    return u
+
+
+def _cookie(resp: Response, name: str, value: str, days: int):
+    resp.set_cookie(name, value, max_age=days * 86400, httponly=True, samesite="lax",
+                    secure=settings.frontend_origin.startswith("https"))
+
+
+# ---------------------------------------------------------------- 기본
 @app.get("/", include_in_schema=False)
 def root():
-    """백엔드 주소로 들어오면 사이트 메인 화면(프런트엔드)으로 보낸다. API 문서는 /docs"""
     return RedirectResponse(settings.frontend_origin)
 
 
 @app.get("/api/status")
 def status():
-    return {"juso": bool(settings.juso_key), "dataGoKr": bool(settings.data_go_kr_key), "vworld": bool(settings.vworld_key)}
+    return {"juso": bool(settings.juso_key), "dataGoKr": bool(settings.data_go_kr_key), "vworld": bool(settings.vworld_key),
+            "llm": bool(settings.anthropic_api_key), "schedule": settings.program_schedule,
+            "externalNotify": {k: bool(v) for k, v in notify.providers().items()}}
 
 
+# ---------------------------------------------------------------- 회원
+@app.post("/api/auth/signup")
+def signup(body: Credentials):
+    try:
+        return auth.signup(body.email, body.password)
+    except auth.AuthError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/auth/login")
+def login(body: Credentials, response: Response):
+    try:
+        token = auth.login(body.email, body.password)
+    except auth.AuthError as e:
+        raise HTTPException(401, str(e))
+    _cookie(response, auth.SESSION_COOKIE, token, auth.SESSION_DAYS)
+    return {"ok": True}
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request, response: Response):
+    auth.logout(request.cookies.get(auth.SESSION_COOKIE))
+    response.delete_cookie(auth.SESSION_COOKIE)
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+def me(request: Request):
+    return {"user": user_of(request)}
+
+
+# ---------------------------------------------------------------- 주소·공공자료
 @app.get("/api/address")
 async def address(mode: str = Query(pattern="^(live|sample)$"), q: str = Query(min_length=2, max_length=80)):
-    result = await search(mode, q.strip())
-    return JSONResponse(result, status_code=200 if result["ok"] else 502)
+    r = await prop.search(mode, q.strip())
+    return JSONResponse(r, status_code=200 if r["ok"] else 502)
 
 
-@app.post("/api/property")
-async def property_lookup(body: PropertyRequest):
-    if not isinstance(body.address.get("admCd"), str):
-        raise HTTPException(400, "주소 정보가 올바르지 않습니다.")
+@app.post("/api/lookup")
+async def lookup(body: LookupRequest):
     try:
-        result = await lookup(body.mode, body.address)
+        return await prop.lookup(body.mode, body.address)
     except ValueError as e:
         raise HTTPException(400, str(e))
-    storage.save_lookup(result)
-    return result
 
 
 # ---------------------------------------------------------------- 분석
-def compute(saved: dict) -> dict:
-    """저장된 입력으로 결과를 계산해 화면용 응답을 만든다."""
-    prop = storage.get_lookup(saved["lookupId"])
-    if not prop:
-        raise HTTPException(404, "조회 기록을 찾을 수 없습니다. 주소부터 다시 진행해 주세요.")
-    answers = Answers.model_validate(saved["answers"])
-    overrides = Overrides.model_validate(saved["overrides"])
-    target = Target.model_validate(saved["target"])
-    built = build(prop, answers, target, overrides)
-    return {
-        **saved,
-        "mode": prop["mode"],
-        "property": prop,
-        "current": built["current"],
-        "facts": built["facts"],
-        "assumptions": built["assumptions"],
-        "comps": built["comps"],
-        "landComps": built["landComps"],
-        "remodelComps": built["remodelComps"],
-        "costs": built["costs"],
-        "subject": built["subject"],
-        "result": analyze(built["engine"]),
-        "consultations": storage.list_consultations(saved["id"]),
-    }
+def _wrap(fn):
+    try:
+        return fn()
+    except analyses.NotFound as e:
+        raise HTTPException(404, str(e))
+    except analyses.AccessError as e:
+        raise HTTPException(403, str(e))
 
 
 @app.post("/api/analyses")
-def create_analysis(body: CreateAnalysis):
-    prop = storage.get_lookup(body.lookupId)
-    if not prop:
-        raise HTTPException(404, "조회 기록을 찾을 수 없습니다. 주소부터 다시 진행해 주세요.")
-    if prop["scope"]["status"] == "unsupported":
-        raise HTTPException(422, f"지원 범위 밖의 물건입니다: {prop['scope']['reason']}")
-    if len(prop["mainBuildings"]) > 1 and not body.target.buildingPk:
-        raise HTTPException(422, "분석할 건물을 선택해 주세요.")
-    saved = {
-        "id": str(uuid.uuid4()), "lookupId": body.lookupId, "createdAt": now(), "updatedAt": now(),
-        "answers": body.answers.model_dump(), "overrides": {}, "target": body.target.model_dump(),
-    }
-    storage.save_analysis(saved)
-    return {"id": saved["id"]}
-
-
-# summary 는 {id} 보다 먼저 등록해야 경로가 겹치지 않는다
-@app.get("/api/analyses/summary")
-def analyses_summary(ids: str = ""):
-    """내 분석 목록용 요약(개인정보 제외)."""
-    items = []
-    for analysis_id in [x for x in ids.split(",") if re.fullmatch(r"[0-9a-f-]{36}", x)][:30]:
-        saved = storage.get_analysis(analysis_id)
-        if not saved or not storage.get_lookup(saved["lookupId"]):
-            items.append({"id": analysis_id, "found": False})
-            continue
-        full = compute(saved)
-        rec = full["result"]["recommendation"]
-        top = next((o for o in full["result"]["options"] if o["id"] == rec["optionId"]), None)
-        items.append({
-            "id": analysis_id, "found": True, "mode": full["mode"], "address": full["property"]["address"]["roadAddr"],
-            "updatedAt": full["updatedAt"], "verdict": rec["verdict"],
-            "optionLabel": top["variantLabel"] if top else None,
-            "comparisonValue": top["scenarios"]["base"]["comparisonValue"] if top and top["computable"] else None,
-        })
-    return {"items": items}
+def create_analysis(body: CreateAnalysis, request: Request, response: Response):
+    user, guest = user_of(request), guest_of(request)
+    if not user and not guest:
+        guest = secrets.token_urlsafe(24)
+        _cookie(response, auth.GUEST_COOKIE, guest, 7)
+    out = _wrap(lambda: analyses.create(body.lookupId, body.answers.model_dump(), body.scope.model_dump(), user, guest))
+    return {**out, "loggedIn": bool(user)}
 
 
 @app.get("/api/analyses/{analysis_id}")
-def get_analysis(analysis_id: str):
-    saved = storage.get_analysis(analysis_id)
-    if not saved:
-        raise HTTPException(404, "분석 결과를 찾을 수 없습니다.")
-    return compute(saved)
+def get_analysis(analysis_id: str, request: Request):
+    return _wrap(lambda: analyses.get(analysis_id, user_of(request), guest_of(request)))
+
+
+EVIDENCE_FIELDS = ("H", "L", "M_H", "M_L", "period_H", "period_L")
+COST_FIELDS = ("tax", "holding", "finance", "cleanup", "other")
+
+
+def _ev(v) -> dict:
+    return Evidence.model_validate(v).model_dump(exclude_none=True)
+
+
+def validate_inputs(raw: dict) -> dict:
+    out, field = {}, None
+    try:
+        for field, v in raw.items():
+            if v is None:
+                out[field] = None
+            elif field in EVIDENCE_FIELDS:
+                out[field] = _ev(v)
+            elif field in ("C_H", "C_L"):
+                out[field] = {k: _ev(x) for k, x in v.items() if k in COST_FIELDS and x}
+            elif field == "D":
+                d = {}
+                if v.get("quote"):
+                    d["quote"] = _ev(v["quote"])
+                if v.get("simulation") and v["simulation"].get("unitPerPyeong"):
+                    s = v["simulation"]
+                    d["simulation"] = {"unitPerPyeong": float(s["unitPerPyeong"]), "multiplier": float(s.get("multiplier") or 1),
+                                       "multiplierShare": min(1.0, max(0.0, float(s.get("multiplierShare") or 1)))}
+                out[field] = d
+            elif field == "funding":
+                out[field] = {"prefund": v.get("prefund") if v.get("prefund") in ("yes", "no", "unknown") else "unknown",
+                              "available": float(v["available"]) if v.get("available") not in (None, "") else None}
+            elif field == "supports":
+                keys = ("name", "programId", "confirmed", "confirmedAmount", "maxAmount", "type", "payment", "saleCompatible",
+                        "noDuplicationConfirmed")
+                out[field] = [{k: s.get(k) for k in keys} for s in v][:10]
+            elif field == "holding":
+                out[field] = {k: _ev(x) for k, x in v.items() if k in ("tax", "management", "insurance", "other") and x}
+                out[field]["plan"] = str(v.get("plan") or "")[:500]
+            elif field == "remodel":
+                out[field] = {k: _ev(v[k]) for k in ("priceAfter", "quote") if v.get(k)}
+                out[field]["costs"] = {k: _ev(x) for k, x in (v.get("costs") or {}).items() if k in COST_FIELDS and x}
+            else:
+                raise HTTPException(400, f"알 수 없는 입력 항목: {field}")
+    except (ValidationError, ValueError, TypeError, KeyError, AttributeError) as e:
+        raise HTTPException(400, f"입력값을 확인해 주세요({field}): {str(e).splitlines()[0][:200]}")
+    return out
 
 
 @app.put("/api/analyses/{analysis_id}")
-def update_analysis(analysis_id: str, body: UpdateAnalysis):
-    saved = storage.get_analysis(analysis_id)
-    if not saved:
-        raise HTTPException(404, "분석 결과를 찾을 수 없습니다.")
-    saved["overrides"] = body.overrides.model_dump(exclude_none=True)
+def update_analysis(analysis_id: str, body: UpdateAnalysis, request: Request):
+    inputs = validate_inputs(body.inputs or {})
+    answers = None
     if body.answers:
-        saved["answers"] = body.answers.model_dump()
-    saved["updatedAt"] = now()
-    storage.save_analysis(saved)
-    return compute(saved)
+        try:
+            answers = Answers.model_validate(body.answers).model_dump()
+        except ValidationError as e:
+            raise HTTPException(400, f"답변을 확인해 주세요: {e.errors()[0]['msg']}")
+    return _wrap(lambda: analyses.update(analysis_id, user_of(request), guest_of(request), inputs, answers))
 
 
-# ---------------------------------------------------------------- 상담 신청
-# 실제 업체 연동은 없다. 신청은 저장만 하고 '신청 접수'로 표시한다. 업체는 모두 예시이며 순위 계산에 쓰이지 않는다.
-PARTNERS = [
-    {"id": "sample-broker-1", "type": "broker", "name": "예시공인중개사사무소", "isSample": True},
-    {"id": "sample-demolition-1", "type": "demolition", "name": "예시해체공사", "isSample": True},
-    {"id": "sample-remodeling-1", "type": "remodeling", "name": "예시리모델링", "isSample": True},
-]
-PARTNER_TYPES_FOR_OPTION = {
-    "sell_as_is": ["broker"],
-    "demolish_sell_land": ["demolition", "broker"],  # 철거 후 토지 매각을 위한 중개사 연결도 제공
-    "remodel": ["remodeling"],
-    "keep": [],  # 결과 확인 후 종료
-}
+# ---------------------------------------------------------------- 관심자산
+@app.post("/api/analyses/{analysis_id}/save")
+def save(analysis_id: str, request: Request):
+    return _wrap(lambda: analyses.save_asset(require_user(request), analysis_id))
 
 
-@app.get("/api/partners")
-def partners():
-    return {"partners": PARTNERS, "forOption": PARTNER_TYPES_FOR_OPTION}
+@app.get("/api/assets")
+def my_assets(request: Request):
+    u = require_user(request)
+    with dbm.connect() as c:
+        rows = c.execute("SELECT w.id, w.analysis_id, w.created_at, a.road_addr, a.jibun_addr, a.pnu FROM watched_assets w "
+                         "JOIN assets a ON a.id = w.asset_id WHERE w.user_id = ? AND w.deleted_at IS NULL ORDER BY w.created_at DESC",
+                         (u["id"],)).fetchall()
+    return {"assets": [dict(r) for r in rows]}
 
 
-@app.post("/api/consultations")
-def create_consultation(body: ConsultationRequest):
-    if not body.consent:
-        raise HTTPException(400, "전달 항목 확인과 동의가 필요합니다.")
-    saved = storage.get_analysis(body.analysisId)
-    if not saved:
-        raise HTTPException(404, "분석 결과를 찾을 수 없습니다.")
-    partner = next((p for p in PARTNERS if p["id"] == body.partnerId), None)
-    if not partner:
-        raise HTTPException(400, "연결 대상을 찾을 수 없습니다.")
-    if partner["type"] not in PARTNER_TYPES_FOR_OPTION[body.optionId]:
-        raise HTTPException(400, "이 선택지에 맞지 않는 연결 대상입니다.")
-    if "name" not in body.sharedFields or "phone" not in body.sharedFields:
-        raise HTTPException(400, "연락을 받으려면 이름과 연락처 전달에 동의해야 합니다.")
-    phone = re.sub(r"[^\d-]", "", body.contactPhone)
-    if len(phone.replace("-", "")) < 9:
-        raise HTTPException(400, "연락처를 확인해 주세요.")
-    prop = storage.get_lookup(saved["lookupId"]) or {}
-    record = {
-        "id": str(uuid.uuid4()), "analysisId": body.analysisId, "optionId": body.optionId,
-        "partnerId": partner["id"], "partnerType": partner["type"], "sharedFields": body.sharedFields,
-        "contactName": body.contactName.strip(), "contactPhone": phone,
-        "addressShared": prop.get("address", {}).get("roadAddr") if "address" in body.sharedFields else None,
-        "message": body.message, "createdAt": now(),
-    }
-    storage.save_consultation(record)
-    return {"id": record["id"], "status": "received", "partner": partner,
-            "sharedFields": body.sharedFields, "createdAt": record["createdAt"]}
+@app.delete("/api/assets/{watch_id}")
+def delete_asset(watch_id: str, request: Request):
+    u = require_user(request)
+    with dbm.connect() as c:
+        n = c.execute("UPDATE watched_assets SET deleted_at = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+                      (now_iso(), watch_id, u["id"])).rowcount
+    if not n:
+        raise HTTPException(404, "관심자산을 찾을 수 없습니다.")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- 알림
+@app.get("/api/notifications")
+def my_notifications(request: Request):
+    return {"items": notify.inbox(require_user(request)["id"])}
+
+
+@app.post("/api/notifications/{nid}/read")
+def read(nid: str, request: Request):
+    u = require_user(request)
+    with dbm.connect() as c:
+        c.execute("UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ?", (now_iso(), nid, u["id"]))
+    return {"ok": True}
+
+
+@app.get("/api/notifications/settings")
+def get_settings(request: Request):
+    u = require_user(request)
+    with dbm.connect() as c:
+        s = c.execute("SELECT in_app, email, sms, push FROM notification_settings WHERE user_id = ?", (u["id"],)).fetchone()
+    return {"settings": {k: bool(s[k]) for k in s.keys()} if s else NotificationSettings().model_dump(),
+            "available": {k: bool(v) for k, v in notify.providers().items()}}
+
+
+@app.put("/api/notifications/settings")
+def put_settings(body: NotificationSettings, request: Request):
+    u = require_user(request)
+    p = notify.providers()
+    for ch in ("email", "sms", "push"):
+        if getattr(body, ch) and not p[ch]:
+            raise HTTPException(400, f"{ch} 발송 공급자가 설정되지 않아 신청할 수 없습니다(앱 내 알림은 사용 가능).")
+    with dbm.connect() as c:
+        c.execute("INSERT INTO notification_settings VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET "
+                  "in_app=excluded.in_app, email=excluded.email, sms=excluded.sms, push=excluded.push, updated_at=excluded.updated_at",
+                  (u["id"], int(body.in_app), int(body.email), int(body.sms), int(body.push), now_iso()))
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- 지원사업(공개)
+@app.get("/api/programs")
+def list_programs(sample: bool = False):
+    return {"programs": programs.published(include_sample=sample), "note": "주간 갱신 자료이며 실시간 정보가 아닙니다."}
+
+
+# ---------------------------------------------------------------- 관리자
+@app.get("/api/admin/candidates")
+def admin_candidates(request: Request, status: str = "pending"):
+    require_admin(request)
+    with dbm.connect() as c:
+        rows = c.execute("SELECT k.id, k.program_id, k.status, k.important_changes, k.validation, k.model_version, k.parser_version, "
+                         "k.created_at, d.url, d.content_type, p.review_state, p.is_sample FROM program_candidates k "
+                         "JOIN program_documents d ON d.id = k.document_id JOIN programs p ON p.id = k.program_id "
+                         "WHERE k.status = ? ORDER BY k.created_at DESC", (status,)).fetchall()
+        docs = c.execute("SELECT id, url, content_type, extract_status, extract_error, fetched_at, is_sample FROM program_documents "
+                         "WHERE extract_status != 'ok' ORDER BY fetched_at DESC").fetchall()
+    return {"candidates": [dict(r) | {"important_changes": dbm.loads(r["important_changes"]), "validation": dbm.loads(r["validation"])}
+                           for r in rows],
+            "extractFailures": [dict(d) for d in docs]}
+
+
+@app.get("/api/admin/candidates/{cid}")
+def admin_candidate(cid: str, request: Request):
+    require_admin(request)
+    with dbm.connect() as c:
+        k = c.execute("SELECT k.*, d.raw_text, d.url FROM program_candidates k JOIN program_documents d ON d.id = k.document_id "
+                      "WHERE k.id = ?", (cid,)).fetchone()
+        if not k:
+            raise HTTPException(404, "후보를 찾을 수 없습니다.")
+        cur = c.execute("SELECT v.data, v.version_no FROM programs p JOIN program_versions v ON v.id = p.current_version_id "
+                        "WHERE p.id = ?", (k["program_id"],)).fetchone()
+        log = c.execute("SELECT * FROM review_log WHERE candidate_id = ? ORDER BY at", (cid,)).fetchall()
+    return {"candidate": dict(k) | {"data": dbm.loads(k["data"]), "validation": dbm.loads(k["validation"]),
+                                    "important_changes": dbm.loads(k["important_changes"])},
+            "current": {"data": dbm.loads(cur["data"]), "versionNo": cur["version_no"]} if cur else None,
+            "fields": programs.FIELDS, "log": [dict(x) for x in log]}
+
+
+@app.post("/api/admin/candidates/{cid}")
+def admin_review(cid: str, body: ReviewAction, request: Request):
+    u = require_admin(request)
+    try:
+        if body.action == "approve":
+            vid = programs.publish(cid, actor=u["email"], edited=body.edited)
+            notify.generate(analyses.profile_for)
+            notify.dispatch()
+            return {"versionId": vid}
+        programs.reject(cid, actor=u["email"], note=body.note)
+        return {"ok": True}
+    except programs.ReviewError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/admin/notices")
+def admin_manual_notice(body: ManualNotice, request: Request):
+    """자동 수집 조건이 불명확한 공식 공고를 관리자가 원문 그대로 등록(허용된 원문만)."""
+    require_admin(request)
+    return programs.ingest(body.noticeKey, body.url, body.text.encode(), "text/plain", posted_at=body.postedAt)
+
+
+@app.get("/api/admin/jobs")
+def admin_jobs(request: Request):
+    require_admin(request)
+    with dbm.connect() as c:
+        sources = [dict(r) for r in c.execute("SELECT * FROM program_sources")]
+        locks = [dict(x) for x in c.execute("SELECT * FROM job_locks")]
+    return {"runs": jobs.runs(), "sources": sources, "locks": locks, "schedule": settings.program_schedule,
+            "nextRun": jobs.next_run(settings.program_schedule, now()).isoformat(), "schedulerEnabled": settings.scheduler_enabled}
+
+
+@app.post("/api/admin/jobs/weekly")
+def admin_run_weekly(request: Request):
+    require_admin(request)
+    return jobs.run("weekly_programs", "manual", jobs.weekly, retry_delays=())

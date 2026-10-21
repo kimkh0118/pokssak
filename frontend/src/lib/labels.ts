@@ -1,85 +1,35 @@
-// 화면에 보여주는 한국어 이름
-import type { Condition, DelayReason, Occupancy, Provenance, Purpose, Timing, Verdict, ProviderError, Partner } from "./api";
-
-export const PURPOSE_LABEL: Record<Purpose, string> = {
-  quick_sale: "빨리 정리",
-  profit: "수익 창출",
-  live: "직접 사용",
-  undecided: "아직 모르겠음",
-  best_price: "좋은 가격에 매각",
-  rent: "임대 수익",
-};
-export const PURPOSE_HINT: Partial<Record<Purpose, string>> = {
-  quick_sale: "빠르게 팔아 현금으로",
-  profit: "팔거나 세를 줘서 더 많이",
-  live: "직접 살거나 쓰기",
-  undecided: "모든 선택지를 비교해요",
-};
-export const DELAY_REASON_LABEL: Record<DelayReason, string> = {
-  cost: "비용",
-  ownership: "소유관계",
-  redevelopment: "재개발 기대",
-  how_to: "방법을 몰라서",
-  other: "기타",
-};
-export const TIMING_LABEL: Record<Timing, string> = {
-  within_3m: "3개월 이내",
-  within_6m: "6개월 이내",
-  within_12m: "1년 이내",
-  flexible: "1년 이상 / 상관없음",
-};
-export const OCCUPANCY_LABEL: Record<Occupancy, string> = { owner: "본인 거주", tenant: "임차인 거주", vacant: "공실", unknown: "모름" };
-export const CONDITION_LABEL: Record<Condition, string> = { good: "바로 사용 가능", partial_repair: "일부 수리 필요", major_repair: "큰 파손 있음", unknown: "모르겠음" };
-export const OPTION_LABEL = { sell_as_is: "현상태로 매각", demolish_sell_land: "철거 후 토지 매각", remodel: "리모델링", keep: "현상태 유지" } as const;
-
-export const PROVENANCE_LABEL: Record<Provenance, string> = {
-  public_api: "공공데이터 조회값",
-  user_input: "사용자 입력값",
-  estimate: "추정값",
+// 화면 표시용 한국어 이름
+export const KIND_LABEL: Record<string, string> = {
+  consult: "상담·견적 입력",
+  public: "공공자료",
+  assumption: "사용자 가정",
+  unknown: "미확인",
+  none: "적용 없음 확인",
+  rule: "공식 요율",
+  public_api: "공공자료",
   sample: "예시 데이터",
 };
-
-export const VERDICT_LABEL: Record<Verdict, string> = {
-  recommend: "추천",
-  needs_quotes: "추가 견적·확인 필요",
-  insufficient_info: "정보 부족으로 판단 보류",
-  no_feasible: "조건에 맞는 실행 가능한 선택지 없음",
+export const STATUS_LABEL = { conditional: "조건부 추천", uncertain: "우열 불확실", hold: "추천 보류" } as const;
+export const OPTION_LABEL: Record<string, string> = { sell_as_is: "현 상태 판매", demolish: "철거 후 토지 판매", tie: "동률", mixed: "점검마다 다름" };
+export const MATCH_LABEL = { partial_match: "조건 일부 일치 후보", needs_check: "추가 확인 필요", mismatch: "조건 불일치", closed: "마감·비활성" } as const;
+export const ERROR_LABEL: Record<string, string> = {
+  not_configured: "인증키 미설정", auth: "인증 오류", rate_limit: "호출 제한 초과", no_result: "조회 결과 없음",
+  invalid_request: "요청값 오류", upstream: "기관 서버 일시 오류", network: "네트워크 오류", parse: "응답 해석 오류",
 };
-
-export const SCENARIO_LABEL = { conservative: "보수적", base: "기준", optimistic: "낙관적" } as const;
-
-export const FLOW_LABEL: Record<string, string> = {
-  sale: "매각대금",
-  transaction: "중개·거래비용",
-  tax: "세금(입력값)",
-  loan: "대출 원금 정산",
-  deposit: "임차보증금 반환·정산",
-  execution: "철거·리모델링 실행비용",
-  holding: "보유비",
-  maintenance: "유지관리비",
-  finance: "대출이자",
-  rent: "임대수입",
-  housing: "대체·임시 주거비",
-};
-
-export const ERROR_LABEL: Record<ProviderError["kind"], string> = {
-  not_configured: "인증키가 설정되지 않았습니다",
-  auth: "인증 오류",
-  rate_limit: "호출 제한 초과",
-  no_result: "조회 결과 없음",
-  invalid_request: "요청값 오류",
-  upstream: "제공기관 시스템 오류",
-  network: "네트워크 오류",
-  parse: "응답 해석 오류",
-};
-
-export const PARTNER_TYPE_LABEL: Record<Partner["type"], string> = { broker: "공인중개사", demolition: "철거업체", remodeling: "리모델링 회사" };
-
-export const SHAREABLE_FIELDS = {
-  name: "이름",
-  phone: "연락처",
-  address: "물건 주소",
-  summary: "분석 요약(선택지별 추정 금액·조건)",
-  property: "토지·건축물 기본 정보",
+export const COST_PARTS = { tax: "세금", holding: "보유·관리비", finance: "금융비", cleanup: "정리비", other: "기타" } as const;
+export const QUOTE_ITEMS = {
+  demolition: "철거 공사", waste: "폐기물 처리", equipment: "장비·운반", asbestos: "석면 관련",
+  admin: "부대 업무(멸실신고 등)", vat: "부가세", cleanup: "별도 정리 비용",
 } as const;
-export type ShareableField = keyof typeof SHAREABLE_FIELDS;
+
+export const QUESTIONS = {
+  ownership: {
+    title: "해당 주택과 토지는 어떤 소유 형태인가요?",
+    hint: "건물과 매각할 토지 모두에 대한 질문이에요.",
+    options: { single: "동일 개인의 단독소유", joint: "공동소유", other: "기타·잘 모르겠음" },
+  },
+  usage: { title: "현재 집의 사용 상태", options: { vacant: "전체 미사용", storage: "짐·가구 보관 중", occupied: "임차인·점유자 거주 중", unknown: "모름" } },
+  direction: { title: "우선하는 방향", options: { recovery: "회수금액 우선", fast: "빠른 매각 우선", undecided: "아직 모르겠음" } },
+  condition: { title: "건물의 실제 상태는 어떤가요?", options: { usable: "양호·수리 가능", old: "노후·대공사 필요", severe: "심각한 노후·폐가", unknown: "모름" } },
+  access: { title: "집 앞까지 공사차량이 진입할 수 있나요?", options: { good: "차량 진입 원활", narrow: "진입은 가능하나 좁음", none: "차량 진입 불가", unknown: "모름" } },
+} as const;

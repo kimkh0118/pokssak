@@ -1,12 +1,19 @@
+from datetime import datetime
+
 import pytest
 
+from app import clock
 from app.settings import settings
 
 
 @pytest.fixture(autouse=True)
-def temp_db(tmp_path, monkeypatch):
-    """테스트마다 빈 DB. 인증키는 기본적으로 '없음'으로 둔다(실제 API를 부르지 않음)."""
+def isolated(tmp_path, monkeypatch):
+    """테스트마다 빈 DB, 고정 시각(한국 시간 2026-10-22 10:00), 외부 키 없음."""
     monkeypatch.setattr(settings, "database_path", str(tmp_path / "test.db"))
-    monkeypatch.setattr(settings, "juso_key", None)
-    monkeypatch.setattr(settings, "data_go_kr_key", None)
-    monkeypatch.setattr(settings, "vworld_key", None)
+    for k in ("juso_key", "data_go_kr_key", "vworld_key", "anthropic_api_key", "email_provider_url", "sms_provider_url", "push_provider_url"):
+        monkeypatch.setattr(settings, k, None)
+    monkeypatch.setattr(settings, "scheduler_enabled", False)
+    monkeypatch.setattr(settings, "admin_emails", ["admin@example.com"])
+    clock.set_now(datetime(2026, 10, 22, 10, 0, tzinfo=clock.KST))
+    yield
+    clock.set_now(None)

@@ -1,78 +1,32 @@
-// 실행 중인 서버에 HTTP로 주소 입력 → 결과 확인 → 조건 수정 → 상담 신청까지 전체 흐름을 검사한다.
-// 사용: 백엔드·프런트엔드를 켠 뒤 node scripts/e2e.mjs (BASE_URL 기본값 http://localhost:3000, /api 는 백엔드로 전달됨)
+// 실행 중인 서버(화면 :3000 → /api 는 백엔드로 전달)에 HTTP로 전체 흐름을 점검한다.
+// 사용: node scripts/e2e.mjs   (BASE_URL 로 변경 가능)
 const BASE = process.env.BASE_URL || "http://localhost:3000";
-let failures = 0;
-const check = (name, cond, extra = "") => {
-  console.log(`${cond ? "PASS" : "FAIL"}  ${name}${extra ? ` — ${extra}` : ""}`);
-  if (!cond) failures++;
-};
-const j = async (path, init) => {
-  const r = await fetch(BASE + path, { ...init, headers: { "Content-Type": "application/json" } });
+let cookie = "", failures = 0;
+const check = (name, ok, extra = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? ` — ${extra}` : ""}`); if (!ok) failures++; };
+async function j(path, init = {}) {
+  const r = await fetch(BASE + path, { ...init, headers: { "Content-Type": "application/json", cookie }, body: init.body && JSON.stringify(init.body) });
+  const set = r.headers.get("set-cookie"); if (set) cookie = [cookie, ...set.split(/,(?=\s*\w+=)/).map((c) => c.split(";")[0])].filter(Boolean).join("; ");
   return { status: r.status, body: await r.json() };
-};
-
-// 1) 실제 모드: 인증키가 없으면 오류를 그대로 돌려주고 예시 데이터로 대체하지 않는다
-const live = await j(`/api/address?mode=live&q=${encodeURIComponent("세종대로 110")}`);
-if (live.body.ok === false) {
-  check("실제 모드 실패는 오류로 반환", ["not_configured", "auth", "network", "rate_limit", "upstream"].includes(live.body.error.kind), live.body.error.kind);
-  check("실제 모드 실패 시 예시 데이터 미포함", !JSON.stringify(live.body).includes("예시시"));
-} else {
-  check("실제 모드 주소 검색 성공(인증키 설정됨)", Array.isArray(live.body.data), `${live.body.data.length}건`);
 }
 
-// 2) 예시 모드 전체 흐름
-const s = await j(`/api/address?mode=sample&q=${encodeURIComponent("예시로 34")}`);
-check("예시 주소 검색", s.body.ok && s.body.data[0].provenance === "sample");
-const addr = s.body.data.find((a) => a.id === "sample-multi");
-const lk = await j("/api/property", { method: "POST", body: JSON.stringify({ mode: "sample", address: addr }) });
-check("토지·건축물·거래 사례 조회", lk.body.land.ok && lk.body.buildings.ok && lk.body.trades.ok);
-check("지원 범위 판정", lk.body.scope.status === "supported");
+const live = await j(`/api/address?mode=live&q=${encodeURIComponent("장대골로31번길 19")}`);
+check("실제 모드 주소 검색(키 있으면 성공, 없으면 오류로 반환)", live.body.ok === true || ["not_configured", "auth", "network", "upstream"].includes(live.body.error?.kind),
+  live.body.ok ? `${live.body.data.length}건` : live.body.error.kind);
 
-const answers = {
-  purpose: "best_price",
-  timing: "flexible",
-  occupancy: "tenant",
-  condition: "partial_repair",
-  tenant: { deposit: { status: "known", won: 200_000_000 }, monthlyRent: { status: "known", won: 1_500_000 }, leaseEnd: { status: "unknown" } },
-  availableCash: { status: "known", won: 0 },
-  loanBalance: { status: "unknown" },
-  loanRatePct: { status: "unanswered" },
-};
-const cr = await j("/api/analyses", { method: "POST", body: JSON.stringify({ lookupId: lk.body.id, answers, target: { buildingPk: "S-2001" } }) });
-check("분석 생성", typeof cr.body.id === "string");
-const a = await j(`/api/analyses/${cr.body.id}`);
-const r = a.body.result;
-check("4개 선택지 계산", r.options.length === 4);
-check("대출 모름 → '대출 잔액 반영 전' 표시", r.globalPending.some((p) => p.includes("대출 잔액 반영 전")));
-check("세금 미입력 → '세금 반영 전' 표시", r.globalPending.includes("세금 반영 전"));
-check("투입 가능 현금 0원은 0원으로 저장(모름 아님)", a.body.answers.availableCash.status === "known" && a.body.answers.availableCash.won === 0);
-const demo = r.options.find((o) => o.id === "demolish_sell_land");
-check("현금 0원 + 보증금 반환 필요 → 철거안 예산 초과", demo.checks.budget === "exceeds", `선투입 ${demo.scenarios.base.maxUpfront}`);
-check("예산 초과 선택지는 추천하지 않음", r.recommendation.optionId !== "demolish_sell_land" && r.recommendation.optionId !== "remodel");
-const keep = r.options.find((o) => o.id === "keep");
-check("보유 시 집값은 현금 수지에 없음", !keep.scenarios.base.flows.some((f) => f.category === "sale") && keep.scenarios.base.terminal !== null);
-
-// 3) 계산 조건 수정 → 재계산
-const up = await j(`/api/analyses/${cr.body.id}`, { method: "PUT", body: JSON.stringify({ overrides: { taxes: { asIsSale: 30_000_000 }, horizonMonths: 48 } }) });
-check("조건 수정 재계산", up.body.current.horizonMonths === 48);
-const sell = up.body.result.options.find((o) => o.id === "sell_as_is");
-check("입력한 세금이 매각 정산에 반영", sell.scenarios.base.saleSettlement.tax === 30_000_000);
-const bad = await j(`/api/analyses/${cr.body.id}`, { method: "PUT", body: JSON.stringify({ overrides: { asIsPrice: { low: 3, base: 2, high: 1 } } }) });
-check("잘못된 조건은 400", bad.status === 400);
-
-// 4) 지원 범위 밖
-const apt = (await j(`/api/address?mode=sample&q=${encodeURIComponent("예시아파트")}`)).body.data[0];
-const lkApt = await j("/api/property", { method: "POST", body: JSON.stringify({ mode: "sample", address: apt }) });
-const crApt = await j("/api/analyses", { method: "POST", body: JSON.stringify({ lookupId: lkApt.body.id, answers, target: {} }) });
-check("공동주택 호실은 분석 거부(422)", crApt.status === 422);
-
-// 5) 상담 신청: 동의 없으면 거부, 동의하면 '신청 접수'
-const noConsent = await j("/api/consultations", { method: "POST", body: JSON.stringify({ analysisId: cr.body.id, optionId: "sell_as_is", partnerId: "sample-broker-1", sharedFields: ["name", "phone"], contactName: "테스트", contactPhone: "010-0000-0000", consent: false }) });
-check("동의 없는 상담 신청 거부", noConsent.status === 400);
-const wrong = await j("/api/consultations", { method: "POST", body: JSON.stringify({ analysisId: cr.body.id, optionId: "keep", partnerId: "sample-broker-1", sharedFields: ["name", "phone"], contactName: "테스트", contactPhone: "010-0000-0000", consent: true }) });
-check("현상태 유지는 업체 연결 없음", wrong.status === 400);
-const ok = await j("/api/consultations", { method: "POST", body: JSON.stringify({ analysisId: cr.body.id, optionId: "demolish_sell_land", partnerId: "sample-demolition-1", sharedFields: ["name", "phone"], contactName: "테스트", contactPhone: "010-0000-0000", consent: true }) });
-check("상담 신청은 '신청 접수' 상태로 저장", ok.body.status === "received" && ok.body.partner.isSample === true);
-
+const found = (await j(`/api/address?mode=sample&q=${encodeURIComponent("바다로 12")}`)).body.data[0];
+const lk = (await j("/api/lookup", { method: "POST", body: { mode: "sample", address: found } })).body;
+check("공공자료 6종(예시) 조회", ["buildings", "land", "landUse", "houseTrades", "landTrades"].every((k) => lk[k].ok));
+const answers = { ownership: "single", usage: "vacant", direction: "recovery", condition: "old", access: "narrow", vacancyMonths: 24 };
+const { id } = (await j("/api/analyses", { method: "POST", body: { lookupId: lk.id, answers } })).body;
+let a = (await j(`/api/analyses/${id}`)).body;
+check("참고 비교만으로는 추천 보류", a.result.status === "hold" && a.result.calc?.withoutSupport.base.K != null);
+const items = Object.fromEntries(["demolition", "waste", "equipment", "asbestos", "admin", "vat", "cleanup"].map((k) => [k, "included"]));
+const cost = Object.fromEntries(["tax", "holding", "finance", "cleanup", "other"].map((k) => [k, { kind: "consult", value: 500000 }]));
+const c = (v, t) => ({ kind: "consult", value: v, priceType: t, scopeMatches: true, siteConditionShared: true, source: "예시공인중개사", checkedOn: "2026-10-10" });
+a = (await j(`/api/analyses/${id}`, { method: "PUT", body: { inputs: { H: c(240000000, "as_is"), L: c(330000000, "land"),
+  D: { quote: { kind: "consult", value: 25000000, source: "예시철거", checkedOn: "2026-10-12", items } }, C_H: cost, C_L: cost,
+  period_H: { kind: "consult", value: 3 }, period_L: { kind: "consult", value: 8 }, funding: { prefund: "yes", available: 40000000 } } } })).body;
+check("상담·견적 보완 후 재계산", ["conditional", "uncertain"].includes(a.result.status), `${a.result.status} / ${a.result.executionRecommendation}`);
+check("지원사업 후보·철거 플랜", a.programs.length > 0 && a.plan.length === 6);
 console.log(failures ? `\n${failures}건 실패` : "\n모든 E2E 검사 통과");
 process.exit(failures ? 1 : 0);

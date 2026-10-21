@@ -1,0 +1,162 @@
+"""분석: 공공자료 + 네 질문 + 상담·견적 입력 → 참고가격·계산·추천·지원사업 매칭·철거 플랜.
+분석은 입력(답변·근거)만 저장하고 결과는 같은 규칙 버전으로 다시 계산한다.
+접근 권한: 로그인 사용자는 본인 분석만, 비회원은 같은 브라우저 세션 토큰으로만 열 수 있다."""
+
+from __future__ import annotations
+
+import uuid
+
+from . import comps, db as dbm, eligibility, engine, explain, plan, programs
+from .auth import token_hash
+from .clock import now_iso
+from .property import get_lookup, is_main
+
+
+class AccessError(Exception):
+    pass
+
+
+class NotFound(Exception):
+    pass
+
+
+def _scope_key(pnu: str, building_key: str | None) -> str:
+    return f"{pnu}:{building_key or 'all'}"
+
+
+def create(lookup_id: str, answers: dict, scope: dict, user: dict | None, guest_token: str | None) -> dict:
+    lk = get_lookup(lookup_id)
+    if not lk:
+        raise NotFound("조회 기록을 찾을 수 없습니다. 주소부터 다시 진행해 주세요.")
+    a = lk["address"]
+    key = _scope_key(lk["pnu"], scope.get("buildingKey"))
+    aid, now = str(uuid.uuid4()), now_iso()
+    with dbm.connect() as c:
+        row = c.execute("SELECT id FROM assets WHERE scope_key = ?", (key,)).fetchone()
+        asset_id = row["id"] if row else str(uuid.uuid4())
+        if not row:
+            c.execute("INSERT INTO assets VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                      (asset_id, key, lk["pnu"], scope.get("buildingKey"), a.get("roadAddr"), a.get("jibunAddr"), a.get("sggNm"), now))
+        c.execute("INSERT INTO analyses VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                  (aid, asset_id, lookup_id, user["id"] if user else None, None if user else token_hash(guest_token or ""),
+                   dbm.dumps({**answers, "scope": scope}), engine.RULE_VERSION, now, now))
+    saved = save_asset(user, aid) if user else None
+    return {"id": aid, "saved": saved}
+
+
+def save_asset(user: dict, analysis_id: str) -> dict:
+    """로그인 사용자의 조회 완료 시 관심자산으로 자동 저장(같은 범위는 중복 저장하지 않음)."""
+    with dbm.connect() as c:
+        an = c.execute("SELECT asset_id FROM analyses WHERE id = ? AND owner_user_id = ?", (analysis_id, user["id"])).fetchone()
+        if not an:
+            raise AccessError("이 분석에 접근할 수 없습니다.")
+        row = c.execute("SELECT id, deleted_at FROM watched_assets WHERE user_id = ? AND asset_id = ?", (user["id"], an["asset_id"])).fetchone()
+        if row:
+            c.execute("UPDATE watched_assets SET analysis_id = ?, deleted_at = NULL WHERE id = ?", (analysis_id, row["id"]))
+            return {"id": row["id"], "created": False}
+        wid = str(uuid.uuid4())
+        c.execute("INSERT INTO watched_assets VALUES (?, ?, ?, ?, ?, NULL)", (wid, user["id"], an["asset_id"], analysis_id, now_iso()))
+    return {"id": wid, "created": True}
+
+
+def _row(analysis_id: str, user: dict | None, guest_token: str | None):
+    with dbm.connect() as c:
+        row = c.execute("SELECT * FROM analyses WHERE id = ?", (analysis_id,)).fetchone()
+    if not row:
+        raise NotFound("분석을 찾을 수 없습니다.")
+    if row["owner_user_id"]:
+        if not user or (user["id"] != row["owner_user_id"] and not user.get("isAdmin")):
+            raise AccessError("이 분석에 접근할 수 없습니다.")
+    elif row["guest_token_hash"] != token_hash(guest_token or ""):
+        raise AccessError("이 분석은 처음 조회한 브라우저에서만 열 수 있습니다. 저장하려면 로그인하세요.")
+    return row
+
+
+def inputs_of(analysis_id: str) -> dict:
+    with dbm.connect() as c:
+        rows = c.execute("SELECT field, payload FROM evidence_inputs WHERE analysis_id = ?", (analysis_id,)).fetchall()
+    return {r["field"]: dbm.loads(r["payload"]) for r in rows}
+
+
+def update(analysis_id: str, user, guest, inputs: dict | None, answers: dict | None) -> dict:
+    row = _row(analysis_id, user, guest)
+    with dbm.connect() as c:
+        for field, payload in (inputs or {}).items():
+            if payload is None:
+                c.execute("DELETE FROM evidence_inputs WHERE analysis_id = ? AND field = ?", (analysis_id, field))
+            else:
+                c.execute("INSERT INTO evidence_inputs VALUES (?, ?, ?, ?) ON CONFLICT(analysis_id, field) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at",
+                          (analysis_id, field, dbm.dumps(payload), now_iso()))
+        if answers:
+            old = dbm.loads(row["answers"])
+            c.execute("UPDATE analyses SET answers = ?, updated_at = ? WHERE id = ?", (dbm.dumps({**old, **answers}), now_iso(), analysis_id))
+        else:
+            c.execute("UPDATE analyses SET updated_at = ? WHERE id = ?", (now_iso(), analysis_id))
+    return get(analysis_id, user, guest)
+
+
+def asset_profile(lk: dict, answers: dict) -> dict:
+    main = lk["mainBuildings"]
+    key = (answers.get("scope") or {}).get("buildingKey")
+    b = next((x for x in main if x.get("mgmBldrgstPk") == key), main[0] if main else {})
+    return {"sggName": lk["address"].get("sggNm"), "housingType": b.get("mainPurpsCdNm"),
+            "vacancyMonths": answers.get("vacancyMonths"), "ownership": answers.get("ownership"),
+            "ownershipLabel": eligibility.OWNERSHIP.get(answers.get("ownership")),
+            "landArea": (lk["land"]["data"] or {}).get("lndpclAr") if lk["land"]["ok"] else None}
+
+
+def compute(row) -> dict:
+    lk = get_lookup(row["lookup_id"])
+    answers = dbm.loads(row["answers"])
+    scope = answers.get("scope") or {}
+    inputs = inputs_of(row["id"])
+    main = lk["mainBuildings"]
+    building = next((x for x in main if x.get("mgmBldrgstPk") == scope.get("buildingKey")), main[0] if len(main) == 1 else None)
+    land = lk["land"]["data"] if lk["land"]["ok"] else {}
+    land_area = land.get("lndpclAr") or (building or {}).get("platArea")
+    build_year = int(building["useAprDay"][:4]) if building and building.get("useAprDay") else None
+    subject = {"umdNm": lk["address"].get("emdNm"), "landArea": land_area, "buildYear": build_year, "jimok": land.get("lndcgrCodeNm") or "대"}
+    reference = {
+        "house": comps.reference_price("house", lk["houseTrades"], subject, lk["months"]["base"], lk["months"]["extended"]),
+        "land": comps.reference_price("land", lk["landTrades"], subject, lk["months"]["base"], lk["months"]["extended"]),
+    }
+    elig = eligibility.evaluate(answers, lk["checks"], scope)
+    result = engine.evaluate(inputs, {"eligibility": elig, "reference": reference,
+                                      "floorArea": (building or {}).get("totArea"), "access": answers.get("access")})
+    profile = asset_profile(lk, answers)
+    matches = []
+    for p in programs.published(include_sample=lk["mode"] == "sample"):
+        m = programs.match(p, profile)
+        d = p["data"]
+        matches.append({"programId": p["id"], "versionId": p["versionId"], "title": (d.get("title") or {}).get("value"),
+                        "agency": (d.get("agency") or {}).get("value"), "status": p["status"], "reviewState": p["reviewState"],
+                        "isSample": p["isSample"], "url": p["url"], "lastSuccessFetchAt": p["lastSuccessFetchAt"],
+                        "benefitType": (d.get("benefitType") or {}).get("value"), "benefitCap": (d.get("benefitCap") or {}).get("value"),
+                        "paymentTiming": (d.get("paymentTiming") or {}).get("value"),
+                        "saleCompatible": (d.get("saleCompatible") or {}).get("value"),
+                        "contact": (d.get("contact") or {}).get("value"), **m})
+    out = {
+        "id": row["id"], "mode": lk["mode"], "ruleVersion": row["rule_version"], "createdAt": row["created_at"], "updatedAt": row["updated_at"],
+        "address": lk["address"], "pnu": lk["pnu"], "checks": lk["checks"],
+        "public": {k: lk[k] for k in ("buildings", "land", "landUse")} | {"mainBuildings": main, "building": building},
+        "tradeStatus": {k: {kk: lk[k].get(kk) for kk in ("ok", "failedMonths", "meta", "error")} for k in ("houseTrades", "landTrades")},
+        "answers": answers, "inputs": inputs, "eligibility": elig, "reference": reference, "result": result,
+        "explanation": explain.ai_explain(result, answers.get("direction")),
+        "holding": engine.holding_guide(inputs), "remodel": engine.remodel_option(inputs), "programs": matches,
+    }
+    out["plan"] = plan.build(out)
+    return out
+
+
+def get(analysis_id: str, user: dict | None, guest: str | None) -> dict:
+    return compute(_row(analysis_id, user, guest))
+
+
+def profile_for(analysis_id: str) -> tuple[dict, dict] | None:
+    """알림 매칭용(권한 검사 없이 내부에서만 사용)."""
+    with dbm.connect() as c:
+        row = c.execute("SELECT lookup_id, answers FROM analyses WHERE id = ?", (analysis_id,)).fetchone()
+    if not row:
+        return None
+    lk = get_lookup(row["lookup_id"])
+    return lk, asset_profile(lk, dbm.loads(row["answers"]))

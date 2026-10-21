@@ -1,447 +1,374 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { Analysis, Answers, CompEstimate, OptionResult, Overrides } from "@/lib/api";
-import { CONDITION_LABEL, DELAY_REASON_LABEL, FLOW_LABEL, OCCUPANCY_LABEL, PURPOSE_LABEL, SCENARIO_LABEL, TIMING_LABEL, VERDICT_LABEL } from "@/lib/labels";
-import { formatArea, formatMonths, formatWon } from "@/lib/format";
-import { Card, Notice, Pill, ProvenanceBadge, SampleBanner, Stat } from "./ui";
-import { ConditionEditor } from "./ConditionEditor";
-import { ConsultPanel } from "./ConsultPanel";
-import { ShareButton } from "./ShareButton";
-import { addHistory } from "@/lib/history";
+import { useSearchParams } from "next/navigation";
+import { api, type Analysis, type Compare, type Reference, type User } from "@/lib/api";
+import { formatWon } from "@/lib/format";
+import { KIND_LABEL, MATCH_LABEL, OPTION_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { InputsPanel } from "./InputsPanel";
+import { PublicInfo } from "./PublicInfo";
+import { Button, Card, Notice, Pill, ProvenanceBadge, SampleBanner } from "./ui";
 
-
-const solvedText = (s: OptionResult["breakevenPrice"]) => (!s ? "해당 없음" : s.ok ? formatWon(s.value) : `산정 불가 — ${s.reason}`);
+const w = (v: number | null | undefined) => (v == null ? "미확인" : formatWon(v));
+const pair = (p: [number, number] | null | undefined) => (!p ? "미확인" : p[0] === p[1] ? w(p[0]) : `${w(p[0])} ~ ${w(p[1])}`);
 
 export function ResultView({ id }: { id: string }) {
+  const params = useSearchParams();
   const [data, setData] = useState<Analysis | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [withSupport, setWithSupport] = useState(false);
+  const [detail, setDetail] = useState<"sell" | "demolish" | "hold">("sell");
+  const [saveState, setSaveState] = useState<string | null>(params.get("saved"));
 
   useEffect(() => {
-    fetch(`/api/analyses/${id}`)
-      .then((r) => r.json())
-      .then((b) => {
-        if (b.error) return setError(b.error);
-        setData(b);
-        addHistory({ id: b.id, address: b.property.address.roadAddr, mode: b.mode });
-      })
-      .catch(() => setError("서버에 연결하지 못했습니다."));
+    api<Analysis>(`/api/analyses/${id}`).then(setData).catch((e) => setError(e.message));
+    api<{ user: User | null }>("/api/auth/me").then((r) => setUser(r.user)).catch(() => {});
   }, [id]);
 
-  const recalc = useCallback(
-    async (overrides: Overrides, answers?: Answers) => {
-      setSaving(true);
-      setError(null);
-      try {
-        const r = await fetch(`/api/analyses/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ overrides, answers }) });
-        const b = await r.json();
-        if (b.error) setError(b.error);
-        else setData(b);
-      } catch {
-        setError("서버에 연결하지 못했습니다.");
-      } finally {
-        setSaving(false);
-      }
-    },
-    [id],
-  );
+  if (error) return <div className="mx-auto max-w-xl py-10 text-center"><p className="text-[20px] font-extrabold">결과를 열 수 없어요</p><p className="mt-2 text-muted">{error}</p></div>;
+  if (!data) return <div className="mx-auto max-w-3xl space-y-3" aria-busy="true"><span className="sr-only">불러오는 중</span>{[0, 1, 2].map((i) => <div key={i} className="h-40 animate-pulse rounded-2xl bg-fill" />)}</div>;
 
-  if (error && !data)
-    return (
-      <div className="mx-auto max-w-xl py-10 text-center">
-        <p className="text-[20px] font-extrabold">결과를 열 수 없어요</p>
-        <p className="mt-2 text-[15px] text-muted">{error}</p>
-        <Link href="/history" className="mt-6 inline-flex h-12 items-center rounded-xl bg-brand px-5 text-[15px] font-bold text-white">내 분석으로</Link>
-      </div>
-    );
-  if (!data)
-    return (
-      <div className="mx-auto max-w-3xl space-y-4" aria-busy="true" aria-live="polite">
-        <span className="sr-only">결과를 불러오는 중</span>
-        <div className="h-6 w-40 animate-pulse rounded bg-fill" />
-        <div className="h-8 w-3/4 animate-pulse rounded bg-fill" />
-        <div className="h-64 animate-pulse rounded-3xl bg-fill" />
-        <div className="grid gap-3 sm:grid-cols-2">
-          {[0, 1, 2, 3].map((i) => <div key={i} className="h-44 animate-pulse rounded-2xl bg-fill" />)}
-        </div>
-      </div>
-    );
-
-  const { result, current, property, answers } = data;
-  const rec = result.recommendation;
-  const top = result.options.find((o) => o.id === rec.optionId) ?? null;
-  const heroTone = rec.verdict === "recommend" ? "bg-brand" : rec.verdict === "needs_quotes" ? "bg-ink" : "bg-[#2b2f3a]";
-  const strength = rec.strength === "strong" ? "추천 강도 높음" : rec.strength === "moderate" ? "추천 강도 보통" : rec.strength === "weak" ? "추천 강도 낮음" : null;
+  const r = data.result;
+  const cmp: Compare | null = r.calc ? (withSupport && r.calc.withSupport ? r.calc.withSupport : r.calc.withoutSupport) : null;
+  const tone = r.status === "conditional" ? "bg-brand" : r.status === "uncertain" ? "bg-ink" : "bg-[#2b2f3a]";
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-3xl space-y-8 pb-10">
       {data.mode === "sample" && <SampleBanner />}
-      <div>
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[13px] font-semibold text-subtle">{new Date(data.updatedAt).toLocaleString("ko-KR")} 기준 분석</p>
-          <ShareButton />
-        </div>
-        <h1 className="mt-1 text-[22px] font-extrabold leading-tight tracking-tight">{property.address.roadAddr}</h1>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          <Pill>{PURPOSE_LABEL[answers.purpose]}</Pill>
-          <Pill>상태: {CONDITION_LABEL[answers.condition]}</Pill>
-          {answers.delayReason && <Pill>미룬 이유: {DELAY_REASON_LABEL[answers.delayReason]}</Pill>}
-          <Pill>{TIMING_LABEL[answers.timing]}</Pill>
-          <Pill>{answers.occupancy === "unknown" ? "사용 상황 미입력" : OCCUPANCY_LABEL[answers.occupancy]}</Pill>
-        </div>
-      </div>
+      <SaveBanner state={saveState} user={user} analysisId={data.id} onChange={setSaveState} />
 
-      <section className={`rounded-3xl p-6 text-white ${heroTone}`} aria-labelledby="verdict">
-        <div className="flex flex-wrap items-center gap-2 text-[13px] font-bold">
-          <span className="rounded-full bg-white/15 px-2.5 py-1">{VERDICT_LABEL[rec.verdict]}</span>
-          {strength && <span className="text-white/70">{strength}</span>}
+      <header>
+        <p className="text-[13px] text-subtle">규칙 {r.ruleVersion} · {new Date(data.updatedAt).toLocaleString("ko-KR")}</p>
+        <h1 className="mt-1 text-[22px] font-extrabold leading-tight">{data.address.roadAddr}</h1>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {Object.values(data.eligibility.labels).filter(Boolean).map((t) => <Pill key={t}>{t}</Pill>)}
         </div>
-        {top && top.computable ? (
-          <>
-            <p className="mt-4 text-[15px] font-semibold text-white/75">{rec.verdict === "recommend" ? "가장 유리한 선택" : "근소하게 앞선 선택"}</p>
-            <h2 id="verdict" className="text-[28px] font-extrabold leading-tight tracking-tight">{top.variantLabel}</h2>
-            <p className="tabular mt-3 text-[34px] font-extrabold leading-none tracking-tight">{formatWon(top.scenarios.base.comparisonValue)}</p>
-            <p className="mt-1 text-[13px] text-white/70">비교가치 · {current.horizonMonths}개월 기준 현재가치</p>
-          </>
-        ) : (
-          <h2 id="verdict" className="mt-4 text-[22px] font-extrabold leading-snug">{rec.headline}</h2>
+      </header>
+
+      <section className={`rounded-3xl p-6 text-white ${tone}`} aria-labelledby="status">
+        <p className="text-[13px] font-bold"><span className="rounded-full bg-white/15 px-2.5 py-1">{STATUS_LABEL[r.status]}</span></p>
+        <h2 id="status" className="mt-3 text-[24px] font-extrabold leading-snug">
+          {r.status === "conditional" ? `입력한 조건에서는 ${OPTION_LABEL[r.executionRecommendation!]}이 유리해요`
+            : r.status === "uncertain" ? "어느 쪽이 유리한지 아직 확실하지 않아요" : "근거가 부족해 추천을 보류했어요"}
+        </h2>
+        {r.computedLeader && r.status !== "conditional" && (
+          <p className="mt-2 text-[14px] text-white/80">계산상으로는 {OPTION_LABEL[r.computedLeader]} 쪽이 앞서지만, 실행 추천은 아니에요.</p>
         )}
-        {top && top.computable && rec.verdict !== "recommend" && <p className="mt-4 text-[15px] font-semibold leading-relaxed">{rec.headline}</p>}
-        <ul className="mt-4 space-y-1.5 border-t border-white/20 pt-4 text-[14px] leading-relaxed text-white/90">
-          {rec.reasons.map((r) => (
-            <li key={r} className="flex gap-2"><span aria-hidden>·</span><span>{r}</span></li>
-          ))}
+        <p className="mt-3 text-[15px] leading-relaxed text-white/90">{data.explanation.summary}</p>
+        {data.explanation.aiError && <p className="mt-1 text-[12px] text-white/60">{data.explanation.aiError}</p>}
+        <ul className="mt-4 space-y-1.5 border-t border-white/20 pt-4 text-[14px] text-white/90">
+          {data.explanation.nextSteps.map((s) => <li key={s}>· {s}</li>)}
         </ul>
+        <p className="mt-4 text-[12px] text-white/60">추천은 입력한 조건에서의 비교 결과이며 실제 판매가격·거래 성사·지원금 수령을 보장하지 않아요.</p>
       </section>
 
-      {(rec.cautions.length > 0 || result.globalPending.length > 0) && (
-        <section className="space-y-3">
-          {result.globalPending.length > 0 && (
-            <div className="flex flex-wrap gap-1.5" aria-label="반영하지 못한 항목">
-              {result.globalPending.map((p) => <Pill key={p} tone="orange">{p}</Pill>)}
-            </div>
-          )}
-          {rec.cautions.length > 0 && (
-            <ul className="space-y-1.5 rounded-2xl bg-fill p-4 text-[14px] text-muted">
-              {rec.cautions.map((c) => <li key={c}>· {c}</li>)}
-            </ul>
-          )}
-        </section>
+      <ActionBar data={data} withSupport={withSupport} setWithSupport={setWithSupport} />
+
+      {r.missing.length > 0 && (
+        <Card>
+          <h2 className="text-[18px] font-extrabold">추천에 더 필요한 정보</h2>
+          <ul className="mt-2 space-y-1 text-[14px] text-muted">{r.missing.map((m) => <li key={m}>· {m}</li>)}</ul>
+        </Card>
       )}
 
-      <section>
-        <h2 className="text-[20px] font-extrabold tracking-tight">선택지별로 보면</h2>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {result.options.map((o) => <OptionCard key={o.id} o={o} isTop={rec.optionId === o.id} isRecommend={rec.verdict === "recommend"} />)}
+      <section aria-labelledby="cmp">
+        <div className="flex items-end justify-between gap-2">
+          <h2 id="cmp" className="text-[20px] font-extrabold">두 판매 방식 비교</h2>
+          <span className="text-[12px] text-subtle">{withSupport ? "확인된 지원 반영" : "지원금 미반영(기본)"}</span>
+        </div>
+        <p className="mt-1 text-[13px] text-subtle">{r.label}. 세금·비용 미확인 항목이 있으면 반영 범위를 밝힌 참고금액이에요.</p>
+        {cmp ? <CompareTable data={data} cmp={cmp} /> : <Notice>비교할 가격 자료가 없어요. 아래에서 상담 가격을 입력하면 계산해요.</Notice>}
+      </section>
+
+      {cmp && <Breakeven cmp={cmp} known={!!r.calc?.demolitionKnown} costsComplete={!!r.calc?.costsComplete} />}
+      {cmp && r.calc?.demolitionKnown && <Sensitivity cmp={cmp} pct={r.sensitivityAssumption} />}
+
+      <InputsPanel data={data} onSaved={setData} />
+
+      <section aria-labelledby="ref">
+        <h2 id="ref" className="text-[20px] font-extrabold">공공 실거래 참고가격</h2>
+        <p className="mt-1 text-[13px] text-subtle">같은 법정동 최근 12개월 거래 중 면적 70~130%, 건축연도 10년 이내 사례(개발 설정이며 감정평가 기준 아님). 추천에는 상담 가격이 필요해요.</p>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <RefCard r={data.reference.house} />
+          <RefCard r={data.reference.land} />
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl ring-1 ring-line">
-        <div className="p-5 pb-3">
-          <h2 className="text-[18px] font-extrabold">한눈에 표로 비교</h2>
-          <p className="mt-1 text-[13px] text-subtle">기준 시나리오 · 비교가치 = 기간 내 월 순현금흐름 현재가치 + 기간 말 보유 순자산 현재가치 ({current.horizonMonths}개월, 할인율 {current.discountRatePct.toFixed(1)}%)</p>
+      <section aria-labelledby="detail">
+        <h2 id="detail" className="text-[20px] font-extrabold">방식별 상세</h2>
+        <div className="mt-3 flex gap-1.5" role="tablist">
+          {([["sell", "현 상태 판매"], ["demolish", "철거 후 판매"], ["hold", "보유·리모델링"]] as const).map(([k, t]) => (
+            <button key={k} role="tab" aria-selected={detail === k} onClick={() => setDetail(k)}
+              className={`rounded-full px-4 py-2 text-[14px] font-bold ${detail === k ? "bg-ink text-white" : "bg-fill text-muted"}`}>{t}</button>
+          ))}
         </div>
-        <div className="overflow-x-auto">
-        <table className="tabular w-full min-w-[860px] text-[14px]">
-          <thead>
-            <tr className="bg-fill text-left text-[13px] text-subtle">
-              <th scope="col" className="p-3 font-bold">항목</th>
-              {result.options.map((o) => (
-                <th key={o.id} scope="col" className={`p-3 font-bold ${rec.optionId === o.id ? "text-brand" : "text-ink"}`}>
-                  {o.label}
-                  {rec.optionId === o.id && <span className="ml-1 rounded bg-brand px-1.5 py-0.5 text-[10px] text-white">{rec.verdict === "recommend" ? "추천" : "선두"}</span>}
-                  <span className="block font-normal text-subtle">{o.variantLabel}</span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <TRow label="비교가치(기준)" cells={result.options.map((o) => (o.computable ? <strong key={o.id}>{formatWon(o.scenarios.base.comparisonValue)}</strong> : <span key={o.id} className="text-bad">계산 보류</span>))} />
-            <TRow label="추정 범위(보수~낙관)" cells={result.options.map((o) => rangeCell(o))} />
-            <TRow label="기간 내 순현금 수지" hint="실제로 들어오고 나가는 돈(명목)" cells={result.options.map((o) => (o.computable ? formatWon(o.scenarios.base.netCash, { signed: true }) : "—"))} />
-            <TRow label="기간 말 보유 순자산" hint="팔지 않은 집의 추정 가치 − 처분비용 − 대출 − 보증금. 현금 아님" cells={result.options.map((o) => (o.computable ? (o.scenarios.base.terminal ? formatWon(o.scenarios.base.terminal.net) : "없음(매각)") : "—"))} />
-            <TRow label="현상태 매각 대비" cells={result.options.map((o) => (o.id === "sell_as_is" ? "기준" : o.vsSellAsIs === null ? "—" : <span key={o.id} className={o.vsSellAsIs >= 0 ? "text-brand" : "text-bad"}>{formatWon(o.vsSellAsIs, { signed: true })}</span>))} />
-            <TRow label="최대 선투입 필요액" hint="누적 현금흐름의 가장 큰 부족액" cells={result.options.map((o) => (o.computable ? formatWon(o.scenarios.base.maxUpfront) : "—"))} />
-            <TRow label="예상 소요 기간" cells={result.options.map((o) => (o.computable ? (o.id === "keep" ? "실행 없음" : formatMonths(o.scenarios.base.completionMonth)) : "—"))} />
-            <TRow label="손익분기 매각가" hint="대안 비교가치 = 기준안" cells={result.options.map((o) => (o.breakevenPrice ? <small key={o.id}>{solvedText(o.breakevenPrice)}<br />{o.baselineLabel ? <span className="text-muted">기준안: {o.baselineLabel}</span> : null}</small> : "—"))} />
-            <TRow label="최대 허용 공사비" cells={result.options.map((o) => (o.maxAllowableCost ? <small key={o.id}>{solvedText(o.maxAllowableCost)}</small> : "—"))} />
-            <TRow label="목적·기간·예산" cells={result.options.map((o) => checksCell(o))} />
-          </tbody>
-        </table>
-        </div>
-        <p className="p-4 text-[12px] text-subtle">보수적·낙관적 범위는 매각가·공사비·기간을 함께 바꾼 가정의 폭이며, 통계적으로 검증된 확률이 아니에요. 업체 수수료·제휴 여부는 계산에 쓰이지 않아요.</p>
+        <Card className="mt-3">
+          {detail === "sell" && <SellDetail data={data} />}
+          {detail === "demolish" && <DemolishDetail data={data} />}
+          {detail === "hold" && <HoldDetail data={data} />}
+        </Card>
       </section>
 
-      {error && <Notice tone="bad">{error}</Notice>}
-      <ConditionEditor data={data} saving={saving} onApply={recalc} />
+      <Programs data={data} />
+      <Plan data={data} />
 
-      <section className="space-y-3">
-        <h2 className="text-[20px] font-extrabold tracking-tight">계산 근거 자세히 보기</h2>
-        {result.options.map((o) => (
-          <OptionDetail key={o.id} o={o} costs={data.costs} />
-        ))}
-      </section>
+      <details className="rounded-2xl ring-1 ring-line p-5">
+        <summary className="cursor-pointer font-bold">공공 기본정보·대상 점검·확인할 사항</summary>
+        <div className="mt-4 space-y-5">
+          <PublicInfo lookup={{ ...data.public, address: data.address, pnu: data.pnu, checks: data.checks, mode: data.mode,
+            houseTrades: data.tradeStatus.houseTrades, landTrades: data.tradeStatus.landTrades } as never} />
+          <div>
+            <h3 className="font-bold">추가 확인사항</h3>
+            <ul className="mt-1 list-disc pl-5 text-[14px] text-muted">{data.eligibility.confirmations.map((c) => <li key={c}>{c}</li>)}</ul>
+            <p className="mt-2 text-[12px] text-subtle">{data.eligibility.notice}</p>
+          </div>
+        </div>
+      </details>
+    </div>
+  );
+}
 
-      <SourcesPanel data={data} />
+function SaveBanner({ state, user, analysisId, onChange }: { state: string | null; user: User | null; analysisId: string; onChange: (s: string | null) => void }) {
+  const [msg, setMsg] = useState<string | null>(null);
+  if (!user) return <Notice>지금 결과는 이 브라우저 세션에서만 볼 수 있어요. <Link href={`/login?next=/analyses/${analysisId}`} className="font-bold text-brand">로그인</Link>하면 관심자산으로 저장하고 지원사업 알림을 받을 수 있어요.</Notice>;
+  if (!state) return null;
+  return (
+    <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#e8f8f0] p-4 text-[14px] text-good">
+      <span>{msg ?? (state === "new" ? "관심자산에 자동 저장했어요." : "이미 저장된 관심자산이에요(중복 저장하지 않았어요).")}</span>
+      {!msg && (
+        <span className="flex gap-3">
+          <button className="font-bold underline" onClick={async () => {
+            try {
+              const list = await api<{ assets: { id: string; analysis_id: string }[] }>("/api/assets");
+              const it = list.assets.find((x) => x.analysis_id === analysisId);
+              if (it) await api(`/api/assets/${it.id}`, { method: "DELETE" });
+              setMsg("저장을 취소했어요.");
+            } catch (e) { setMsg(`저장 취소 실패: ${(e as Error).message}`); }
+          }}>저장 취소</button>
+          <button className="font-bold underline" onClick={() => onChange(null)}>닫기</button>
+        </span>
+      )}
+    </div>
+  );
+}
 
-      <ConsultPanel data={data} />
+function ActionBar({ data, withSupport, setWithSupport }: { data: Analysis; withSupport: boolean; setWithSupport: (v: boolean) => void }) {
+  return (
+    <nav aria-label="결과 화면 동작" className="flex flex-wrap gap-2">
+      <a href="#inputs" className="rounded-full bg-ink px-4 py-2 text-[14px] font-bold text-white">정보 수정</a>
+      <button disabled={!data.result.calc?.withSupport} onClick={() => setWithSupport(!withSupport)}
+        className="rounded-full bg-fill px-4 py-2 text-[14px] font-bold text-ink disabled:text-subtle">
+        다른 경우 보기: {withSupport ? "지원금 미반영" : "확인된 지원 반영"}
+      </button>
+      <a href="#plan" className="rounded-full bg-fill px-4 py-2 text-[14px] font-bold text-ink">상담·플랜</a>
+      <Link href="/" className="rounded-full bg-fill px-4 py-2 text-[14px] font-bold text-ink">종료</Link>
+    </nav>
+  );
+}
 
-      <div className="flex gap-3 text-sm">
-        <Link href={`/analyze?mode=${data.mode}`} className="text-brand hover:underline">다른 주소 분석하기</Link>
+function Explain({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="group mt-2 text-[13px]">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-full bg-fill px-2.5 py-1 font-bold text-muted">ⓘ {title}</summary>
+      <div className="mt-2 space-y-1 rounded-xl bg-fill p-3 text-muted">{children}</div>
+    </details>
+  );
+}
+
+function CompareTable({ data, cmp }: { data: Analysis; cmp: Compare }) {
+  const b = cmp.base, r = data.result;
+  const rows: [string, React.ReactNode, React.ReactNode][] = [
+    ["판매가격", <>{w(b.H)} <ProvenanceBadge p={r.calc!.priceBasis.H ?? "unknown"} /></>, <>{w(b.L)} <ProvenanceBadge p={r.calc!.priceBasis.L ?? "unknown"} /></>],
+    ["철거비", "—", r.calc!.demolitionKnown ? <>{w(b.D)} <ProvenanceBadge p={r.demolition.basis === "quote" ? "consult" : "assumption"} /></> : <span className="text-bad">미확인</span>],
+    ["중개보수", w(b.M_H), w(b.M_L)],
+    ["기타 처리비용", <>{r.costs.C_H.missing.length === 5 ? <span className="text-bad">미확인</span> : w(b.C_H)}{r.costs.C_H.missing.length > 0 && <span className="block text-[11px] text-warn">미반영: {r.costs.C_H.missing.join(", ")}</span>}</>,
+      <>{r.costs.C_L.missing.length === 5 ? <span className="text-bad">미확인</span> : w(b.C_L)}{r.costs.C_L.missing.length > 0 && <span className="block text-[11px] text-warn">미반영: {r.costs.C_L.missing.join(", ")}</span>}</>],
+    ["확인된 지원", "—", b.G ? w(b.G) : "0원(미반영)"],
+  ];
+  return (
+    <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-line">
+      <table className="tabular w-full min-w-[520px] text-[14px]">
+        <caption className="sr-only">현 상태 판매와 철거 후 토지 판매 비교</caption>
+        <thead><tr className="bg-fill text-left text-[13px]"><th className="p-3">항목</th><th className="p-3">현 상태 판매</th><th className="p-3">철거 후 토지 판매</th></tr></thead>
+        <tbody>
+          {rows.map(([k, a, c]) => <tr key={k} className="border-t border-line"><th scope="row" className="p-3 text-left font-semibold">{k}</th><td className="p-3">{a}</td><td className="p-3">{c}</td></tr>)}
+          <tr className="border-t-2 border-ink/20 bg-brand-soft/50 font-extrabold">
+            <th scope="row" className="p-3 text-left">비용 차감 예상 회수액</th>
+            <td className="p-3">{w(b.N_H)}<span className="block text-[11px] font-normal text-subtle">범위 {pair(cmp.ranges.N_H)}</span></td>
+            <td className="p-3">{r.calc!.demolitionKnown ? <>{w(b.N_L)}<span className="block text-[11px] font-normal text-subtle">범위 {pair(cmp.ranges.N_L)}</span></> : <span className="text-bad">철거비 미확인</span>}</td>
+          </tr>
+          {r.calc!.demolitionKnown && <tr className="border-t border-line"><th scope="row" className="p-3 text-left">차이(철거 후 − 현 상태)</th><td colSpan={2} className="p-3 font-bold">{formatWon(b.delta, { signed: true })}{cmp.overlap && <span className="ml-2 text-[12px] font-normal text-warn">두 범위가 겹쳐요</span>}</td></tr>}
+        </tbody>
+      </table>
+      <div className="p-3">
+        <Explain title="계산식·출처·제외 비용">
+          <p>현 상태 회수액 = 판매가격 − 중개보수 − 기타 처리비용</p>
+          <p>철거 후 회수액 = 토지 판매가격 − 철거비 − 중개보수 − 기타 처리비용 + 확인된 지원</p>
+          <p>중개보수: {r.brokerageRule.name}({r.brokerageRule.effective} 시행, 버전 {r.brokerageRule.version}). {r.brokerageRule.note}</p>
+          <p>제외: 과거 취득비용, 대출·보증금 정산, 개인별 세금(입력하지 않은 경우). 대출 정산 후 최종 실수령액이 아니에요.</p>
+          {r.support.excluded.map((x) => <p key={x}>지원 제외: {x}</p>)}
+        </Explain>
       </div>
     </div>
   );
 }
 
-function OptionCard({ o, isTop, isRecommend }: { o: OptionResult; isTop: boolean; isRecommend: boolean }) {
-  const b = o.scenarios.base;
+function Breakeven({ cmp, known, costsComplete }: { cmp: Compare; known: boolean; costsComplete: boolean }) {
+  const b = cmp.base;
   return (
-    <article className={`rounded-2xl p-5 ${isTop ? "bg-brand-soft ring-2 ring-brand" : "bg-fill"}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="text-[17px] font-extrabold">{o.label}</h3>
-          <p className="text-[13px] text-subtle">{o.variantLabel}</p>
-        </div>
-        {isTop && <Pill tone="blue">{isRecommend ? "추천" : "선두"}</Pill>}
-        {!isTop && o.checks.excludedReason && o.computable && <Pill tone="red">제외</Pill>}
-      </div>
-      {o.computable ? (
-        <>
-          <p className={`tabular mt-3 text-[24px] font-extrabold tracking-tight ${isTop ? "text-brand" : "text-ink"}`}>{formatWon(b.comparisonValue)}</p>
-          <p className="text-[12px] text-subtle">
-            {o.vsSellAsIs === null || o.id === "sell_as_is" ? "비교 기준" : <>현상태 매각 대비 <span className={o.vsSellAsIs >= 0 ? "font-bold text-brand" : "font-bold text-bad"}>{formatWon(o.vsSellAsIs, { signed: true })}</span></>}
-          </p>
-          <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
-            <dt className="text-subtle">순현금 수지</dt><dd className="tabular text-right font-bold">{formatWon(b.netCash, { signed: true })}</dd>
-            <dt className="text-subtle">보유 순자산</dt><dd className="tabular text-right font-bold">{b.terminal ? formatWon(b.terminal.net) : "없음(매각)"}</dd>
-            <dt className="text-subtle">최대 선투입</dt><dd className={`tabular text-right font-bold ${o.checks.budget === "exceeds" ? "text-bad" : ""}`}>{formatWon(b.maxUpfront)}</dd>
-            <dt className="text-subtle">소요 기간</dt><dd className="text-right font-bold">{o.id === "keep" ? "실행 없음" : formatMonths(b.completionMonth)}</dd>
-          </dl>
-          {o.checks.excludedReason && <p className="mt-3 text-[12px] font-semibold text-bad">{o.checks.excludedReason}</p>}
-        </>
-      ) : (
-        <p className="mt-3 text-[14px] font-semibold text-warn">계산 보류 · {o.missing.join(" / ")}</p>
-      )}
-    </article>
+    <section className="grid gap-3 sm:grid-cols-2" aria-label="손익분기점">
+      <Card>
+        <p className="text-[13px] font-bold text-subtle">추가비용 기준</p>
+        <p className="tabular mt-1 text-[24px] font-extrabold">{formatWon(b.K)}</p>
+        <p className="text-[13px] text-muted">토지 가격이 현 상태 가격보다 이만큼 높아요(중개보수 차이 반영). 다른 비용과 지원금을 확인하기 전 기준이며 철거비만의 상한은 아니에요.</p>
+        <Explain title="K 상세"><p>K = L − H − (M_L − M_H)</p><p>= {formatWon(b.L)} − {formatWon(b.H)} − ({formatWon(b.M_L)} − {formatWon(b.M_H)})</p></Explain>
+      </Card>
+      <Card>
+        <p className="text-[13px] font-bold text-subtle">철거비 손익분기점</p>
+        <p className={`tabular mt-1 text-[24px] font-extrabold ${b.D_star < 0 ? "text-bad" : ""}`}>{formatWon(b.D_star)}</p>
+        <p className="text-[13px] text-muted">
+          {b.D_star < 0 ? "음수예요. 이 가정에서는 철거비가 0원이어도 철거 후 판매가 우세하지 않아요."
+            : `철거 총비용이 이 금액보다 적으면 철거 후 판매가 유리해요(다른 입력이 고정된 경우).`}
+          {known && ` 지금 철거비는 ${formatWon(b.D)}이에요.`}
+        </p>
+        {!costsComplete && <p className="mt-1 text-[12px] text-warn">기타 처리비용(세금·보유관리비 등)에 미확인 항목이 있어 그 항목을 빼고 계산한 참고값이에요.</p>}
+        <Explain title="D* 상세"><p>D* = K − (C_L − C_H) + G</p><p>= {formatWon(b.K)} − ({formatWon(b.C_L)} − {formatWon(b.C_H)}) + {formatWon(b.G)}</p><p>검증: 차이 = D* − D</p></Explain>
+      </Card>
+    </section>
   );
 }
 
-function TRow({ label, hint, cells }: { label: string; hint?: string; cells: React.ReactNode[] }) {
+function Sensitivity({ cmp, pct }: { cmp: Compare; pct: number }) {
   return (
-    <tr className="border-t border-line align-top">
-      <th scope="row" className="p-3 text-left font-bold">
-        {label}
-        {hint && <span className="block text-[12px] font-normal text-subtle">{hint}</span>}
-      </th>
-      {cells.map((c, i) => <td key={i} className="p-3">{c}</td>)}
-    </tr>
-  );
-}
-
-function rangeCell(o: OptionResult) {
-  const c = o.scenarios.conservative;
-  const p = o.scenarios.optimistic;
-  if (!c.computable || !p.computable) return o.computable ? <small className="text-muted">일부 시나리오 계산 불가</small> : "—";
-  return <small>{formatWon(c.comparisonValue)} ~ {formatWon(p.comparisonValue)}</small>;
-}
-
-function checksCell(o: OptionResult) {
-  if (!o.computable) return <small className="text-bad">{o.missing.join(" / ")}</small>;
-  const c = o.checks;
-  const items = [
-    c.purposeFit === "mismatch" ? ["목적 불일치", "text-bad"] : c.purposeFit === "partial" ? ["목적 부분 부합", "text-warn"] : ["목적 부합", "text-brand"],
-    c.timing === "exceeds" ? ["희망 시점 초과", "text-bad"] : c.timing === "ok" ? ["기간 충족", "text-brand"] : null,
-    c.budget === "exceeds" ? ["예산 초과", "text-bad"] : c.budget === "unknown" ? ["예산 확인 필요", "text-warn"] : ["예산 이내", "text-brand"],
-  ].filter(Boolean) as string[][];
-  return (
-    <small className="space-y-0.5">
-      {items.map(([t, cls]) => <span key={t} className={`block ${cls}`}>{t}</span>)}
-    </small>
-  );
-}
-
-function OptionDetail({ o, costs }: { o: OptionResult; costs: Analysis["costs"] }) {
-  const b = o.scenarios.base;
-  const byCat = new Map<string, number>();
-  for (const f of b.flows) byCat.set(f.category, (byCat.get(f.category) ?? 0) + f.amount);
-  const costLines = o.id === "demolish_sell_land" ? costs.demolition : o.id === "remodel" ? costs.remodel : null;
-  return (
-    <details className="rounded-2xl bg-fill/60 p-5 ring-1 ring-line">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
-        <span><span className="text-[16px] font-extrabold">{o.label}</span> <span className="text-[13px] text-subtle">· {o.variantLabel}</span></span>
-        <span className="tabular text-[15px] font-bold">{o.computable ? formatWon(b.comparisonValue) : <span className="text-bad">계산 보류</span>}</span>
-      </summary>
-      <div className="mt-4 space-y-4 text-sm">
-        {!o.computable && <Notice tone="warn">{o.missing.join(" / ")}</Notice>}
-        {o.remodelAlternatives && (
-          <div>
-            <h4 className="mb-1 font-medium">리모델링 활용 방식별</h4>
-            <ul className="space-y-1">
-              {o.remodelAlternatives.map((r) => (
-                <li key={r.variant} className={r.variant === o.variant ? "font-medium" : "text-muted"}>
-                  {r.label}: {r.computable ? formatWon(r.comparisonValue) : `계산 보류(${r.missing.join(", ")})`}{r.variant === o.variant ? " ← 표에 표시" : ""}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {o.computable && (
-          <>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {(["conservative", "base", "optimistic"] as const).map((k) => (
-                <Stat key={k} label={`${SCENARIO_LABEL[k]} 시나리오`} value={o.scenarios[k].computable ? formatWon(o.scenarios[k].comparisonValue) : "계산 불가"} sub={o.scenarios[k].computable ? `순현금 ${formatWon(o.scenarios[k].netCash, { signed: true })} · ${o.id === "keep" ? "실행 없음" : formatMonths(o.scenarios[k].completionMonth)}` : o.scenarios[k].missing.join(", ")} />
-              ))}
-            </div>
-            {b.saleSettlement && (
-              <div>
-                <h4 className="mb-1 font-medium">{b.pending.length ? "예상 순수령액(아래 미반영 항목 반영 전)" : "예상 순수령액"}</h4>
-                <dl className="tabular grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
-                  <dt>매각대금({b.saleSettlement.month}개월 차)</dt><dd className="text-right">{formatWon(b.saleSettlement.price)}</dd>
-                  <dt>− 철거·리모델링 실행비용</dt><dd className="text-right">{formatWon(-b.saleSettlement.executionCost)}</dd>
-                  <dt>− 실행 기간 보유비·유지비·대출이자</dt><dd className="text-right">{formatWon(-b.saleSettlement.holdingAndFinance)}</dd>
-                  <dt>− 중개·거래비용</dt><dd className="text-right">{formatWon(-b.saleSettlement.transaction)}</dd>
-                  <dt>− 세금</dt><dd className="text-right">{b.saleSettlement.tax === null ? "세금 반영 전" : formatWon(-b.saleSettlement.tax)}</dd>
-                  <dt>− 대출 잔액 정산</dt><dd className="text-right">{formatWon(-b.saleSettlement.loan)}</dd>
-                  <dt>− 임차보증금 반환·정산</dt><dd className="text-right">{formatWon(-b.saleSettlement.deposit)}</dd>
-                  <dt className="border-t border-line pt-1 font-bold">= 순수령액</dt><dd className="border-t border-line pt-1 text-right font-bold">{formatWon(b.saleSettlement.netProceeds)}</dd>
-                </dl>
-                <p className="mt-1 text-xs text-muted">기간 내 전체 순현금 수지(임대수입·대체 주거비 포함)는 {formatWon(b.netCash, { signed: true })}입니다.</p>
-              </div>
-            )}
-            {b.terminal && (
-              <div>
-                <h4 className="mb-1 font-medium">기간 말 보유 순자산(현금 아님)</h4>
-                <dl className="tabular grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
-                  <dt>보유 부동산 추정 가치</dt><dd className="text-right">{formatWon(b.terminal.propertyValue)}</dd>
-                  <dt>− 가정한 처분비용</dt><dd className="text-right">{formatWon(-b.terminal.disposalCost)}</dd>
-                  <dt>− 세금</dt><dd className="text-right">{b.terminal.tax === null ? "세금 반영 전" : formatWon(-b.terminal.tax)}</dd>
-                  <dt>− 남은 대출</dt><dd className="text-right">{formatWon(-b.terminal.loan)}</dd>
-                  <dt>− 보증금 반환의무</dt><dd className="text-right">{formatWon(-b.terminal.deposit)}</dd>
-                  <dt className="border-t border-line pt-1 font-bold">= 보유 순자산</dt><dd className="border-t border-line pt-1 text-right font-bold">{formatWon(b.terminal.net)}</dd>
-                </dl>
-              </div>
-            )}
-            <div>
-              <h4 className="mb-1 font-medium">기간 내 현금흐름 항목별 합계</h4>
-              <ul className="tabular grid gap-1 sm:grid-cols-2">
-                {[...byCat.entries()].map(([k, v]) => (
-                  <li key={k} className="flex justify-between gap-2 border-b border-line py-1"><span>{FLOW_LABEL[k] ?? k}</span><span>{formatWon(v, { signed: true })}</span></li>
-                ))}
-              </ul>
-            </div>
-            {o.rentalPayback && (
-              <p>임대 목적 회수기간(현상태 임대 대비 추가 순임대수입 기준): <strong>{o.rentalPayback.ok ? `${formatMonths(Math.ceil(o.rentalPayback.value ?? 0))}` : `회수 불가 — ${o.rentalPayback.reason}`}</strong>
-                {o.rentalPayback.extraMonthly !== undefined && <span className="text-muted"> (월 추가 순수입 {formatWon(o.rentalPayback.extraMonthly)})</span>}</p>
-            )}
-          </>
-        )}
-        {costLines && (
-          <div>
-            <h4 className="mb-1 font-medium">실행비용 내역(가정 단가 · 견적으로 대체 필요)</h4>
-            {costLines.withheldReason && <Notice tone="warn">{costLines.withheldReason}</Notice>}
-            <table className="tabular w-full text-xs">
-              <thead><tr className="text-left text-muted"><th className="py-1">항목</th><th>근거</th><th className="text-right">기준(범위)</th></tr></thead>
-              <tbody>
-                {costLines.lines.map((l) => (
-                  <tr key={l.key} className="border-t border-line align-top">
-                    <td className="py-1 pr-2">{l.label}</td>
-                    <td className="pr-2 text-muted">{l.basis}<br />{l.region} · {l.asOf}</td>
-                    <td className="text-right">{formatWon(l.amount.base)}<br /><span className="text-muted">{formatWon(l.amount.low)}~{formatWon(l.amount.high)}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="mt-1 text-xs text-muted">공사 중 보유비·금융비용, 이주·임시거주비는 월별 현금흐름에서 따로 계산합니다.</p>
-          </div>
-        )}
-        {o.pending.length > 0 && <p className="text-xs text-warn">반영하지 못한 항목: {o.pending.join(", ")}</p>}
-        <div>
-          <h4 className="mb-1 font-medium">확인 필요</h4>
-          <ul className="list-disc pl-5 text-muted">{o.needsConfirmation.map((c) => <li key={c}>{c}</li>)}</ul>
-        </div>
+    <details className="rounded-2xl ring-1 ring-line p-5">
+      <summary className="cursor-pointer font-bold">±{pct * 100}% 점검 8가지 — {cmp.consistentWinner && cmp.consistentWinner !== "mixed" ? `모두 ${OPTION_LABEL[cmp.consistentWinner]} 우세` : "점검마다 결과가 달라요"}</summary>
+      <p className="mt-2 text-[12px] text-subtle">가격·철거비를 ±{pct * 100}% 바꿔 본 개발 점검 가정이에요. 실제 가격 오차 확률이 아니에요.</p>
+      <div className="mt-2 overflow-x-auto">
+        <table className="tabular w-full min-w-[480px] text-[13px]">
+          <thead><tr className="text-left text-subtle"><th className="py-1">현 상태 가격</th><th>토지 가격</th><th>철거비</th><th>차이 범위</th><th>우세</th></tr></thead>
+          <tbody>{cmp.sensitivity.map((s, i) => (
+            <tr key={i} className="border-t border-line"><td className="py-1">×{s.H}</td><td>×{s.L}</td><td>×{s.D}</td><td>{formatWon(s.deltaMin, { signed: true })} ~ {formatWon(s.deltaMax, { signed: true })}</td><td>{OPTION_LABEL[s.winner] ?? s.winner}</td></tr>
+          ))}</tbody>
+        </table>
       </div>
     </details>
   );
 }
 
-function SourcesPanel({ data: built }: { data: Analysis }) {
-  const groups = [...new Set(built.assumptions.map((a) => a.group))];
+function RefCard({ r }: { r: Reference }) {
   return (
-    <Card className="space-y-5">
-      <h2 className="text-[20px] font-extrabold tracking-tight">출처 · 가정 · 비교 사례</h2>
-      <div>
-        <h3 className="mb-1 text-sm font-medium">물건 기본 정보</h3>
-        <table className="w-full text-sm">
-          <tbody>
-            {built.facts.map((f) => (
-              <tr key={f.key} className="border-t border-line align-top">
-                <th scope="row" className="py-1.5 pr-2 text-left font-normal text-muted">{f.label}</th>
-                <td className="py-1.5">
-                  {f.value === null ? <span className="text-bad">정보 없음</span> : typeof f.value === "number" ? `${f.value.toLocaleString("ko-KR")}${f.unit ? ` ${f.unit}` : ""}` : f.value}{" "}
-                  <ProvenanceBadge p={f.provenance} />
-                  <span className="block text-xs text-muted">{f.source}{f.asOf ? ` · 기준일 ${f.asOf}` : ""}{f.fetchedAt ? ` · 조회 ${new Date(f.fetchedAt).toLocaleString("ko-KR")}` : ""}{f.note ? ` · ${f.note}` : ""}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {groups.map((g) => (
-        <div key={g}>
-          <h3 className="mb-1 text-sm font-medium">{g}</h3>
-          <table className="w-full text-sm">
-            <tbody>
-              {built.assumptions.filter((a) => a.group === g).map((a) => (
-                <tr key={a.key} className="border-t border-line align-top">
-                  <th scope="row" className="w-48 py-1.5 pr-2 text-left font-normal text-muted">{a.label}</th>
-                  <td className="py-1.5">
-                    {a.display} <ProvenanceBadge p={a.provenance} />
-                    <span className="block text-xs text-muted">{a.source}{a.asOf ? ` · ${a.asOf}` : ""}{a.note ? ` · ${a.note}` : ""}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ))}
-      <CompsTable title="현상태 매각가 비교 사례" est={built.comps} subjectArea={built.subject.landArea} />
-      <CompsTable title="토지 매각가 비교 사례" est={built.landComps} subjectArea={built.subject.landArea} />
-      <CompsTable title="리모델링 후 가치 참고 사례(주변 신축급)" est={built.remodelComps} subjectArea={built.subject.landArea} />
+    <Card>
+      <p className="text-[13px] font-bold text-subtle">{r.label} 참고가격</p>
+      <p className="tabular mt-1 text-[22px] font-extrabold">{r.value == null ? "산정 보류" : formatWon(r.value)}</p>
+      <p className="text-[12px] text-subtle">{r.status === "median" ? `${r.sampleSize}건 단가 중앙값` : r.status === "single" ? "단일 사례 환산값" : "자료 부족"}
+        {r.range && ` · 관측 범위 ${formatWon(r.range.min)} ~ ${formatWon(r.range.max)}`}</p>
+      {r.notes.map((n) => <p key={n} className="mt-1 text-[12px] text-warn">{n}</p>)}
+      {r.extended && <p className="mt-1 text-[12px] text-muted">{r.extended.note}: {r.extended.sampleSize}건 · {formatWon(r.extended.value)}</p>}
+      {r.decisions.length > 0 && (
+        <Explain title={`사례 ${r.decisions.length}건 선정·제외 사유`}>
+          <ul className="space-y-1">{r.decisions.map((d, i) => (
+            <li key={i} className={d.included ? "text-ink" : ""}>{d.trade.dealDate} {d.trade.umdNm} {d.trade.jibunMasked} · {d.trade.landArea}㎡ · {formatWon(d.trade.amountWon)} — {d.included ? "사용" : `제외: ${d.reason}`}</li>
+          ))}</ul>
+          <p>공개 지번이 일부 가려져 있어 대상 필지와 연결하지 않아요.</p>
+        </Explain>
+      )}
     </Card>
   );
 }
 
-function CompsTable({ title, est, subjectArea }: { title: string; est: CompEstimate; subjectArea: number | null }) {
+function SellDetail({ data }: { data: Analysis }) {
+  const H = data.inputs.H as { kind?: string; source?: string; checkedOn?: string } | undefined;
   return (
-    <details>
-      <summary className="cursor-pointer text-sm font-medium">{title} — {est.withheldReason ? "산정 보류" : `${est.sampleSize}건 사용`}</summary>
-      <div className="mt-2 space-y-2 text-sm">
-        {est.withheldReason && <Notice tone="warn">{est.withheldReason}</Notice>}
-        <p className="text-xs text-muted">대상 토지 {formatArea(subjectArea)} · 지역·계약년월 단위 공개 자료로, 지번이 일부만 공개되어 대상 주소의 거래 이력과 연결하지 않습니다.</p>
-        <ul className="list-disc pl-5 text-xs text-muted">{est.criteria.map((c) => <li key={c}>{c}</li>)}</ul>
-        {est.pricePerLandSqm && <p className="text-xs">대지㎡당 가격: 25% {formatWon(est.pricePerLandSqm.low)} · 중앙값 {formatWon(est.pricePerLandSqm.base)} · 75% {formatWon(est.pricePerLandSqm.high)}</p>}
-        {est.decisions.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="tabular w-full min-w-[640px] text-xs">
-              <thead><tr className="text-left text-muted"><th className="py-1">계약일</th><th>법정동·지번</th><th>대지/연면적(㎡)</th><th>건축년도</th><th className="text-right">거래금액</th><th className="pl-3">판단</th></tr></thead>
-              <tbody>
-                {est.decisions.map((d, i) => (
-                  <tr key={i} className={`border-t border-line ${d.included ? "" : "text-muted"}`}>
-                    <td className="py-1">{d.trade.dealDate}</td>
-                    <td>{d.trade.umdNm} {d.trade.jibunPartial}</td>
-                    <td>{d.trade.landArea ?? "-"} / {d.trade.floorArea ?? "-"}</td>
-                    <td>{d.trade.buildYear ?? "-"}</td>
-                    <td className="text-right">{formatWon(d.trade.amountWon)}</td>
-                    <td className="pl-3">{d.included ? "✓ 사용" : `제외: ${d.reason}`}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+    <div className="space-y-2 text-[14px]">
+      <p className="font-bold">현 상태 그대로 건물과 토지를 함께 파는 방법</p>
+      <p>가격 근거: {H?.kind ? `${KIND_LABEL[H.kind]}${H.source ? ` · ${H.source}` : ""}${H.checkedOn ? ` · ${H.checkedOn}` : ""}` : "미입력"}</p>
+      <p className="text-muted">철거 자금 확인이 필요 없어요. 공인중개사에게 현 상태 일괄 매각가격과 예상 기간을 물어보세요.</p>
+      <p className="text-muted">상담: 인근 공인중개사(공개 연락처). 링크를 눌러도 주소·응답·금액은 전송되지 않아요.</p>
+    </div>
+  );
+}
+
+function DemolishDetail({ data }: { data: Analysis }) {
+  const d = data.result.demolition;
+  return (
+    <div className="space-y-2 text-[14px]">
+      <p className="font-bold">철거한 뒤 토지만 파는 방법</p>
+      <p>철거비 근거: {d.basis === "quote" ? "실제 견적" : d.basis === "assumption" ? "사용자 가정 시뮬레이션" : "미확인"} {d.note && `· ${d.note}`}</p>
+      {d.problems.map((p) => <p key={p} className="text-warn">· {p}</p>)}
+      <p className="text-muted">철거비를 먼저 내야 해요. 사후 지급 지원금은 철거 전에 쓸 수 없어요.</p>
+      {data.answers.access === "none" && <Notice tone="warn">차량 진입 불가: 현장 작업 가능 여부와 대안(소형 장비·인력 철거)을 먼저 확인해야 해요.</Notice>}
+    </div>
+  );
+}
+
+function HoldDetail({ data }: { data: Analysis }) {
+  const h = data.holding, rm = data.remodel;
+  return (
+    <div className="space-y-3 text-[14px]">
+      <p className="font-bold">보유하는 경우 비용</p>
+      {h.totals ? (
+        <ul>{Object.entries(h.totals).map(([y, p]) => <li key={y}>{y}년 보유 시 입력 비용 합계: {pair(p)}</li>)}</ul>
+      ) : <p className="text-muted">보유 비용을 입력하면 기간별 합계를 보여줘요.</p>}
+      {h.unreflected.length > 0 && <p className="text-warn">미반영: {h.unreflected.join(", ")}</p>}
+      <p className="text-[12px] text-subtle">{h.note}</p>
+      <p className="pt-2 font-bold">리모델링 후 매각(확장 옵션)</p>
+      {rm.enabled ? <p>비용 차감 예상 회수액 {w(rm.N_R)} (범위 {pair(rm.range)})</p> : <p className="text-muted">계산하려면: {rm.need?.join(", ")}. {rm.note}</p>}
+    </div>
+  );
+}
+
+function Programs({ data }: { data: Analysis }) {
+  return (
+    <section aria-labelledby="prog">
+      <h2 id="prog" className="text-[20px] font-extrabold">지원사업 후보</h2>
+      <p className="mt-1 text-[13px] text-subtle">공식 공고를 주 1회 정리한 자료예요(실시간 아님). 후보는 지원 확정이 아니며, 확인된 금액만 &lsquo;확인된 지원 반영&rsquo;에 들어가요.</p>
+      {data.programs.length === 0 && <Notice>현재 등록된 지원사업이 없어요.</Notice>}
+      <div className="mt-3 space-y-3">
+        {data.programs.map((p) => (
+          <Card key={p.programId}>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="font-extrabold">{p.title}{p.isSample && <span className="ml-1 rounded bg-sample-soft px-1.5 text-[11px] text-sample">예시</span>}</p>
+                <p className="text-[13px] text-subtle">{p.agency} · 신청 {p.status}{p.reviewState === "changing" && " · 변경 확인 중"}</p>
+              </div>
+              <Pill tone={p.result === "partial_match" ? "blue" : p.result === "needs_check" ? "orange" : "gray"}>{MATCH_LABEL[p.result]}</Pill>
+            </div>
+            <ul className="mt-2 space-y-1 text-[13px]">
+              {p.items.map((i) => <li key={i.label} className={i.status === "fail" ? "text-bad" : i.status === "pass" ? "text-good" : "text-muted"}>· {i.label}: {i.detail}</li>)}
+            </ul>
+            <p className="mt-2 text-[13px] text-muted">
+              {p.benefitType === "cash" ? "현금 보조" : p.benefitType === "direct" ? "지자체 직접 수행" : p.benefitType === "tax" ? "세제 혜택" : "지원 방식 미확인"}
+              {p.benefitCap != null && ` · 공고상 최대 ${formatWon(p.benefitCap)}(개인 확정액 아님)`}
+              {p.paymentTiming === "post" && " · 사후 지급"}{p.saleCompatible === false && " · 즉시 매각과 양립 안 됨"}
+            </p>
+            <p className="mt-1 text-[12px] text-subtle">마지막 정상 수집 {p.lastSuccessFetchAt ? new Date(p.lastSuccessFetchAt).toLocaleDateString("ko-KR") : "미상"}{p.contact && ` · 문의 ${p.contact}`}</p>
+            {!p.isSample && <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-[13px] font-bold text-brand">공고 원문 보기 ↗</a>}
+          </Card>
+        ))}
       </div>
-    </details>
+    </section>
+  );
+}
+
+function Plan({ data }: { data: Analysis }) {
+  const tone = { done: "bg-good text-white", todo: "bg-fill text-muted", blocked: "bg-bad text-white" };
+  return (
+    <section id="plan" aria-labelledby="plan-h">
+      <h2 id="plan-h" className="text-[20px] font-extrabold">맞춤형 철거 플랜</h2>
+      <p className="mt-1 text-[13px] text-subtle">업체에 연락하기 전에 이 순서로 확인하세요. 최종 선택과 실행은 직접 결정해요. 제휴 업체는 없어요.</p>
+      <ol className="mt-3 space-y-2">
+        {data.plan.map((s) => (
+          <li key={s.no} className="flex gap-3 rounded-2xl bg-fill p-4">
+            <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[13px] font-extrabold ${tone[s.status]}`}>{s.status === "done" ? "✓" : s.no}</span>
+            <span><span className="block font-bold">{s.title}</span><span className="block text-[13px] text-muted">{s.detail}</span>
+              {s.contact && <span className="block text-[12px] text-subtle">상담: {s.contact}</span>}</span>
+          </li>
+        ))}
+      </ol>
+      {data.eligibility.contacts.length > 0 && <p className="mt-2 text-[13px] text-muted">먼저 필요한 상담: {data.eligibility.contacts.join(", ")}</p>}
+      <div className="mt-4 flex gap-2"><Link href="/"><Button variant="secondary">분석 종료</Button></Link></div>
+    </section>
   );
 }

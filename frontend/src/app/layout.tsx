@@ -6,14 +6,14 @@ import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.url),
-  title: { default: `${SITE.name} — 팔까, 고칠까, 그대로 둘까`, template: `%s | ${SITE.name}` },
+  title: { default: `${SITE.name} — 그대로 팔까, 철거하고 팔까`, template: `%s | ${SITE.name}` },
   description: SITE.description,
   applicationName: SITE.name,
   openGraph: {
     type: "website",
     locale: "ko_KR",
     siteName: SITE.name,
-    title: `${SITE.name} — 우리 집, 얼마 남는지 비교`,
+    title: `${SITE.name} — 비용 빼고 얼마 남는지 비교`,
     description: SITE.description,
   },
   formatDetection: { telephone: false },

@@ -1,4 +1,4 @@
-"""요청 본문 검증(Pydantic). 금액은 원 단위. 0원과 '모름'·'미입력'을 구분한다."""
+"""요청 검증. 금액은 원, 면적은 ㎡. '미확인(unknown)'·'0원'·'적용 없음(none)'을 구분한다."""
 
 from __future__ import annotations
 
@@ -6,143 +6,93 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-Mode = Literal["live", "sample"]
+Kind = Literal["consult", "public", "assumption", "unknown", "none", "rule"]
 
 
-class Money(BaseModel):
-    """known: 금액을 앎(0원 포함) / unknown: 모름 / unanswered: 입력 안 함"""
-
-    status: Literal["known", "unknown", "unanswered"] = "unanswered"
-    won: float | None = Field(default=None, ge=0, le=1e13)
+class Evidence(BaseModel):
+    """값 또는 범위 + 단위·출처 종류·출처·기준일·범위·포함/제외 항목. 사용자가 기록한 상담값은 전문가 검증이 아니다."""
+    kind: Kind
+    value: float | None = Field(default=None, ge=0, le=1e13)
+    min: float | None = Field(default=None, ge=0, le=1e13)
+    max: float | None = Field(default=None, ge=0, le=1e13)
+    unit: str = "원"
+    source: str | None = Field(default=None, max_length=200)      # 상담 경로(예: ○○공인중개사)
+    checkedOn: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    scope: str | None = Field(default=None, max_length=200)
+    includes: list[str] = []
+    excludes: list[str] = []
+    # 가격 상담 전용
+    priceType: Literal["as_is", "land"] | None = None
+    scopeMatches: bool | None = None
+    siteConditionShared: bool | None = None
+    wishPrice: bool | None = None
+    # 견적 전용
+    items: dict[str, Literal["included", "excluded", "excluded_na", "unknown"]] | None = None
+    siteWorkConfirmed: bool | None = None
+    note: str | None = Field(default=None, max_length=500)
 
     @model_validator(mode="after")
-    def _known_needs_amount(self):
-        if self.status == "known" and self.won is None:
-            raise ValueError("금액을 입력해 주세요.")
+    def _shape(self):
+        if self.min is not None and self.max is not None and self.min > self.max:
+            raise ValueError("범위의 최소값이 최대값보다 큽니다.")
+        if self.kind not in ("unknown", "none") and self.value is None and (self.min is None or self.max is None):
+            raise ValueError("값 또는 범위(최소·최대)를 입력하세요. 모르면 '미확인'을 고르세요.")
         return self
-
-    @property
-    def value(self) -> float | None:
-        return round(self.won) if self.status == "known" else None
-
-
-class Rate(BaseModel):
-    status: Literal["known", "unknown", "unanswered"] = "unanswered"
-    pct: float | None = Field(default=None, ge=0, le=30)
-
-
-class LeaseEnd(BaseModel):
-    status: Literal["known", "unknown", "unanswered"] = "unanswered"
-    yyyymm: str | None = Field(default=None, pattern=r"^\d{4}-?\d{2}$")
-
-
-class Tenant(BaseModel):
-    deposit: Money = Money()
-    monthlyRent: Money = Money()
-    leaseEnd: LeaseEnd = LeaseEnd()
 
 
 class Answers(BaseModel):
-    # 질문 1: 이 집을 어떻게 하고 싶나요? (빨리 정리 / 수익 창출 / 직접 사용 / 아직 모르겠음)
-    purpose: Literal["quick_sale", "profit", "live", "undecided", "best_price", "rent"]
-    # 질문 2: 현재 집 상태는 어떤가요?
-    condition: Literal["good", "partial_repair", "major_repair", "unknown"]
-    # 질문 3: 지금까지 처리를 미룬 가장 큰 이유는?
-    delayReason: Literal["cost", "ownership", "redevelopment", "how_to", "other"] | None = None
-    # 아래는 질문에서 묻지 않고 '계산 조건 수정'에서 선택 입력
-    timing: Literal["within_3m", "within_6m", "within_12m", "flexible"] | None = None
-    occupancy: Literal["owner", "tenant", "vacant", "unknown"] = "unknown"
-    tenant: Tenant | None = None
-    availableCash: Money = Money()
-    loanBalance: Money = Money()
-    loanRatePct: Rate = Rate()
-
-    @model_validator(mode="after")
-    def _defaults(self):
-        if self.occupancy != "tenant":
-            self.tenant = None
-        if self.timing is None:  # '빨리 정리'는 6개월 안, 나머지는 시점 제한 없음
-            self.timing = "within_6m" if self.purpose == "quick_sale" else "flexible"
-        return self
+    ownership: Literal["single", "joint", "other"]
+    corporate: bool = False          # 법인 명의
+    ownerMismatch: bool = False      # 건물·토지 소유자 불일치
+    usage: Literal["vacant", "storage", "occupied", "unknown"]
+    storageFollowup: dict | None = None  # {inUse: yes|no|unknown, cleanupKnown: yes|no}
+    direction: Literal["recovery", "fast", "undecided"]
+    condition: Literal["usable", "old", "severe", "unknown"]
+    access: Literal["good", "narrow", "none", "unknown"]
+    vacancyMonths: int | None = Field(default=None, ge=0, le=600)
 
 
-class PriceRange(BaseModel):
-    low: float = Field(ge=0, le=1e13)
-    base: float = Field(ge=0, le=1e13)
-    high: float = Field(ge=0, le=1e13)
-
-    @model_validator(mode="after")
-    def _ordered(self):
-        if not self.low <= self.base <= self.high:
-            raise ValueError("낮은 값 ≤ 기준값 ≤ 높은 값이어야 합니다.")
-        return self
+class Scope(BaseModel):
+    buildingKey: str | None = None
+    costsSeparable: bool = False
 
 
-class MonthRange(PriceRange):
-    low: float = Field(ge=0, le=120)
-    base: float = Field(ge=0, le=120)
-    high: float = Field(ge=0, le=120)
-
-
-class Taxes(BaseModel):
-    asIsSale: float | None = Field(default=None, ge=0)
-    landSale: float | None = Field(default=None, ge=0)
-    remodelSale: float | None = Field(default=None, ge=0)
-
-
-class Overrides(BaseModel):
-    """'계산 조건 수정' 값. 비어 있는 항목은 기본 가정값을 쓴다."""
-
-    horizonMonths: int | None = Field(default=None, ge=6, le=240)
-    discountRatePct: float | None = Field(default=None, ge=0, le=30)
-    priceGrowthPct: float | None = Field(default=None, ge=-30, le=30)
-    asIsPrice: PriceRange | None = None
-    landPrice: PriceRange | None = None
-    remodelPrice: PriceRange | None = None
-    remodelRentMonthly: PriceRange | None = None
-    demolitionCost: PriceRange | None = None
-    remodelCost: PriceRange | None = None
-    remodelScope: Literal["partial", "full"] | None = None
-    replacementHousingMonthly: float | None = Field(default=None, ge=0)
-    holdingCostMonthly: float | None = Field(default=None, ge=0)
-    maintenanceAsIsMonthly: float | None = Field(default=None, ge=0)
-    remodelVacancyPct: float | None = Field(default=None, ge=0, le=100)
-    remodelMaintenanceMonthly: float | None = Field(default=None, ge=0)
-    transactionExtraFixed: float | None = Field(default=None, ge=0)
-    taxes: Taxes | None = None
-    demolitionWorkMonths: MonthRange | None = None
-    remodelWorkMonths: MonthRange | None = None
-    saleLeadAsIs: MonthRange | None = None
-    saleLeadLand: MonthRange | None = None
-    saleLeadRemodeled: MonthRange | None = None
-
-
-class Target(BaseModel):
-    buildingPk: str | None = None
-
-
-class PropertyRequest(BaseModel):
-    mode: Mode
+class LookupRequest(BaseModel):
+    mode: Literal["live", "sample"]
     address: dict
 
 
 class CreateAnalysis(BaseModel):
     lookupId: str
     answers: Answers
-    target: Target = Target()
+    scope: Scope = Scope()
 
 
 class UpdateAnalysis(BaseModel):
-    overrides: Overrides = Overrides()
-    answers: Answers | None = None
+    inputs: dict | None = None       # 필드명 → 근거(검증은 서버에서 Evidence 로)
+    answers: dict | None = None
 
 
-class ConsultationRequest(BaseModel):
-    analysisId: str
-    optionId: Literal["sell_as_is", "demolish_sell_land", "remodel", "keep"]
-    partnerId: str
-    sharedFields: list[Literal["name", "phone", "address", "summary", "property"]]
-    contactName: str = Field(min_length=1, max_length=50)
-    contactPhone: str = Field(min_length=9, max_length=20)
-    message: str | None = Field(default=None, max_length=1000)
-    consent: bool
+class Credentials(BaseModel):
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(min_length=8, max_length=200)
+
+
+class NotificationSettings(BaseModel):
+    in_app: bool = True
+    email: bool = False
+    sms: bool = False
+    push: bool = False
+
+
+class ManualNotice(BaseModel):
+    noticeKey: str = Field(min_length=3, max_length=200)
+    url: str = Field(min_length=8, max_length=500)
+    text: str = Field(min_length=20, max_length=200_000)
+    postedAt: str | None = None
+
+
+class ReviewAction(BaseModel):
+    action: Literal["approve", "reject"]
+    note: str | None = None
+    edited: dict | None = None

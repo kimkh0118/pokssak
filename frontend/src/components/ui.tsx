@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import type { MoneyInput, Provenance, ProviderError } from "@/lib/api";
-import { ERROR_LABEL, PROVENANCE_LABEL } from "@/lib/labels";
-import { formatWon, manwonToWon, wonToManwon } from "@/lib/format";
+import type { ReactNode } from "react";
+import type { ProviderError } from "@/lib/api";
+import { ERROR_LABEL, KIND_LABEL } from "@/lib/labels";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <section className={`rounded-2xl bg-surface p-5 ring-1 ring-line ${className}`}>{children}</section>;
@@ -42,15 +41,19 @@ export function BottomBar({ children }: { children: ReactNode }) {
   );
 }
 
-const PROV_STYLE: Record<Provenance, string> = {
+const PROV_STYLE: Record<string, string> = {
   public_api: "bg-brand-soft text-brand",
-  user_input: "bg-fill text-muted",
-  estimate: "bg-warn-soft text-warn",
+  public: "bg-brand-soft text-brand",
+  rule: "bg-brand-soft text-brand",
+  consult: "bg-[#e8f8f0] text-good",
+  assumption: "bg-warn-soft text-warn",
+  unknown: "bg-bad-soft text-bad",
+  none: "bg-fill text-muted",
   sample: "bg-sample-soft text-sample",
 };
 
-export function ProvenanceBadge({ p }: { p: Provenance }) {
-  return <span className={`inline-block whitespace-nowrap rounded-md px-1.5 py-0.5 align-middle text-[11px] font-bold ${PROV_STYLE[p]}`}>{PROVENANCE_LABEL[p]}</span>;
+export function ProvenanceBadge({ p }: { p: string }) {
+  return <span className={`inline-block whitespace-nowrap rounded-md px-1.5 py-0.5 align-middle text-[11px] font-bold ${PROV_STYLE[p] ?? "bg-fill text-muted"}`}>{KIND_LABEL[p] ?? p}</span>;
 }
 
 export function Pill({ children, tone = "gray" }: { children: ReactNode; tone?: "gray" | "blue" | "red" | "orange" | "green" }) {
@@ -71,11 +74,11 @@ export function ProviderErrorBox({ error, title }: { error: ProviderError; title
   return (
     <div role="alert" className="rounded-xl bg-bad-soft p-4 text-[14px] text-bad">
       <p className="font-bold">
-        {title ?? error.source} · {ERROR_LABEL[error.kind]}
+        {title ?? error.source} · {ERROR_LABEL[error.kind] ?? error.kind}
         {error.code ? ` (코드 ${error.code})` : ""}
       </p>
       <p className="mt-1 text-ink/80">{error.message}</p>
-      {error.kind === "not_configured" && <p className="mt-1 text-ink/80">서버 환경변수에 인증키를 넣어야 해요. README의 &lsquo;API 인증키 설정&rsquo;을 참고하세요.</p>}
+      {error.kind === "not_configured" && <p className="mt-1 text-ink/80">서버 환경변수에 인증키를 넣어야 해요. README의 &lsquo;API 인증키&rsquo;를 참고하세요.</p>}
       {error.kind === "rate_limit" && <p className="mt-1 text-ink/80">잠시 후 다시 시도해 주세요.</p>}
     </div>
   );
@@ -123,76 +126,6 @@ export function ChoiceGroup<T extends string>({
         })}
       </div>
     </fieldset>
-  );
-}
-
-/** 만원 단위 금액 입력 + "모름". 빈 칸은 미입력(0원 아님). */
-export function MoneyField({
-  id,
-  label,
-  value,
-  onChange,
-  hint,
-  allowNone,
-}: {
-  id: string;
-  label: string;
-  value: MoneyInput;
-  onChange: (v: MoneyInput) => void;
-  hint?: string;
-  allowNone?: string;
-}) {
-  const [text, setText] = useState(value.status === "known" ? String(wonToManwon(value.won)) : "");
-  const unknown = value.status === "unknown";
-  return (
-    <div className="space-y-2">
-      <label htmlFor={id} className="block text-[15px] font-bold">
-        {label}
-      </label>
-      <div className={`flex items-center rounded-xl bg-fill px-4 focus-within:ring-2 focus-within:ring-brand ${unknown ? "opacity-50" : ""}`}>
-        <input
-          id={id}
-          inputMode="numeric"
-          disabled={unknown}
-          className="tabular h-14 min-w-0 flex-1 bg-transparent text-right text-[20px] font-bold outline-none placeholder:text-[16px] placeholder:font-medium placeholder:text-subtle"
-          placeholder="입력하지 않음"
-          value={value.status === "known" ? text : ""}
-          onChange={(e) => {
-            const t = e.target.value.replace(/[^\d.]/g, "");
-            setText(t);
-            if (t === "") onChange({ status: "unanswered" });
-            else if (Number.isFinite(Number(t))) onChange({ status: "known", won: manwonToWon(Number(t)) });
-          }}
-        />
-        <span className="pl-2 text-[16px] font-bold text-muted">만원</span>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          aria-pressed={unknown}
-          onClick={() => onChange(unknown ? { status: "unanswered" } : { status: "unknown" })}
-          className={`rounded-full px-3 py-1.5 text-[13px] font-bold ${unknown ? "bg-ink text-white" : "bg-fill text-muted hover:bg-fill-strong"}`}
-        >
-          모름
-        </button>
-        {allowNone && (
-          <button
-            type="button"
-            className="rounded-full bg-fill px-3 py-1.5 text-[13px] font-bold text-muted hover:bg-fill-strong"
-            onClick={() => {
-              setText("0");
-              onChange({ status: "known", won: 0 });
-            }}
-          >
-            {allowNone}
-          </button>
-        )}
-        <span className="text-[13px] text-subtle" aria-live="polite">
-          {value.status === "known" ? `= ${formatWon(value.won)}` : value.status === "unknown" ? "모름 (0원으로 계산하지 않아요)" : "미입력 (0원으로 계산하지 않아요)"}
-        </span>
-      </div>
-      {hint && <p className="text-[13px] text-subtle">{hint}</p>}
-    </div>
   );
 }
 

@@ -3,9 +3,9 @@
 import { useState } from "react";
 import type { StoredAnalysis } from "@/lib/server/analyses";
 import type { Overrides } from "@/lib/analysis/buildInput";
-import type { Range } from "@/lib/domain/types";
+import type { Answers, MoneyInput, Range } from "@/lib/domain/types";
 import { manwonToWon, wonToManwon } from "@/lib/domain/units";
-import { Button, Card } from "./ui";
+import { Button, Card, MoneyField } from "./ui";
 
 type RangeKey = "asIsPrice" | "landPrice" | "remodelPrice" | "remodelRentMonthly" | "demolitionCost" | "remodelCost";
 type Txt = { low: string; base: string; high: string };
@@ -33,7 +33,7 @@ function toRange(t: Txt): Range | undefined {
 
 const numOrUndef = (s: string) => (s.trim() === "" || !Number.isFinite(Number(s)) ? undefined : Number(s));
 
-export function ConditionEditor({ data, saving, onApply }: { data: StoredAnalysis; saving: boolean; onApply: (o: Overrides) => void }) {
+export function ConditionEditor({ data, saving, onApply }: { data: StoredAnalysis; saving: boolean; onApply: (o: Overrides, answers: Answers) => void }) {
   const ov = data.overrides;
   const ei = data.built.engineInput;
   const [ranges, setRanges] = useState<Record<RangeKey, Txt>>(() =>
@@ -48,6 +48,10 @@ export function ConditionEditor({ data, saving, onApply }: { data: StoredAnalysi
   const [taxL, setTaxL] = useState(ov.taxes?.landSale != null ? String(wonToManwon(ov.taxes.landSale)) : "");
   const [taxR, setTaxR] = useState(ov.taxes?.remodelSale != null ? String(wonToManwon(ov.taxes.remodelSale)) : "");
   const [scope, setScope] = useState<"" | "partial" | "full">(ov.remodelScope ?? "");
+  const ans = data.answers;
+  const [cash, setCash] = useState<MoneyInput>(ans.availableCash);
+  const [loan, setLoan] = useState<MoneyInput>(ans.loanBalance);
+  const [rate, setRate] = useState(ans.loanRatePct.status === "known" ? String(ans.loanRatePct.pct) : "");
 
   function apply() {
     const o: Overrides = {};
@@ -69,7 +73,13 @@ export function ConditionEditor({ data, saving, onApply }: { data: StoredAnalysi
     if (ta !== undefined || tl !== undefined || tr !== undefined)
       o.taxes = { asIsSale: ta === undefined ? null : manwonToWon(ta), landSale: tl === undefined ? null : manwonToWon(tl), remodelSale: tr === undefined ? null : manwonToWon(tr) };
     if (scope) o.remodelScope = scope;
-    onApply(o);
+    const r = numOrUndef(rate);
+    onApply(o, {
+      ...ans,
+      availableCash: cash,
+      loanBalance: loan,
+      loanRatePct: r !== undefined ? { status: "known", pct: r } : ans.loanRatePct.status === "unknown" ? { status: "unknown" } : { status: "unanswered" },
+    });
   }
 
   const cur = (k: RangeKey) => {
@@ -83,6 +93,13 @@ export function ConditionEditor({ data, saving, onApply }: { data: StoredAnalysi
       <details>
         <summary className="cursor-pointer font-bold">계산 조건 수정 <span className="text-sm font-normal text-muted">— 견적·시세를 알면 입력해 더 정확하게 계산합니다</span></summary>
         <div className="mt-4 space-y-5 text-sm">
+          <fieldset className="space-y-4 rounded-2xl bg-fill/60 p-4">
+            <legend className="sr-only">자금과 대출</legend>
+            <p className="text-[15px] font-extrabold">자금·대출 <span className="text-[13px] font-medium text-subtle">입력하면 예산 초과 여부와 대출 정산까지 계산해요</span></p>
+            <MoneyField id="ce-cash" label="추가로 투입 가능한 현금" value={cash} onChange={setCash} allowNone="0원" hint="추가 대출은 자동으로 가정하지 않아요." />
+            <MoneyField id="ce-loan" label="현재 대출 잔액 (이 집 담보)" value={loan} onChange={setLoan} allowNone="대출 없음" />
+            <Field label="대출 금리(% / 연, 알고 있다면)" value={rate} onChange={setRate} />
+          </fieldset>
           <p className="text-xs text-muted">빈 칸은 기본 가정값을 씁니다. 금액 단위는 만원입니다. 기준값만 입력하면 범위도 같은 값으로 봅니다.</p>
           <div className="space-y-3">
             {RANGE_FIELDS.map((f) => (

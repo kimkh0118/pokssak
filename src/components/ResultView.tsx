@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { StoredAnalysis } from "@/lib/server/analyses";
 import type { Overrides } from "@/lib/analysis/buildInput";
+import type { Answers } from "@/lib/domain/types";
 import type { OptionAnalysis } from "@/lib/engine/analyze";
 import { SCENARIO_LABEL, type ScenarioKey } from "@/lib/engine/analyze";
 import { FLOW_CATEGORY_LABEL, type FlowCategory } from "@/lib/engine/cashflow";
@@ -37,11 +38,11 @@ export function ResultView({ id }: { id: string }) {
   }, [id]);
 
   const recalc = useCallback(
-    async (overrides: Overrides) => {
+    async (overrides: Overrides, answers?: Answers) => {
       setSaving(true);
       setError(null);
       try {
-        const r = await fetch(`/api/analyses/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ overrides }) });
+        const r = await fetch(`/api/analyses/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ overrides, answers }) });
         const b = await r.json();
         if (b.error) setError(b.error);
         else setData(b);

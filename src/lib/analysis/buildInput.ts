@@ -1,4 +1,4 @@
-// 조회 결과 + 질문 3개 답 + 계산 조건 수정값 → 계산 엔진 입력.
+// 조회 결과 + 질문 답 + 계산 조건 수정값 → 계산 엔진 입력.
 // 모든 값에 출처 구분(공공데이터/사용자 입력/추정/예시)을 붙여 화면에 보여줄 수 있게 한다.
 
 import type { Answers, DataPoint, Provenance, Range } from "../domain/types";
@@ -270,8 +270,9 @@ export function buildInput(lookup: PropertyLookup, answers: Answers, target: Tar
   add({ key: "maintenance", group: "비용", label: "현 건물 월 유지관리비", display: formatWon(maint), provenance: ov.maintenanceAsIsMonthly !== undefined ? "user_input" : "estimate", source: "집 상태 답변에 따른 기본 가정값(전문 진단 아님)" });
   add({ key: "taxes", group: "비용", label: "세금", display: [taxes.asIsSale, taxes.landSale, taxes.remodelSale].every((x) => x === null) ? "세금 반영 전" : `현상태 ${formatWon(taxes.asIsSale)} / 토지 ${formatWon(taxes.landSale)} / 리모델링 후 ${formatWon(taxes.remodelSale)}`, provenance: ov.taxes ? "user_input" : "estimate", source: "개인별 세금은 검증된 계산 규칙이 없어 자동 산정하지 않음(직접 입력 시 반영)" });
   add({ key: "replacement", group: "자금·임대차", label: "월 대체·임시 주거비", display: replacement === null ? "미입력" : formatWon(replacement), provenance: replacement === null ? "estimate" : "user_input", source: answers.occupancy === "owner" ? "본인 거주 시 필요(계산 조건 수정에서 입력)" : "본인 거주가 아니면 사용하지 않음" });
-  add({ key: "loan", group: "자금·임대차", label: "대출 잔액 / 금리", display: `${loan === null ? "모름" : formatWon(loan)} / ${loanRate === null ? "모름" : `${(loanRate * 100).toFixed(2)}%`}`, provenance: "user_input", source: "질문 3 답변" });
-  add({ key: "cash", group: "자금·임대차", label: "추가 투입 가능 현금", display: cash === null ? "모름" : formatWon(cash), provenance: "user_input", source: "질문 3 답변" });
+  const missingText = (st: string) => (st === "unknown" ? "모름" : "미입력");
+  add({ key: "loan", group: "자금·임대차", label: "대출 잔액 / 금리", display: `${loan === null ? missingText(answers.loanBalance.status) : formatWon(loan)} / ${loanRate === null ? missingText(answers.loanRatePct.status) : `${(loanRate * 100).toFixed(2)}%`}`, provenance: loan === null ? "estimate" : "user_input", source: "계산 조건 수정의 자금·대출 입력(미입력 시 대출 반영 전으로 표시)" });
+  add({ key: "cash", group: "자금·임대차", label: "추가 투입 가능 현금", display: cash === null ? missingText(answers.availableCash.status) : formatWon(cash), provenance: cash === null ? "estimate" : "user_input", source: "계산 조건 수정의 자금·대출 입력(미입력 시 예산 판단 보류)" });
   if (answers.occupancy === "tenant")
     add({ key: "tenant", group: "자금·임대차", label: "임차보증금 / 월세 / 종료", display: `${tenantDeposit === null ? "모름" : formatWon(tenantDeposit)} / ${tenantRent === null ? "모름" : formatWon(tenantRent)} / ${leaseEnd === null ? "모름" : `${leaseEnd}개월 후`}`, provenance: "user_input", source: "질문 2 답변" });
   add({ key: "durations", group: "기간", label: "매각 소요(현상태/토지/리모델링 후)", display: `${monthsText(durations.asIs)} / ${monthsText(durations.land)} / ${monthsText(durations.remodeled)}`, provenance: "estimate", source: "서비스 기본 가정값" });

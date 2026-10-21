@@ -9,13 +9,12 @@ import { formatArea } from "@/lib/domain/units";
 import { addHistory } from "@/lib/history";
 import { BottomBar, Button, ChoiceGroup, MoneyField, Notice, Pill, ProvenanceBadge, ProviderErrorBox, SampleBanner } from "./ui";
 
-type Step = "search" | "target" | "q1" | "q2" | "q3";
+type Step = "search" | "target" | "q1" | "q2";
 const STEPS: { key: Step; label: string }[] = [
   { key: "search", label: "주소 선택" },
   { key: "target", label: "분석 대상 확인" },
   { key: "q1", label: "질문 1" },
   { key: "q2", label: "질문 2" },
-  { key: "q3", label: "질문 3" },
 ];
 
 const U: MoneyInput = { status: "unanswered" };
@@ -39,10 +38,6 @@ export function Wizard({ mode }: { mode: DataMode }) {
   const [rent, setRent] = useState<MoneyInput>(U);
   const [leaseEnd, setLeaseEnd] = useState<string>("");
   const [leaseUnknown, setLeaseUnknown] = useState(false);
-  const [cash, setCash] = useState<MoneyInput>(U);
-  const [loan, setLoan] = useState<MoneyInput>(U);
-  const [rate, setRate] = useState<string>("");
-  const [rateUnknown, setRateUnknown] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -107,9 +102,10 @@ export function Wizard({ mode }: { mode: DataMode }) {
               leaseEnd: leaseUnknown ? { status: "unknown" } : leaseEnd ? { status: "known", yyyymm: leaseEnd } : { status: "unanswered" },
             }
           : undefined,
-      availableCash: cash,
-      loanBalance: loan,
-      loanRatePct: rateUnknown ? { status: "unknown" } : rate !== "" ? { status: "known", pct: Number(rate) } : { status: "unanswered" },
+      // 자금·대출은 질문에서 묻지 않고 결과 화면의 '계산 조건 수정'에서 선택 입력
+      availableCash: { status: "unanswered" },
+      loanBalance: { status: "unanswered" },
+      loanRatePct: { status: "unanswered" },
     };
     try {
       const res = await fetch("/api/analyses", {
@@ -245,27 +241,11 @@ export function Wizard({ mode }: { mode: DataMode }) {
           )}
           <ChoiceGroup name="condition" legend="집 상태는 어떤가요?" columns={2} value={condition} onChange={setCondition} options={(Object.keys(CONDITION_LABEL) as Condition[]).map((v) => ({ value: v, label: CONDITION_LABEL[v] }))} />
           <p className="-mt-4 text-[13px] text-subtle">입력한 상태는 참고용이에요. 전문 안전진단 결과로 보지 않아요.</p>
-          <Nav onBack={() => setStep("q1")} onNext={() => setStep("q3")} nextDisabled={!occupancy || !condition} />
+          {submitError && <Notice tone="bad">{submitError}</Notice>}
+          <Nav onBack={() => setStep("q1")} onNext={submit} nextLabel={submitting ? "계산하고 있어요…" : "결과 보기"} nextDisabled={!occupancy || !condition || submitting} />
         </div>
       )}
 
-      {step === "q3" && (
-        <div className="space-y-8">
-          <QTitle n={3}>추가로 쓸 수 있는 돈과<br />대출은 얼마인가요?</QTitle>
-          <MoneyField id="cash" label="추가로 투입 가능한 현금" value={cash} onChange={setCash} hint="추가 대출은 자동으로 가정하지 않아요." allowNone="0원" />
-          <MoneyField id="loan" label="현재 대출 잔액 (이 집 담보)" value={loan} onChange={setLoan} allowNone="대출 없음" />
-          <div className="space-y-2">
-            <label htmlFor="rate" className="block text-[15px] font-bold">대출 금리 <span className="font-medium text-subtle">(알고 있다면)</span></label>
-            <div className={`flex items-center rounded-xl bg-fill px-4 focus-within:ring-2 focus-within:ring-brand ${rateUnknown ? "opacity-50" : ""}`}>
-              <input id="rate" inputMode="decimal" disabled={rateUnknown} value={rate} onChange={(e) => setRate(e.target.value.replace(/[^\d.]/g, ""))} placeholder="입력하지 않음" className="tabular h-14 min-w-0 flex-1 bg-transparent text-right text-[20px] font-bold outline-none placeholder:text-[16px] placeholder:font-medium placeholder:text-subtle" />
-              <span className="pl-2 text-[16px] font-bold text-muted">% / 연</span>
-            </div>
-            <button type="button" aria-pressed={rateUnknown} onClick={() => setRateUnknown((v) => !v)} className={`rounded-full px-3 py-1.5 text-[13px] font-bold ${rateUnknown ? "bg-ink text-white" : "bg-fill text-muted"}`}>모름</button>
-          </div>
-          {submitError && <Notice tone="bad">{submitError}</Notice>}
-          <Nav onBack={() => setStep("q2")} onNext={submit} nextLabel={submitting ? "계산하고 있어요…" : "결과 보기"} nextDisabled={submitting} />
-        </div>
-      )}
     </div>
   );
 }

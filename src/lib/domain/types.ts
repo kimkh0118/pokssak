@@ -82,7 +82,7 @@ export const CONDITION_LABEL: Record<Condition, string> = {
   unknown: "모름",
 };
 
-/** 핵심 질문 3개에 대한 답 */
+/** 핵심 질문 답(자금·대출은 결과 화면의 계산 조건 수정에서 선택 입력) */
 export interface Answers {
   purpose: Purpose;
   timing: Timing;

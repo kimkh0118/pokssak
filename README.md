@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 집 선택 비교 (MVP)
 
-## Getting Started
+집주인이 단독·다가구주택 주소를 입력하고 질문 3개에 답하면 다음 네 가지 선택지를 **같은 기준**으로 비교합니다.
 
-First, run the development server:
+- 현상태로 매각
+- 철거 후 토지 매각
+- 리모델링(목적에 따라 매각 / 임대·보유 / 거주·보유)
+- 현상태 유지
+
+결과 화면은 추천(또는 판단 보류) 이유, 선택지별 순현금 수지, 보유 시 추정 순자산, 현상태 매각 대비 차이, 최대 선투입 필요액, 예상 기간, 손익분기 매각가, 최대 허용 공사비, 추정 범위, 미확인 조건, 출처·가정·비용 내역을 보여줍니다. 계산은 LLM 없이 재현 가능한 순수 함수로만 합니다.
+
+## 실행 방법
+
+필요 환경: Node.js 22.5 이상(내장 `node:sqlite` 사용, Node 24에서 확인).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # 실제 공공데이터를 쓰려면 인증키 입력(없어도 예시 모드는 동작)
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **예시 모드**: 첫 화면의 "예시로 체험". 인증키 없이 가상의 '예시시 예시구' 주소·거래 사례로 전체 흐름이 동작합니다. 모든 화면 상단에 예시 모드 표시가 고정됩니다.
+- **실제 모드**: "실제 주소로 시작". 인증키가 없거나 API가 실패하면 그 오류를 그대로 보여주고, 예시 데이터로 바꾸지 않습니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+검증 명령:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm test                 # 단위 테스트(계산·단위·응답 해석·검증)
+npm run test:network     # 실제 공공 API에 잘못된 키로 호출해 인증 오류 분류 확인(네트워크 필요)
+npm run e2e              # 실행 중인 서버(BASE_URL, 기본 localhost:3000)에 전체 흐름 HTTP 검사
+npm run typecheck && npm run lint && npm run build
+```
 
-## Learn More
+## API 인증키 설정
 
-To learn more about Next.js, take a look at the following resources:
+키는 서버 환경변수로만 읽고, 로그·오류 메시지에서는 가립니다(`src/lib/providers/http.ts`).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| 환경변수 | 발급처 | 신청할 서비스 | 용도 |
+|---|---|---|---|
+| `JUSO_API_KEY` | [주소기반산업지원서비스](https://business.juso.go.kr/) → API 신청 | 도로명주소 **검색 API** | 주소 후보 검색, 법정동코드·지번·공동주택 여부 |
+| `DATA_GO_KR_SERVICE_KEY` | [공공데이터포털](https://www.data.go.kr/) 로그인 → 활용신청 | [건축HUB 건축물대장정보 서비스(15134735)](https://www.data.go.kr/data/15134735/openapi.do), [단독/다가구 매매 실거래가 자료(15126465)](https://www.data.go.kr/data/15126465/openapi.do) | 건축물 용도·구조·연면적·층수·사용승인일, 주변 거래 사례 |
+| `VWORLD_API_KEY` (+ 필요 시 `VWORLD_DOMAIN`) | [브이월드 오픈API](https://www.vworld.kr/) → 인증키 발급 | 국가중점데이터 **토지특성정보(토지특성속성조회)** | 토지 면적·지목·용도지역·공시지가·기준연도 |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- 공공데이터포털 키는 **Decoding(일반) 인증키**를 넣으세요. 서버가 URL 인코딩합니다.
+- 공공데이터포털은 서비스마다 활용신청이 따로 필요합니다. 키가 있어도 신청하지 않은 서비스는 인증 오류가 납니다.
 
-## Deploy on Vercel
+## 공공데이터 연동 내용과 확인 수준
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| 기능 | 엔드포인트 | 명세 확인 방법 | 실제 정상 응답 확인 |
+|---|---|---|---|
+| 주소 검색 | `business.juso.go.kr/addrlink/addrLinkApi.do` | 공식 개발자 안내의 요청변수·출력결과·오류코드 표 | ❌ 키 없음. 잘못된 키 → `E0001` 응답은 실제 확인 |
+| 건축물대장 표제부 | `apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo` | 공공데이터포털 활용명세(Swagger) | ❌ 키 없음. 잘못된 키 → 코드 30(HTTP 403) 실제 확인 |
+| 단독·다가구 매매 실거래 | `apis.data.go.kr/1613000/RTMSDataSvcSHTrade/getRTMSDataSvcSHTrade` | 공공데이터포털 활용명세(Swagger) | ❌ 키 없음. 잘못된 키 → 코드 30(XML) 실제 확인 |
+| 토지특성 | `api.vworld.kr/ned/data/getLandCharacteristics` | 브이월드 API 상세 페이지(요청변수·출력 항목·오류코드) | ❌ 키 없음. 잘못된 키 → `INVALID_KEY` 실제 확인 |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+정상 응답 해석은 공식 명세의 필드명으로 구현했고, 응답 형태를 흉내 낸 테스트로 검사했습니다. **실제 인증키로 정상 데이터를 받아 본 적은 없습니다.** 특히 브이월드 정상 응답의 목록 노드(`landCharacteristicss.field`)는 공식 페이지에 예시가 없어 키 발급 후 첫 호출에서 확인이 필요합니다.
+
+처리하는 실패 유형: 인증키 미설정, 인증 오류, 호출 제한, 조회 결과 없음, 요청값 오류, 기관 시스템 오류, 네트워크·시간 초과, 응답 해석 오류, 일부 필드 누락(화면에 누락 필드명 표시), 실거래가 일부 월 조회 실패(실패 월 표시).
+
+데이터 제공기관 교체: 각 기관은 `src/lib/providers/*`에 분리되어 있고, `src/lib/server/lookup.ts`가 이를 묶습니다. 다른 토지정보 API를 쓰려면 같은 `LandRecord` 형태로 돌려주는 함수를 만들어 `lookupProperty`에서 바꾸면 됩니다.
+
+## 계산 원칙(요약)
+
+- **현금 수지와 보유 순자산을 구분**: 팔지 않은 집값은 "남는 현금"에 넣지 않고 기간 말 보유 순자산으로만 표시.
+- **비교가치** = 각 월 순현금흐름의 현재가치 합 + 비교 기간 말 보유 순자산의 현재가치. 월 t의 현재가치 = 금액 ÷ (1+r)^(t/12). 기본 H=36개월, r=3.5%, 가격변동률 0%(모두 수정 가능한 가정).
+- 대출은 이자만 내다가 매각·기간 말에 원금 정산(분할상환 미반영). 대출·보증금은 시나리오마다 한 번만 정산.
+- 0원과 미입력/모름 구분. 미확인 항목은 "대출 잔액 반영 전", "세금 반영 전" 등으로 표시하고 "최종 실수령액"이라 부르지 않음.
+- 세금은 자동 계산하지 않음. 사용자가 확인한 금액을 입력하면 반영.
+- 중개보수는 「공인중개사법 시행규칙」 상한요율(주택 매매, 토지 0.9%)로 추정(부가세 별도).
+- 현상태 매각가: 같은 시군구 단독·다가구 실거래 중 해제·직거래 제외, 대지·연면적 0.5~2배, 건축년도 ±15년, 같은 동 3건 이상이면 같은 동만 → 대지㎡당 가격 25·50·75% 분위수 × 대상 대지면적. 3건 미만이면 산정 보류.
+- 철거 후 토지 매각가: 토지 거래 사례 또는 직접 입력으로만 산정(주택가 × 상승률 금지). **실제 모드에는 토지 실거래 API가 아직 없어 기본은 "산정 보류"**.
+- 리모델링 후 가치: 근거가 없으면 계산 보류, 사용자가 가정값 입력.
+- 손익분기 매각가·최대 허용 공사비: `대안 비교가치 − 기준안 비교가치 = 0`을 이분법으로 탐색, 해가 없으면 숫자를 내지 않음. 임대 회수기간은 추가 **순**임대수입 기준.
+- 최대 선투입 필요액 = 누적 현금흐름의 최저점. 투입 가능 현금을 넘으면 추천에서 제외.
+- 추천 순서: 목적 부합 → 예산·희망 시점 → 실행 가능·미확인 조건 → 같은 기준 경제성 → 불확실성(1위와 2위 차이가 추정 범위보다 작으면 "추가 견적·확인 필요"). 정보 부족은 "판단 보류"로, 현상태 유지 추천과 구분.
+
+주요 코드: `src/lib/engine/`(cashflow, breakeven, recommend, analyze), `src/lib/estimation/`(comps, costs), `src/lib/analysis/`(buildInput, scope, validate), `src/lib/server/`(lookup, analyses, consultations, db).
+
+## 미연동·가정 항목
+
+- **철거·리모델링 단가**: `src/lib/estimation/costs.ts`의 값은 화면 흐름을 위한 서비스 가정값이며 공식 단가가 아닙니다(지역 차이 미반영). 실제 서비스 전에 출처가 있는 단가표로 바꾸거나 견적 입력을 받아야 합니다.
+- **보유비(월 10만 원), 상태별 유지관리비, 매각·공사 소요 기간**: 기본 가정값.
+- **토지 매매 실거래 API**: 미연동(실제 모드에서 철거 후 토지 매각가는 직접 입력 필요).
+- **세금 계산**: 미구현(입력값만 반영).
+- **업체 연동**: 없음. 상담 신청은 로컬 DB에 저장하고 "신청 접수"로만 표시. 업체는 모두 예시.
+- **LLM**: 사용하지 않음. 추가한다면 저장된 계산 결과를 설명하는 역할로만 두고 금액·순위를 바꾸지 못하게 해야 합니다.
+- 인증·사용자 계정 없음(MVP). 분석 결과 URL을 아는 사람은 결과를 볼 수 있습니다.
+
+## 저장 데이터
+
+`data/app.db`(SQLite): 조회 결과(`property_lookups`), 분석 결과(`analyses`), 상담 신청(`consultation_requests`). 상담 신청에는 사용자가 체크한 항목만 저장합니다.

@@ -1,6 +1,6 @@
 # 집 선택 비교
 
-단독·다가구주택 주소와 질문 2개로 **현상태 매각 · 철거 후 토지 매각 · 리모델링 · 현상태 유지**를 같은 기준으로 비교합니다.
+단독·다가구주택 주소와 질문 3개(어떻게 하고 싶은지·집 상태·미룬 이유)로 **현상태 매각 · 철거 후 토지 매각 · 리모델링 · 현상태 유지**를 같은 기준으로 비교합니다.
 비용을 빼고 얼마가 남는지, 어느 가격·공사비부터 다른 선택이 유리해지는지 근거와 함께 보여줍니다.
 
 ## 구조
@@ -50,9 +50,13 @@ cp backend/.env.example backend/.env   # 인증키 입력(없어도 예시 모�
 따로 실행하려면:
 
 ```bash
-cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000
-cd frontend && npm run dev
+backend/.venv/bin/python backend/run.py   # 백엔드(:8000)
+cd frontend && npm run dev                # 화면(:3000)
 ```
+
+`backend/app/main.py`는 패키지 안의 모듈이라 직접 실행하지 않습니다(상대 import 오류). 백엔드는 항상 `backend/run.py`나 `uvicorn app.main:app`으로 실행합니다.
+
+**VS Code**: `부웅산` 폴더 전체를 연 뒤 실행 및 디버그(⇧⌘D)에서 **"전체 실행 (백엔드 + 프런트엔드)"**을 선택해 ▶. 파이썬 인터프리터는 `.vscode/settings.json`에서 `backend/.venv`로 지정되어 있습니다.
 
 ## 검증
 

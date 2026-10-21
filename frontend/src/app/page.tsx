@@ -54,7 +54,7 @@ export default async function Home() {
           <br />
           <span className="text-brand">얼마 남는지</span> 비교해 드려요
         </h1>
-        <p className="mt-3 text-[16px] leading-relaxed text-muted">주소 하나와 질문 2개면 충분해요. 단독·다가구주택만 지원합니다.</p>
+        <p className="mt-3 text-[16px] leading-relaxed text-muted">주소 하나와 질문 3개면 충분해요. 단독·다가구주택만 지원합니다.</p>
 
         <Link
           href="/analyze?mode=live"

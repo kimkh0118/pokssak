@@ -6,7 +6,8 @@ export type Provenance = "public_api" | "user_input" | "estimate" | "sample";
 export type Range = { low: number; base: number; high: number };
 export type MoneyInput = { status: "known"; won: number } | { status: "unknown" } | { status: "unanswered" };
 
-export type Purpose = "quick_sale" | "best_price" | "live" | "rent" | "undecided";
+export type Purpose = "quick_sale" | "profit" | "live" | "undecided" | "best_price" | "rent";
+export type DelayReason = "cost" | "ownership" | "redevelopment" | "how_to" | "other";
 export type Timing = "within_3m" | "within_6m" | "within_12m" | "flexible";
 export type Occupancy = "owner" | "tenant" | "vacant" | "unknown";
 export type Condition = "good" | "partial_repair" | "major_repair" | "unknown";
@@ -14,10 +15,11 @@ export type OptionId = "sell_as_is" | "demolish_sell_land" | "remodel" | "keep";
 export type Verdict = "recommend" | "needs_quotes" | "insufficient_info" | "no_feasible";
 
 export interface Answers {
-  purpose: Purpose;
-  timing: Timing;
-  occupancy: Occupancy;
-  condition: Condition;
+  purpose: Purpose; // 질문 1
+  condition: Condition; // 질문 2
+  delayReason?: DelayReason | null; // 질문 3
+  timing: Timing; // 계산 조건 수정
+  occupancy: Occupancy; // 계산 조건 수정
   tenant?: {
     deposit: MoneyInput;
     monthlyRent: MoneyInput;

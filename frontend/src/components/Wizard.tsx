@@ -2,21 +2,23 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Address, Answers, Condition, Fetched, Mode, MoneyInput, Occupancy, PropertyLookup, Purpose, Timing } from "@/lib/api";
-import { CONDITION_LABEL, OCCUPANCY_LABEL, PURPOSE_LABEL, TIMING_LABEL } from "@/lib/labels";
+import type { Address, Condition, DelayReason, Fetched, Mode, PropertyLookup, Purpose } from "@/lib/api";
+import { CONDITION_LABEL, DELAY_REASON_LABEL, PURPOSE_HINT, PURPOSE_LABEL } from "@/lib/labels";
+
+const Q1: Purpose[] = ["quick_sale", "profit", "live", "undecided"];
 import { formatArea } from "@/lib/format";
 import { addHistory } from "@/lib/history";
-import { BottomBar, Button, ChoiceGroup, MoneyField, Notice, Pill, ProvenanceBadge, ProviderErrorBox, SampleBanner } from "./ui";
+import { BottomBar, Button, ChoiceGroup, Notice, Pill, ProvenanceBadge, ProviderErrorBox, SampleBanner } from "./ui";
 
-type Step = "search" | "target" | "q1" | "q2";
+type Step = "search" | "target" | "q1" | "q2" | "q3";
 const STEPS: { key: Step; label: string }[] = [
   { key: "search", label: "주소 선택" },
   { key: "target", label: "분석 대상 확인" },
   { key: "q1", label: "질문 1" },
   { key: "q2", label: "질문 2" },
+  { key: "q3", label: "질문 3" },
 ];
 
-const U: MoneyInput = { status: "unanswered" };
 
 export function Wizard({ mode }: { mode: Mode }) {
   const router = useRouter();
@@ -30,13 +32,8 @@ export function Wizard({ mode }: { mode: Mode }) {
   const [buildingPk, setBuildingPk] = useState<string | null>(null);
   const [scopeConfirmed, setScopeConfirmed] = useState(false);
   const [purpose, setPurpose] = useState<Purpose | null>(null);
-  const [timing, setTiming] = useState<Timing | null>(null);
-  const [occupancy, setOccupancy] = useState<Occupancy | null>(null);
   const [condition, setCondition] = useState<Condition | null>(null);
-  const [deposit, setDeposit] = useState<MoneyInput>(U);
-  const [rent, setRent] = useState<MoneyInput>(U);
-  const [leaseEnd, setLeaseEnd] = useState<string>("");
-  const [leaseUnknown, setLeaseUnknown] = useState(false);
+  const [delayReason, setDelayReason] = useState<DelayReason | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -85,27 +82,11 @@ export function Wizard({ mode }: { mode: Mode }) {
     !!lookup && lookup.scope.status !== "unsupported" && (lookup.scope.status === "supported" || scopeConfirmed) && (!multi || !!buildingPk);
 
   async function submit() {
-    if (!lookup || !purpose || !timing || !occupancy || !condition) return;
+    if (!lookup || !purpose || !condition || !delayReason) return;
     setSubmitError(null);
     setSubmitting(true);
-    const answers: Answers = {
-      purpose,
-      timing,
-      occupancy,
-      condition,
-      tenant:
-        occupancy === "tenant"
-          ? {
-              deposit,
-              monthlyRent: rent,
-              leaseEnd: leaseUnknown ? { status: "unknown" } : leaseEnd ? { status: "known", yyyymm: leaseEnd } : { status: "unanswered" },
-            }
-          : undefined,
-      // 자금·대출은 질문에서 묻지 않고 결과 화면의 '계산 조건 수정'에서 선택 입력
-      availableCash: { status: "unanswered" },
-      loanBalance: { status: "unanswered" },
-      loanRatePct: { status: "unanswered" },
-    };
+    // 사용 상황·희망 시점·자금은 결과 화면의 '계산 조건 수정'에서 선택 입력
+    const answers = { purpose, condition, delayReason };
     try {
       const res = await fetch("/api/analyses", {
         method: "POST",
@@ -212,39 +193,32 @@ export function Wizard({ mode }: { mode: Mode }) {
 
       {step === "q1" && (
         <div className="space-y-8">
-          <QTitle n={1}>이 집을 앞으로<br />어떻게 활용하고 싶으세요?</QTitle>
-          <ChoiceGroup name="purpose" legend="활용 목적" value={purpose} onChange={setPurpose} options={(Object.keys(PURPOSE_LABEL) as Purpose[]).map((v) => ({ value: v, label: PURPOSE_LABEL[v] }))} />
-          <ChoiceGroup name="timing" legend="언제쯤 실행하고 싶으세요?" columns={2} value={timing} onChange={setTiming} options={(Object.keys(TIMING_LABEL) as Timing[]).map((v) => ({ value: v, label: TIMING_LABEL[v] }))} />
-          <Nav onBack={() => setStep("target")} onNext={() => setStep("q2")} nextDisabled={!purpose || !timing} />
+          <QTitle n={1}>이 집을<br />어떻게 하고 싶나요?</QTitle>
+          <ChoiceGroup name="purpose" legend="하나를 골라 주세요" value={purpose} onChange={setPurpose}
+            options={Q1.map((v) => ({ value: v, label: PURPOSE_LABEL[v], hint: PURPOSE_HINT[v] }))} />
+          <Nav onBack={() => setStep("target")} onNext={() => setStep("q2")} nextDisabled={!purpose} />
         </div>
       )}
 
       {step === "q2" && (
         <div className="space-y-8">
-          <QTitle n={2}>지금 집은<br />어떤 상황인가요?</QTitle>
-          <ChoiceGroup name="occupancy" legend="누가 살고 있나요?" columns={2} value={occupancy} onChange={setOccupancy} options={(Object.keys(OCCUPANCY_LABEL) as Occupancy[]).map((v) => ({ value: v, label: OCCUPANCY_LABEL[v] }))} />
-          {occupancy === "tenant" && (
-            <div className="space-y-5 rounded-2xl ring-1 ring-line p-5">
-              <p className="text-[14px] text-subtle">임대차 정보는 선택 입력이에요. 모르면 &lsquo;모름&rsquo;을 눌러 주세요.</p>
-              <MoneyField id="deposit" label="임차보증금 합계" value={deposit} onChange={setDeposit} />
-              <MoneyField id="rent" label="월 임대료 합계" value={rent} onChange={setRent} allowNone="월세 없음(전세)" />
-              <div className="space-y-2">
-                <label htmlFor="leaseEnd" className="block text-[15px] font-bold">계약 종료 시점</label>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input id="leaseEnd" type="month" disabled={leaseUnknown} value={leaseEnd} onChange={(e) => setLeaseEnd(e.target.value)} className="h-14 rounded-xl bg-fill px-4 text-[16px] font-bold disabled:opacity-40" />
-                  <button type="button" aria-pressed={leaseUnknown} onClick={() => setLeaseUnknown((v) => !v)} className={`rounded-full px-3 py-1.5 text-[13px] font-bold ${leaseUnknown ? "bg-ink text-white" : "bg-fill text-muted"}`}>모름</button>
-                </div>
-                <p className="text-[13px] text-subtle">여러 세대라면 가장 늦게 끝나는 계약 기준</p>
-              </div>
-            </div>
-          )}
-          <ChoiceGroup name="condition" legend="집 상태는 어떤가요?" columns={2} value={condition} onChange={setCondition} options={(Object.keys(CONDITION_LABEL) as Condition[]).map((v) => ({ value: v, label: CONDITION_LABEL[v] }))} />
+          <QTitle n={2}>현재 집 상태는<br />어떤가요?</QTitle>
+          <ChoiceGroup name="condition" legend="하나를 골라 주세요" columns={2} value={condition} onChange={setCondition}
+            options={(Object.keys(CONDITION_LABEL) as Condition[]).map((v) => ({ value: v, label: CONDITION_LABEL[v] }))} />
           <p className="-mt-4 text-[13px] text-subtle">입력한 상태는 참고용이에요. 전문 안전진단 결과로 보지 않아요.</p>
-          {submitError && <Notice tone="bad">{submitError}</Notice>}
-          <Nav onBack={() => setStep("q1")} onNext={submit} nextLabel={submitting ? "계산하고 있어요…" : "결과 보기"} nextDisabled={!occupancy || !condition || submitting} />
+          <Nav onBack={() => setStep("q1")} onNext={() => setStep("q3")} nextDisabled={!condition} />
         </div>
       )}
 
+      {step === "q3" && (
+        <div className="space-y-8">
+          <QTitle n={3}>지금까지 처리를 미룬<br />가장 큰 이유는 뭔가요?</QTitle>
+          <ChoiceGroup name="delayReason" legend="하나를 골라 주세요" columns={2} value={delayReason} onChange={setDelayReason}
+            options={(Object.keys(DELAY_REASON_LABEL) as DelayReason[]).map((v) => ({ value: v, label: DELAY_REASON_LABEL[v] }))} />
+          {submitError && <Notice tone="bad">{submitError}</Notice>}
+          <Nav onBack={() => setStep("q2")} onNext={submit} nextLabel={submitting ? "계산하고 있어요…" : "결과 보기"} nextDisabled={!delayReason || submitting} />
+        </div>
+      )}
     </div>
   );
 }

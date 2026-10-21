@@ -43,19 +43,26 @@ class Tenant(BaseModel):
 
 
 class Answers(BaseModel):
-    purpose: Literal["quick_sale", "best_price", "live", "rent", "undecided"]
-    timing: Literal["within_3m", "within_6m", "within_12m", "flexible"]
-    occupancy: Literal["owner", "tenant", "vacant", "unknown"]
+    # 질문 1: 이 집을 어떻게 하고 싶나요? (빨리 정리 / 수익 창출 / 직접 사용 / 아직 모르겠음)
+    purpose: Literal["quick_sale", "profit", "live", "undecided", "best_price", "rent"]
+    # 질문 2: 현재 집 상태는 어떤가요?
     condition: Literal["good", "partial_repair", "major_repair", "unknown"]
+    # 질문 3: 지금까지 처리를 미룬 가장 큰 이유는?
+    delayReason: Literal["cost", "ownership", "redevelopment", "how_to", "other"] | None = None
+    # 아래는 질문에서 묻지 않고 '계산 조건 수정'에서 선택 입력
+    timing: Literal["within_3m", "within_6m", "within_12m", "flexible"] | None = None
+    occupancy: Literal["owner", "tenant", "vacant", "unknown"] = "unknown"
     tenant: Tenant | None = None
     availableCash: Money = Money()
     loanBalance: Money = Money()
     loanRatePct: Rate = Rate()
 
     @model_validator(mode="after")
-    def _tenant_only_when_tenant(self):
+    def _defaults(self):
         if self.occupancy != "tenant":
             self.tenant = None
+        if self.timing is None:  # '빨리 정리'는 6개월 안, 나머지는 시점 제한 없음
+            self.timing = "within_6m" if self.purpose == "quick_sale" else "flexible"
         return self
 
 

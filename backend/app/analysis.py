@@ -27,6 +27,7 @@ class EngineInput:
     timing: str
     occupancy: str
     condition: str = "unknown"
+    delay_reason: str | None = None
     horizon_months: int = 36
     discount_rate: float = 0.035
     price_growth: float = 0.0
@@ -109,7 +110,11 @@ def _confirmations(option_id: str, i: EngineInput) -> list[str]:
                   "대수선·용도변경 해당 여부와 인허가",
                   "리모델링 후 가치·임대료에 대한 현장 시세 확인"]
     if option_id == "keep" and i.condition == "major_repair":
-        items.append("대규모 보수 필요 상태: 안전 점검과 보수 견적")
+        items.append("큰 파손 상태: 안전 점검과 보수 견적")
+    if i.delay_reason == "ownership":
+        items.insert(0, "소유관계 정리: 공유자·상속인 전원 동의와 상속등기 여부(정리 전에는 매각·철거·공사가 어려움)")
+    if i.delay_reason == "redevelopment":
+        items.append("재개발·정비구역 지정 여부와 진행 단계(구역 지정 시 철거·신축·매각 조건이 달라짐)")
     return items
 
 
@@ -123,9 +128,10 @@ def analyze(i: EngineInput) -> dict:
     remodel_runs = {v: run(v) for v in ("remodel_sell", "remodel_rent", "remodel_live")}
     remodel_variant = {"rent": "remodel_rent", "live": "remodel_live",
                        "quick_sale": "remodel_sell", "best_price": "remodel_sell"}.get(i.purpose)
-    if remodel_variant is None:
+    if remodel_variant is None:  # 수익 창출·미정: 계산 가능한 방식 중 가장 유리한 방식
         usable = [v for v, r in remodel_runs.items()
-                  if r["base"]["computable"] and not (v == "remodel_live" and i.occupancy != "owner")]
+                  if r["base"]["computable"]
+                  and not (v == "remodel_live" and (i.occupancy != "owner" or i.purpose == "profit"))]
         usable.sort(key=lambda v: -remodel_runs[v]["base"]["comparisonValue"])
         remodel_variant = usable[0] if usable else "remodel_sell"
 
@@ -203,6 +209,13 @@ PURPOSE_FIT = {
     "live": {"sell_as_is": "mismatch", "demolish_sell_land": "mismatch", "remodel": "fit", "keep": "fit"},
     "rent": {"sell_as_is": "mismatch", "demolish_sell_land": "mismatch", "remodel": "fit", "keep": "fit"},
     "undecided": {"sell_as_is": "fit", "demolish_sell_land": "fit", "remodel": "fit", "keep": "fit"},
+    "profit": {"sell_as_is": "fit", "demolish_sell_land": "fit", "remodel": "fit", "keep": "fit"},
+}
+
+DELAY_CAUTION = {
+    "cost": "비용 부담이 걱정이라면 '계산 조건 수정'에 투입 가능한 현금을 넣어 주세요. 선투입이 필요한 선택지를 예산 기준으로 거릅니다.",
+    "ownership": "소유관계(공유·상속)가 정리되지 않으면 어떤 선택도 실행하기 어렵습니다. 먼저 법무 상담으로 정리 방법을 확인하세요.",
+    "redevelopment": "재개발 기대 이익은 계산에 넣지 않았습니다. 정비구역 지정·사업 단계에 따라 결과가 크게 달라질 수 있습니다.",
 }
 
 
@@ -224,6 +237,13 @@ def _result(verdict, option_id, strength, headline, reasons, cautions):
 
 
 def recommend(options: list[dict], i: EngineInput) -> dict:
+    result = _recommend(options, i)
+    if i.delay_reason in DELAY_CAUTION:
+        result["cautions"].insert(0, DELAY_CAUTION[i.delay_reason])
+    return result
+
+
+def _recommend(options: list[dict], i: EngineInput) -> dict:
     limit = TIMING_MONTHS[i.timing]
 
     # 1~3단계: 선택지별 점검

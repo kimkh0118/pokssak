@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { Analysis, Answers, CompEstimate, OptionResult, Overrides } from "@/lib/api";
-import { CONDITION_LABEL, FLOW_LABEL, OCCUPANCY_LABEL, PURPOSE_LABEL, SCENARIO_LABEL, TIMING_LABEL, VERDICT_LABEL } from "@/lib/labels";
+import { CONDITION_LABEL, DELAY_REASON_LABEL, FLOW_LABEL, OCCUPANCY_LABEL, PURPOSE_LABEL, SCENARIO_LABEL, TIMING_LABEL, VERDICT_LABEL } from "@/lib/labels";
 import { formatArea, formatMonths, formatWon } from "@/lib/format";
 import { Card, Notice, Pill, ProvenanceBadge, SampleBanner, Stat } from "./ui";
 import { ConditionEditor } from "./ConditionEditor";
@@ -86,9 +86,10 @@ export function ResultView({ id }: { id: string }) {
         <h1 className="mt-1 text-[22px] font-extrabold leading-tight tracking-tight">{property.address.roadAddr}</h1>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Pill>{PURPOSE_LABEL[answers.purpose]}</Pill>
+          <Pill>상태: {CONDITION_LABEL[answers.condition]}</Pill>
+          {answers.delayReason && <Pill>미룬 이유: {DELAY_REASON_LABEL[answers.delayReason]}</Pill>}
           <Pill>{TIMING_LABEL[answers.timing]}</Pill>
-          <Pill>{OCCUPANCY_LABEL[answers.occupancy]}</Pill>
-          <Pill>상태 {CONDITION_LABEL[answers.condition]}</Pill>
+          <Pill>{answers.occupancy === "unknown" ? "사용 상황 미입력" : OCCUPANCY_LABEL[answers.occupancy]}</Pill>
         </div>
       </div>
 

@@ -100,3 +100,26 @@ def test_상담신청_동의와_연결대상_검사():
 def test_입력검증():
     assert client.post("/api/analyses", json={"lookupId": "x", "answers": {**ANSWERS, "purpose": "nope"}}).status_code == 400
     assert client.get("/api/address", params={"mode": "sample", "q": "a"}).status_code == 400
+
+
+def test_새_질문_3개만으로_분석():
+    prop = sample_lookup("예시로 12", "sample-house")
+    answers = {"purpose": "quick_sale", "condition": "major_repair", "delayReason": "ownership"}
+    analysis_id = create(prop["id"], answers=answers).json()["id"]
+    a = client.get(f"/api/analyses/{analysis_id}").json()
+    assert a["answers"]["timing"] == "within_6m"  # '빨리 정리'는 6개월 기준
+    assert a["answers"]["occupancy"] == "unknown"
+    rec = a["result"]["recommendation"]
+    assert "소유관계" in rec["cautions"][0]
+    sell = next(o for o in a["result"]["options"] if o["id"] == "sell_as_is")
+    assert "소유관계" in sell["needsConfirmation"][0]
+
+
+def test_수익창출과_재개발기대():
+    prop = sample_lookup("예시로 12", "sample-house")
+    answers = {"purpose": "profit", "condition": "good", "delayReason": "redevelopment"}
+    a = client.get(f"/api/analyses/{create(prop['id'], answers=answers).json()['id']}").json()
+    assert a["answers"]["timing"] == "flexible"
+    remodel = next(o for o in a["result"]["options"] if o["id"] == "remodel")
+    assert remodel["variant"] in ("remodel_sell", "remodel_rent")
+    assert any("재개발" in c for c in a["result"]["recommendation"]["cautions"])

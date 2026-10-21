@@ -140,6 +140,7 @@ def build(lookup: dict, answers: Answers, target: Target, ov: Overrides) -> dict
 
     engine = EngineInput(
         purpose=answers.purpose, timing=answers.timing, occupancy=answers.occupancy, condition=answers.condition,
+        delay_reason=answers.delayReason,
         horizon_months=pick(ov.horizonMonths, 36),
         discount_rate=pick(ov.discountRatePct, 3.5) / 100,
         price_growth=pick(ov.priceGrowthPct, 0) / 100,
@@ -221,7 +222,7 @@ def build(lookup: dict, answers: Answers, target: Target, ov: Overrides) -> dict
     if answers.occupancy == "tenant":
         add("tenant", "자금·임대차", "임차보증금 / 월세 / 종료",
             f"{'모름' if tenant_deposit is None else won(tenant_deposit)} / {'모름' if tenant_rent is None else won(tenant_rent)} / "
-            f"{'모름' if lease_end is None else f'{lease_end}개월 후'}", "user_input", "질문 2 답변")
+            f"{'모름' if lease_end is None else f'{lease_end}개월 후'}", "user_input", "계산 조건 수정 입력")
     add("durations", "기간", "매각 소요(현상태/토지/리모델링 후)",
         f"{_months_text(durations['lead_as_is'])} / {_months_text(durations['lead_land'])} / {_months_text(durations['lead_remodeled'])}",
         "estimate", "서비스 기본 가정값")

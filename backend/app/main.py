@@ -13,6 +13,9 @@ POST /api/consultations                상담 신청 저장('신청 접수')
 
 from __future__ import annotations
 
+if __name__ == "__main__":  # 직접 실행하면 아래 상대 import가 실패하므로 안내만 하고 끝낸다
+    raise SystemExit("app/main.py 는 직접 실행하지 않습니다. 대신:  backend/.venv/bin/python backend/run.py")
+
 import logging
 import re
 import uuid
@@ -21,7 +24,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from . import storage
 from .analysis import analyze
@@ -54,6 +57,12 @@ def now() -> str:
 
 
 # ---------------------------------------------------------------- 조회
+@app.get("/", include_in_schema=False)
+def root():
+    """백엔드 주소로 들어오면 사이트 메인 화면(프런트엔드)으로 보낸다. API 문서는 /docs"""
+    return RedirectResponse(settings.frontend_origin)
+
+
 @app.get("/api/status")
 def status():
     return {"juso": bool(settings.juso_key), "dataGoKr": bool(settings.data_go_kr_key), "vworld": bool(settings.vworld_key)}

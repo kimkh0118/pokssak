@@ -1,12 +1,26 @@
 // 화면에 보여주는 한국어 이름
-import type { Condition, Occupancy, Provenance, Purpose, Timing, Verdict, ProviderError, Partner } from "./api";
+import type { Condition, DelayReason, Occupancy, Provenance, Purpose, Timing, Verdict, ProviderError, Partner } from "./api";
 
 export const PURPOSE_LABEL: Record<Purpose, string> = {
-  quick_sale: "빠르게 매각해 현금 확보",
-  best_price: "시간이 걸려도 더 좋은 가격에 매각",
-  live: "계속 거주",
+  quick_sale: "빨리 정리",
+  profit: "수익 창출",
+  live: "직접 사용",
+  undecided: "아직 모르겠음",
+  best_price: "좋은 가격에 매각",
   rent: "임대 수익",
-  undecided: "아직 결정하지 못함",
+};
+export const PURPOSE_HINT: Partial<Record<Purpose, string>> = {
+  quick_sale: "빠르게 팔아 현금으로",
+  profit: "팔거나 세를 줘서 더 많이",
+  live: "직접 살거나 쓰기",
+  undecided: "모든 선택지를 비교해요",
+};
+export const DELAY_REASON_LABEL: Record<DelayReason, string> = {
+  cost: "비용",
+  ownership: "소유관계",
+  redevelopment: "재개발 기대",
+  how_to: "방법을 몰라서",
+  other: "기타",
 };
 export const TIMING_LABEL: Record<Timing, string> = {
   within_3m: "3개월 이내",
@@ -15,7 +29,7 @@ export const TIMING_LABEL: Record<Timing, string> = {
   flexible: "1년 이상 / 상관없음",
 };
 export const OCCUPANCY_LABEL: Record<Occupancy, string> = { owner: "본인 거주", tenant: "임차인 거주", vacant: "공실", unknown: "모름" };
-export const CONDITION_LABEL: Record<Condition, string> = { good: "양호", partial_repair: "부분 보수 필요", major_repair: "대규모 보수 필요", unknown: "모름" };
+export const CONDITION_LABEL: Record<Condition, string> = { good: "바로 사용 가능", partial_repair: "일부 수리 필요", major_repair: "큰 파손 있음", unknown: "모르겠음" };
 export const OPTION_LABEL = { sell_as_is: "현상태로 매각", demolish_sell_land: "철거 후 토지 매각", remodel: "리모델링", keep: "현상태 유지" } as const;
 
 export const PROVENANCE_LABEL: Record<Provenance, string> = {

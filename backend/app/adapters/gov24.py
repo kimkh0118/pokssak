@@ -11,7 +11,9 @@ import httpx
 from ..settings import settings
 
 URL = "https://api.odcloud.kr/api/gov24/v3/serviceList"
-KEYWORDS = ("빈집", "철거", "노후주택", "노후 주택", "슬레이트", "공가", "폐가")
+KEYWORDS = ("빈집", "빈 집", "폐가", "공가주택", "노후주택", "노후 주택", "슬레이트")
+HOUSE_WORDS = ("주택", "건축물", "가옥")  # '철거'는 집과 함께 나올 때만(간판·시설물 철거 제외)
+EXCLUDE = ("화재", "간판", "요금", "감면")  # 빈집 처리와 무관한 사업
 PER_PAGE = 500
 MAX_PAGES = 10
 
@@ -22,7 +24,12 @@ class Gov24Error(Exception):
 
 def _matches(item: dict) -> bool:
     text = " ".join(str(item.get(k) or "") for k in ("서비스명", "서비스목적요약", "지원내용", "지원대상"))
-    return any(k in text for k in KEYWORDS)
+    name = str(item.get("서비스명") or "")
+    if any(x in name for x in EXCLUDE):
+        return False
+    if any(k in text for k in KEYWORDS):
+        return True
+    return "철거" in name and any(w in text for w in HOUSE_WORDS)
 
 
 def fetch(client: httpx.Client | None = None) -> list[dict]:

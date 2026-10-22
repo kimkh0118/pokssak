@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { api, type Analysis, type Compare, type Reference, type User } from "@/lib/api";
 import { formatWon } from "@/lib/format";
 import { KIND_LABEL, MATCH_LABEL, OPTION_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { AnswersEditor } from "./AnswersEditor";
 import { InputsPanel } from "./InputsPanel";
 import { PublicInfo } from "./PublicInfo";
 import { Button, Card, Notice, Pill, ProvenanceBadge, SampleBanner } from "./ui";
@@ -85,6 +86,7 @@ export function ResultView({ id }: { id: string }) {
       {cmp && <Breakeven cmp={cmp} known={!!r.calc?.demolitionKnown} costsComplete={!!r.calc?.costsComplete} />}
       {cmp && r.calc?.demolitionKnown && <Sensitivity cmp={cmp} pct={r.sensitivityAssumption} />}
 
+      <AnswersEditor key={`a-${data.updatedAt}`} data={data} onSaved={setData} />
       <InputsPanel data={data} onSaved={setData} />
 
       <section aria-labelledby="ref">
@@ -157,7 +159,8 @@ function SaveBanner({ state, user, analysisId, onChange }: { state: string | nul
 function ActionBar({ data, withSupport, setWithSupport }: { data: Analysis; withSupport: boolean; setWithSupport: (v: boolean) => void }) {
   return (
     <nav aria-label="결과 화면 동작" className="flex flex-wrap gap-2">
-      <a href="#inputs" className="rounded-full bg-ink px-4 py-2 text-[14px] font-bold text-white">정보 수정</a>
+      <a href="#answers" className="rounded-full bg-ink px-4 py-2 text-[14px] font-bold text-white">질문 답 수정</a>
+      <a href="#inputs" className="rounded-full bg-ink px-4 py-2 text-[14px] font-bold text-white">가격·견적 입력</a>
       <button disabled={!data.result.calc?.withSupport} onClick={() => setWithSupport(!withSupport)}
         className="rounded-full bg-fill px-4 py-2 text-[14px] font-bold text-ink disabled:text-subtle">
         다른 경우 보기: {withSupport ? "지원금 미반영" : "확인된 지원 반영"}

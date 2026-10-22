@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api, type Analysis, type Compare, type Reference, type User } from "@/lib/api";
 import { formatWon } from "@/lib/format";
-import { KIND_LABEL, MATCH_LABEL, OPTION_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { KIND_LABEL, MATCH_LABEL, OPTION_LABEL } from "@/lib/labels";
 import { AnswersEditor } from "./AnswersEditor";
 import { InputsPanel } from "./InputsPanel";
+import { LEGAL_KEYS, Verdict } from "./Verdict";
 import { PublicInfo } from "./PublicInfo";
 import { Button, Card, Notice, Pill, ProvenanceBadge, SampleBanner } from "./ui";
 
@@ -33,7 +34,7 @@ export function ResultView({ id }: { id: string }) {
 
   const r = data.result;
   const cmp: Compare | null = r.calc ? (withSupport && r.calc.withSupport ? r.calc.withSupport : r.calc.withoutSupport) : null;
-  const tone = r.status === "conditional" ? "bg-brand" : r.status === "uncertain" ? "bg-ink" : "bg-[#2b2f3a]";
+  const blocked = data.eligibility.holdReasons.some((h) => LEGAL_KEYS.some((k) => h.includes(k)));
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 pb-10">
@@ -48,43 +49,22 @@ export function ResultView({ id }: { id: string }) {
         </div>
       </header>
 
-      <section className={`rounded-3xl p-6 text-white ${tone}`} aria-labelledby="status">
-        <p className="text-[13px] font-bold"><span className="rounded-full bg-white/15 px-2.5 py-1">{STATUS_LABEL[r.status]}</span></p>
-        <h2 id="status" className="mt-3 text-[24px] font-extrabold leading-snug">
-          {r.status === "conditional" ? `입력한 조건에서는 ${OPTION_LABEL[r.executionRecommendation!]}이 유리해요`
-            : r.status === "uncertain" ? "어느 쪽이 유리한지 아직 확실하지 않아요" : "근거가 부족해 추천을 보류했어요"}
-        </h2>
-        {r.computedLeader && r.status !== "conditional" && (
-          <p className="mt-2 text-[14px] text-white/80">계산상으로는 {OPTION_LABEL[r.computedLeader]} 쪽이 앞서지만, 실행 추천은 아니에요.</p>
-        )}
-        <p className="mt-3 text-[15px] leading-relaxed text-white/90">{data.explanation.summary}</p>
-        {data.explanation.aiError && <p className="mt-1 text-[12px] text-white/60">{data.explanation.aiError}</p>}
-        <ul className="mt-4 space-y-1.5 border-t border-white/20 pt-4 text-[14px] text-white/90">
-          {data.explanation.nextSteps.map((s) => <li key={s}>· {s}</li>)}
-        </ul>
-        <p className="mt-4 text-[12px] text-white/60">추천은 입력한 조건에서의 비교 결과이며 실제 판매가격·거래 성사·지원금 수령을 보장하지 않아요.</p>
-      </section>
+      <Verdict data={data} />
 
       <ActionBar data={data} withSupport={withSupport} setWithSupport={setWithSupport} />
 
-      {r.missing.length > 0 && (
-        <Card>
-          <h2 className="text-[18px] font-extrabold">추천에 더 필요한 정보</h2>
-          <ul className="mt-2 space-y-1 text-[14px] text-muted">{r.missing.map((m) => <li key={m}>· {m}</li>)}</ul>
-        </Card>
-      )}
 
-      <section aria-labelledby="cmp">
+      {!blocked && <section aria-labelledby="cmp">
         <div className="flex items-end justify-between gap-2">
           <h2 id="cmp" className="text-[20px] font-extrabold">두 판매 방식 비교</h2>
           <span className="text-[12px] text-subtle">{withSupport ? "확인된 지원 반영" : "지원금 미반영(기본)"}</span>
         </div>
         <p className="mt-1 text-[13px] text-subtle">{r.label}. 세금·비용 미확인 항목이 있으면 반영 범위를 밝힌 참고금액이에요.</p>
         {cmp ? <CompareTable data={data} cmp={cmp} /> : <Notice>비교할 가격 자료가 없어요. 아래에서 상담 가격을 입력하면 계산해요.</Notice>}
-      </section>
+      </section>}
 
-      {cmp && <Breakeven cmp={cmp} known={!!r.calc?.demolitionKnown} costsComplete={!!r.calc?.costsComplete} />}
-      {cmp && r.calc?.demolitionKnown && <Sensitivity cmp={cmp} pct={r.sensitivityAssumption} />}
+      {!blocked && cmp && <Breakeven cmp={cmp} known={!!r.calc?.demolitionKnown} costsComplete={!!r.calc?.costsComplete} />}
+      {!blocked && cmp && r.calc?.demolitionKnown && <Sensitivity cmp={cmp} pct={r.sensitivityAssumption} />}
 
       <AnswersEditor key={`a-${data.updatedAt}`} data={data} onSaved={setData} />
       <InputsPanel data={data} onSaved={setData} />

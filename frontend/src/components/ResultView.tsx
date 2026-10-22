@@ -9,6 +9,7 @@ import { KIND_LABEL, MATCH_LABEL, OPTION_LABEL } from "@/lib/labels";
 import { AnswersEditor } from "./AnswersEditor";
 import { InputsPanel } from "./InputsPanel";
 import { LEGAL_KEYS, Verdict } from "./Verdict";
+import { BUSAN_GU_SITES } from "@/lib/site";
 import { AddressPlate, plateTitle } from "./AddressSign";
 import { PublicInfo } from "./PublicInfo";
 import { Button, Card, Notice, Pill, ProvenanceBadge, SampleBanner } from "./ui";
@@ -309,7 +310,7 @@ function Programs({ data }: { data: Analysis }) {
     <section aria-labelledby="prog">
       <h2 id="prog" className="text-[20px] font-extrabold">지원사업 후보</h2>
       <p className="mt-1 text-[13px] text-subtle">공식 공고를 주 1회 정리한 자료예요(실시간 아님). 후보는 지원 확정이 아니며, 확인된 금액만 &lsquo;확인된 지원 반영&rsquo;에 들어가요.</p>
-      {data.programs.length === 0 && <Notice>현재 등록된 지원사업이 없어요.</Notice>}
+      {data.programs.length === 0 && <NoPrograms sgg={data.address.sggNm} />}
       <div className="mt-3 space-y-3">
         {data.programs.map((p) => (
           <Card key={p.programId}>
@@ -371,5 +372,27 @@ function Plan({ data }: { data: Analysis }) {
       {data.eligibility.contacts.length > 0 && <p className="mt-2 text-[13px] text-muted">먼저 필요한 상담: {data.eligibility.contacts.join(", ")}</p>}
       <div className="mt-4 flex gap-2"><Link href="/"><Button variant="secondary">분석 종료</Button></Link></div>
     </section>
+  );
+}
+
+function NoPrograms({ sgg }: { sgg?: string | null }) {
+  const site = sgg ? BUSAN_GU_SITES[sgg] : undefined;
+  return (
+    <div className="rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line">
+      <p className="text-[16px] font-extrabold">아직 확인된 지원사업 공고가 없어요</p>
+      <p className="mt-1 text-[14px] text-muted">
+        부산시·정부24는 매주 자동으로 확인하고 있어요. 빈집 철거·정비 지원은 보통 <b>구·군청</b>이 해마다 따로 공고해서, 직접 확인하는 게 가장 빨라요.
+      </p>
+      <ol className="mt-3 space-y-1.5 text-[14px]">
+        <li>1. {sgg ?? "해당 구·군"}청 홈페이지 &lsquo;고시공고&rsquo;나 &lsquo;새소식&rsquo;에서 <b>빈집</b>으로 검색</li>
+        <li>2. 없으면 구청 <b>건축과(빈집 담당)</b>에 올해 빈집 정비 지원 계획을 문의</li>
+        <li>3. 번호를 모르면 부산시 120 바로콜센터(051-120)로 담당 부서 연결 요청</li>
+      </ol>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {site && <a href={site} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white">{sgg}청 홈페이지 열기</a>}
+        <a href="tel:051120" className="rounded-lg bg-fill px-4 py-2 text-[14px] font-bold">051-120 전화</a>
+      </div>
+      <p className="mt-3 text-[12px] text-subtle">공고를 찾으면 &lsquo;지원금&rsquo; 칸에 확인된 금액을 넣어 &lsquo;확인된 지원 반영&rsquo; 결과를 볼 수 있어요.</p>
+    </div>
   );
 }

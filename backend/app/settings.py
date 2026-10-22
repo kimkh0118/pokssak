@@ -35,6 +35,9 @@ class Settings:
     program_schedule: str = _env("PROGRAM_SCHEDULE") or "MON 09:00"
     # 예시(가상) 주소·공고: 화면에서는 제거됨. 개발·테스트에서만 SAMPLE_MODE=1로 켬
     sample_mode: bool = (_env("SAMPLE_MODE") or "0") == "1"
+    # 지원사업 자동 수집: 부산시 고시공고 게시판 크롤링, 정부24 공공서비스 API(공공데이터포털 키·활용신청 필요)
+    busan_gosi_crawl: bool = (_env("BUSAN_GOSI_CRAWL") or "1") == "1"
+    gov24_enabled: bool = (_env("GOV24_ENABLED") or "1") == "1"
     scheduler_enabled: bool = (_env("SCHEDULER_ENABLED") or "1") == "1"
     # 외부 알림 공급자(없으면 앱 내 알림만)
     email_provider_url: str | None = _env("EMAIL_PROVIDER_URL")

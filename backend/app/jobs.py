@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 import httpx
 
 from . import analyses, db as dbm, notify, programs
+from .adapters import busan_gosi, gov24
 from .clock import KST, now, now_iso
 from .settings import settings
 
@@ -103,6 +104,34 @@ def collect() -> dict:
             out["unchanged" if res.get("unchanged") else "fetched"] += 1
         except Exception as e:  # noqa: BLE001
             out["failed"].append(f"{s['agency']}: {type(e).__name__}")
+    collect_builtin(out)
+    return out
+
+
+def _ingest_text(out: dict, key: str, url: str, text: str, posted_at: str | None):
+    res = programs.ingest(key, url, text.encode(), "text/plain", posted_at=posted_at)
+    out["unchanged" if res.get("unchanged") else "fetched"] += 1
+
+
+def collect_builtin(out: dict, gov_client=None, busan_client=None, sleep=time.sleep) -> dict:
+    """정부24 공공서비스 API + 부산시 고시공고 게시판. 한쪽이 실패해도 다른 쪽은 계속한다."""
+    if settings.gov24_enabled:
+        try:
+            for item in gov24.fetch(gov_client):
+                _ingest_text(out, *gov24.to_notice(item))
+        except gov24.Gov24Error as e:
+            out["skipped"].append(f"정부24: {e}")
+        except Exception as e:  # noqa: BLE001
+            out["failed"].append(f"정부24: {type(e).__name__}")
+    if settings.busan_gosi_crawl:
+        if not programs.robots_allows(busan_gosi.LIST, busan_client):
+            out["skipped"].append("부산시 고시공고: robots.txt 에서 허용되지 않거나 확인 불가")
+        else:
+            try:
+                for n in busan_gosi.crawl(programs.extract_text, busan_client, sleep=sleep):
+                    _ingest_text(out, n["noticeKey"], n["url"], n["text"], n["postedAt"])
+            except Exception as e:  # noqa: BLE001
+                out["failed"].append(f"부산시 고시공고: {type(e).__name__}")
     return out
 
 

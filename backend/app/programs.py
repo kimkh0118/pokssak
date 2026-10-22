@@ -184,13 +184,20 @@ def structure_llm(raw_text: str) -> dict | None:
 
 
 # ---------------------------------------------------------------- 수집·등록
-def robots_allows(url: str) -> bool:
+def robots_allows(url: str, client: httpx.Client | None = None) -> bool:
+    """RFC 9309: robots.txt 가 200 이면 규칙대로, 4xx(없음·접근 거부)면 규칙 없음(허용),
+    5xx·연결 실패면 확인 불가로 보고 수집하지 않는다."""
     parts = urlparse(url)
-    rp = robotparser.RobotFileParser(f"{parts.scheme}://{parts.netloc}/robots.txt")
     try:
-        rp.read()
-    except Exception:  # noqa: BLE001
-        return False  # robots 를 확인하지 못하면 자동 수집하지 않음
+        r = (client or httpx).get(f"{parts.scheme}://{parts.netloc}/robots.txt", timeout=10, follow_redirects=True)
+    except httpx.HTTPError:
+        return False
+    if 400 <= r.status_code < 500:
+        return True
+    if r.status_code != 200:
+        return False
+    rp = robotparser.RobotFileParser()
+    rp.parse(r.text.splitlines())
     return rp.can_fetch("BusanVacantHouseBot", url)
 
 

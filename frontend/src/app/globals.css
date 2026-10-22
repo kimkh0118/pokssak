@@ -1,26 +1,29 @@
 @import "tailwindcss";
 
-/* 밝은 앱형 화면: 진한 검정 글자 + 파란 포인트 + 회색 채움 */
+/* 폭싹: 벽돌 담장 + 도로명 표지판(남색) + 살구빛 주황 버튼 */
 :root {
   color-scheme: light;
   --bg: #ffffff;
   --surface: #ffffff;
-  --fill: #f3f4f7;
-  --fill-strong: #e9ebf0;
+  --fill: #f4f2ef;
+  --fill-strong: #e9e5df;
   --ink: #0c0d11;
   --muted: #4a5163;
   --subtle: #8a92a6;
-  --line: #e8eaef;
-  --brand: #396eff;
-  --brand-strong: #2456e6;
+  --line: #e6e1da;
+  --brand: #c97c4b;
+  --brand-strong: #a95d2e;
   --brand-ink: #ffffff;
-  --brand-soft: #eef2ff;
-  --brand-2: #7290ff;
+  --brand-soft: #fbefe6;
+  --brand-2: #e9a87c;
   --warn: #d97706;
   --warn-soft: #fff6e6;
   --bad: #ff4d52;
   --bad-soft: #fff0f0;
   --good: #12b76a;
+  --sign: #3a3d9b;
+  --sign-strong: #2c2f80;
+  --brick: #a5463a;
   --sample: #7a5af8;
   --sample-soft: #f4f1ff;
 }
@@ -44,6 +47,9 @@
   --color-bad: var(--bad);
   --color-bad-soft: var(--bad-soft);
   --color-good: var(--good);
+  --color-sign: var(--sign);
+  --color-sign-strong: var(--sign-strong);
+  --color-brick: var(--brick);
   --color-sample: var(--sample);
   --color-sample-soft: var(--sample-soft);
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
@@ -51,7 +57,7 @@
 
 html,
 body {
-  background: var(--bg);
+  background-color: #f1eeea;
   color: var(--ink);
 }
 
@@ -81,4 +87,26 @@ body {
   .ticker {
     animation: none;
   }
+}
+
+/* 옅은 벽돌 벽 배경 */
+.brick-wall {
+  background-color: #f1eeea;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='40'%3E%3Cg fill='none' stroke='%23e2ddd5' stroke-width='2'%3E%3Cpath d='M0 1h72M0 21h72M1 1v20M37 21v20'/%3E%3C/g%3E%3C/svg%3E");
+}
+/* 담장 윗단: 붉은 벽돌 띠 */
+.brick-strip {
+  height: 22px;
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(90deg, var(--brick) 0 44px, transparent 44px 48px),
+    linear-gradient(90deg, transparent 0 22px, #8c3a30 22px 66px, transparent 66px 70px);
+  background-size: 48px 9px, 70px 9px;
+  background-position: 0 2px, 0 12px;
+  background-repeat: repeat-x;
+  box-shadow: inset 0 -1px 0 #e4dfd8;
+}
+/* 도로명 표지판: 오른쪽 화살촉 모양 */
+.road-sign {
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 50%, calc(100% - 22px) 100%, 0 100%);
 }

@@ -42,7 +42,7 @@ export function PublicInfo({ lookup }: { lookup: Info }) {
   return (
     <section className="space-y-5" aria-label="공공 기본정보">
       <div>
-        <p className="text-[13px] font-bold text-brand">대상 건물·필지 확인</p>
+        <p className="text-[13px] font-bold text-brand-strong">대상 건물·필지 확인</p>
         <h1 className="mt-1 text-[22px] font-extrabold leading-tight tracking-tight">{lookup.address.roadAddr}</h1>
         <p className="mt-1 text-[13px] text-subtle">지번 {lookup.address.jibunAddr} · 필지고유번호(PNU) {lookup.pnu}</p>
       </div>

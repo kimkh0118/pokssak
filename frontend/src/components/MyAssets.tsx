@@ -22,7 +22,7 @@ export function MyAssets() {
   }, []);
 
   if (user === undefined) return <div className="mx-auto h-24 max-w-2xl animate-pulse rounded-2xl bg-fill" />;
-  if (!user) return <div className="mx-auto max-w-2xl"><Notice>관심자산은 로그인한 뒤 볼 수 있어요. <Link className="font-bold text-brand" href="/login?next=/my">로그인</Link></Notice></div>;
+  if (!user) return <div className="mx-auto max-w-2xl"><Notice>관심자산은 로그인한 뒤 볼 수 있어요. <Link className="font-bold text-brand-strong" href="/login?next=/my">로그인</Link></Notice></div>;
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -32,7 +32,7 @@ export function MyAssets() {
       </div>
       <p className="text-[14px] text-subtle">{user.email} · 조회를 마치면 자동 저장돼요. 같은 건물·필지는 한 번만 저장해요. 저장은 소유권 인증이 아니에요.</p>
       {error && <Notice tone="bad">{error}</Notice>}
-      {assets?.length === 0 && <Notice>아직 저장한 빈집이 없어요. <Link className="font-bold text-brand" href="/analyze?mode=live">분석 시작</Link></Notice>}
+      {assets?.length === 0 && <Notice>아직 저장한 빈집이 없어요. <Link className="font-bold text-brand-strong" href="/analyze?mode=live">분석 시작</Link></Notice>}
       <ul className="space-y-2">
         {assets?.map((a) => (
           <li key={a.id} className="flex items-center gap-2 rounded-2xl bg-fill p-1 pr-2">

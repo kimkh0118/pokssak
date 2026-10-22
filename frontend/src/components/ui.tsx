@@ -5,7 +5,7 @@ import type { ProviderError } from "@/lib/api";
 import { ERROR_LABEL, KIND_LABEL } from "@/lib/labels";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-2xl bg-surface p-5 ring-1 ring-line ${className}`}>{children}</section>;
+  return <section className={`rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line ${className}`}>{children}</section>;
 }
 
 export function Button({
@@ -16,12 +16,12 @@ export function Button({
   ...rest
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" | "dark"; size?: "md" | "lg" }) {
   const styles = {
-    primary: "bg-brand text-brand-ink hover:bg-brand-strong",
+    primary: "bg-brand text-brand-ink shadow-[0_4px_10px_-4px_rgba(169,93,46,.7)] hover:bg-brand-strong",
     dark: "bg-ink text-white hover:opacity-90",
     secondary: "bg-fill text-ink hover:bg-fill-strong",
-    ghost: "text-brand hover:underline",
+    ghost: "text-brand-strong hover:underline",
   }[variant];
-  const sizes = size === "lg" ? "min-h-14 rounded-xl px-5 text-[17px]" : "min-h-11 rounded-xl px-4 text-[15px]";
+  const sizes = size === "lg" ? "min-h-14 rounded-lg px-5 text-[17px]" : "min-h-11 rounded-lg px-4 text-[15px]";
   return (
     <button
       className={`inline-flex items-center justify-center font-bold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-fill-strong disabled:text-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${sizes} ${styles} ${className}`}
@@ -42,9 +42,9 @@ export function BottomBar({ children }: { children: ReactNode }) {
 }
 
 const PROV_STYLE: Record<string, string> = {
-  public_api: "bg-brand-soft text-brand",
-  public: "bg-brand-soft text-brand",
-  rule: "bg-brand-soft text-brand",
+  public_api: "bg-brand-soft text-brand-strong",
+  public: "bg-brand-soft text-brand-strong",
+  rule: "bg-brand-soft text-brand-strong",
   consult: "bg-[#e8f8f0] text-good",
   assumption: "bg-warn-soft text-warn",
   unknown: "bg-bad-soft text-bad",
@@ -57,7 +57,7 @@ export function ProvenanceBadge({ p }: { p: string }) {
 }
 
 export function Pill({ children, tone = "gray" }: { children: ReactNode; tone?: "gray" | "blue" | "red" | "orange" | "green" }) {
-  const s = { gray: "bg-fill text-muted", blue: "bg-brand-soft text-brand", red: "bg-bad-soft text-bad", orange: "bg-warn-soft text-warn", green: "bg-[#e8f8f0] text-good" }[tone];
+  const s = { gray: "bg-fill text-muted", blue: "bg-brand-soft text-brand-strong", red: "bg-bad-soft text-bad", orange: "bg-warn-soft text-warn", green: "bg-[#e8f8f0] text-good" }[tone];
   return <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-[12px] font-bold ${s}`}>{children}</span>;
 }
 
@@ -113,14 +113,14 @@ export function ChoiceGroup<T extends string>({
           return (
             <label
               key={o.value}
-              className={`flex min-h-14 cursor-pointer items-center justify-between gap-3 rounded-xl px-4 py-3 text-[16px] font-semibold transition ${on ? "bg-brand-soft text-brand ring-2 ring-brand" : "bg-fill text-ink hover:bg-fill-strong"}`}
+              className={`flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-lg px-4 py-2.5 text-[15px] font-semibold shadow-sm transition ${on ? "bg-brand-soft text-brand-strong ring-2 ring-brand" : "bg-surface text-ink ring-1 ring-line hover:ring-brand-2"}`}
             >
               <span>
                 {o.label}
                 {o.hint && <span className="block text-[13px] font-normal text-subtle">{o.hint}</span>}
               </span>
               <input type="radio" name={name} className="sr-only" checked={on} onChange={() => onChange(o.value)} />
-              <span aria-hidden className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[13px] ${on ? "bg-brand text-white" : "bg-surface text-transparent ring-1 ring-line"}`}>✓</span>
+              <span aria-hidden className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[13px] ${on ? "bg-brand text-white" : "bg-fill text-transparent ring-1 ring-line"}`}>✓</span>
             </label>
           );
         })}
@@ -133,7 +133,7 @@ export function Stat({ label, value, sub, tone }: { label: string; value: ReactN
   return (
     <div className="rounded-xl bg-fill p-3.5">
       <p className="text-[12px] font-semibold text-subtle">{label}</p>
-      <p className={`tabular mt-1 text-[17px] font-extrabold ${tone === "blue" ? "text-brand" : tone === "red" ? "text-bad" : "text-ink"}`}>{value}</p>
+      <p className={`tabular mt-1 text-[17px] font-extrabold ${tone === "blue" ? "text-brand-strong" : tone === "red" ? "text-bad" : "text-ink"}`}>{value}</p>
       {sub && <p className="mt-0.5 text-[12px] text-subtle">{sub}</p>}
     </div>
   );

@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { HomeSign } from "@/components/HomeSign";
+import { LogoMark } from "@/components/Logo";
 
 export const dynamic = "force-dynamic";
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
@@ -24,20 +24,21 @@ export default async function Home() {
   const s = await keyStatus();
   return (
     <div className="mx-auto max-w-3xl space-y-12">
-      <section className="pt-4">
-        <p className="text-[14px] font-extrabold text-brand">부산 빈집 소유자를 위한</p>
-        <h1 className="mt-2 text-[30px] font-extrabold leading-[1.25] tracking-tight sm:text-[38px]">
-          그대로 팔까, 철거하고 팔까?
+      <section className="rounded-2xl bg-surface/90 p-6 shadow-sm ring-1 ring-line sm:p-8">
+        <p className="flex items-center gap-1 text-[14px] font-extrabold text-[#c9483b]"><LogoMark size={18} />폭싹</p>
+        <h1 className="mt-2 text-[28px] font-extrabold leading-[1.25] tracking-tight sm:text-[36px]">
+          집에 관련된 정보
           <br />
-          <span className="text-brand">비용 빼고 얼마 남는지</span> 비교해요
+          알아보기.
         </h1>
-        <div className="mt-6">
+        <p className="mt-2 text-[15px] text-muted">부산 빈집, 그대로 팔지 철거하고 팔지 — 비용 빼고 얼마 남는지 비교해요.</p>
+        <div className="mt-6 max-w-md">
           <HomeSign />
         </div>
-        <div className="mt-3 flex flex-wrap gap-2 text-[13px]">
+        <div className="mt-4 flex flex-wrap gap-2 text-[13px]">
           {s ? (
             [["juso", "주소"], ["dataGoKr", "건축물·실거래"], ["vworld", "토지특성·이용계획"]].map(([k, t]) => (
-              <span key={k} className={`rounded-full px-2.5 py-1 font-bold ${s[k] ? "bg-brand-soft text-brand" : "bg-fill text-subtle"}`}>{s[k] ? "✓" : "–"} {t}</span>
+              <span key={k} className={`rounded-full px-2.5 py-1 font-bold ${s[k] ? "bg-brand-soft text-brand-strong" : "bg-fill text-subtle"}`}>{s[k] ? "✓" : "–"} {t}</span>
             ))
           ) : (
             <span className="text-bad">백엔드 서버가 꺼져 있어요(README 실행 방법 참고)</span>
@@ -45,21 +46,12 @@ export default async function Home() {
         </div>
       </section>
 
-      <Link href="/analyze?mode=sample" className="flex items-center justify-between rounded-2xl bg-ink p-5 text-white">
-        <span>
-          <span className="text-[13px] font-bold text-brand-2">인증키 없이 체험</span>
-          <span className="mt-1 block text-[19px] font-extrabold">예시 빈집으로 전체 흐름 보기</span>
-          <span className="mt-1 block text-[13px] text-white/60">가상의 &lsquo;부산광역시(예시) 예시구&rsquo; 주소·거래·지원사업이에요</span>
-        </span>
-        <span aria-hidden className="text-[26px]">›</span>
-      </Link>
-
       <section>
         <h2 className="text-[22px] font-extrabold">이렇게 진행돼요</h2>
         <ol className="mt-4 grid gap-2 sm:grid-cols-2">
           {STEPS.map(([t, d], i) => (
-            <li key={t} className="rounded-2xl bg-fill p-4">
-              <span className="text-[13px] font-extrabold text-brand">0{i + 1}</span>
+            <li key={t} className="rounded-2xl bg-surface p-4 ring-1 ring-line">
+              <span className="text-[13px] font-extrabold text-brand-strong">0{i + 1}</span>
               <p className="mt-1 font-extrabold">{t}</p>
               <p className="text-[13px] text-subtle">{d}</p>
             </li>

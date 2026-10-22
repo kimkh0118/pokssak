@@ -11,7 +11,6 @@ const QA: { q: string; a: React.ReactNode }[] = [
   { q: "지원금은 확정인가요?", a: "아니요. 공고의 최대 지원액은 개인 확정액이 아니에요. 기관에서 확인받은 금액만 '확인된 지원 반영' 비교에 넣고, 공공활용 의무 등으로 즉시 매각과 맞지 않는 지원은 빼요." },
   { q: "지원사업 정보는 얼마나 최신인가요?", a: "공식 공고를 주 1회(기본 월요일 오전 9시) 정리해요. 실시간 정보가 아니며, 화면에 마지막 정상 수집일을 표시해요." },
   { q: "입력한 정보가 업체에 전달되나요?", a: "아니요. 상담 링크를 눌러도 주소·응답·금액은 전송되지 않아요. 제휴 업체도 없어요." },
-  { q: "예시 모드는 뭔가요?", a: "가상의 '부산광역시(예시) 예시구' 주소·거래·지원사업으로 흐름을 체험하는 모드예요. 실제 조회가 실패해도 예시 데이터로 바꾸지 않아요." },
 ];
 
 export default function FaqPage() {
@@ -30,7 +29,7 @@ export default function FaqPage() {
         ))}
       </div>
       <p className="mt-8 text-[15px] text-muted">
-        계산 방식이 궁금하다면 <Link href="/about" className="font-bold text-brand hover:underline">계산 방법</Link>을 확인해 주세요.
+        계산 방식이 궁금하다면 <Link href="/about" className="font-bold text-brand-strong hover:underline">계산 방법</Link>을 확인해 주세요.
       </p>
     </div>
   );

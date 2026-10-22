@@ -9,6 +9,7 @@ import { KIND_LABEL, MATCH_LABEL, OPTION_LABEL } from "@/lib/labels";
 import { AnswersEditor } from "./AnswersEditor";
 import { InputsPanel } from "./InputsPanel";
 import { LEGAL_KEYS, Verdict } from "./Verdict";
+import { AddressPlate, plateTitle } from "./AddressSign";
 import { PublicInfo } from "./PublicInfo";
 import { Button, Card, Notice, Pill, ProvenanceBadge, SampleBanner } from "./ui";
 
@@ -43,7 +44,8 @@ export function ResultView({ id }: { id: string }) {
 
       <header>
         <p className="text-[13px] text-subtle">규칙 {r.ruleVersion} · {new Date(data.updatedAt).toLocaleString("ko-KR")}</p>
-        <h1 className="mt-1 text-[22px] font-extrabold leading-tight">{data.address.roadAddr}</h1>
+        <h1 className="sr-only">{data.address.roadAddr}</h1>
+        <div className="mt-2"><AddressPlate title={plateTitle(data.address.jibunAddr, data.address.roadAddr)} sub={data.address.roadAddr} /></div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {Object.values(data.eligibility.labels).filter(Boolean).map((t) => <Pill key={t}>{t}</Pill>)}
         </div>
@@ -114,7 +116,7 @@ export function ResultView({ id }: { id: string }) {
 
 function SaveBanner({ state, user, analysisId, onChange }: { state: string | null; user: User | null; analysisId: string; onChange: (s: string | null) => void }) {
   const [msg, setMsg] = useState<string | null>(null);
-  if (!user) return <Notice>지금 결과는 이 브라우저 세션에서만 볼 수 있어요. <Link href={`/login?next=/analyses/${analysisId}`} className="font-bold text-brand">로그인</Link>하면 관심자산으로 저장하고 지원사업 알림을 받을 수 있어요.</Notice>;
+  if (!user) return <Notice>지금 결과는 이 브라우저 세션에서만 볼 수 있어요. <Link href={`/login?next=/analyses/${analysisId}`} className="font-bold text-brand-strong">로그인</Link>하면 관심자산으로 저장하고 지원사업 알림을 받을 수 있어요.</Notice>;
   if (!state) return null;
   return (
     <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#e8f8f0] p-4 text-[14px] text-good">
@@ -327,7 +329,7 @@ function Programs({ data }: { data: Analysis }) {
               {p.paymentTiming === "post" && " · 사후 지급"}{p.saleCompatible === false && " · 즉시 매각과 양립 안 됨"}
             </p>
             <p className="mt-1 text-[12px] text-subtle">마지막 정상 수집 {p.lastSuccessFetchAt ? new Date(p.lastSuccessFetchAt).toLocaleDateString("ko-KR") : "미상"}{p.contact && ` · 문의 ${p.contact}`}</p>
-            {!p.isSample && <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-[13px] font-bold text-brand">공고 원문 보기 ↗</a>}
+            {!p.isSample && <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-[13px] font-bold text-brand-strong">공고 원문 보기 ↗</a>}
           </Card>
         ))}
       </div>
@@ -339,11 +341,27 @@ function Plan({ data }: { data: Analysis }) {
   const tone = { done: "bg-good text-white", todo: "bg-fill text-muted", blocked: "bg-bad text-white" };
   return (
     <section id="plan" aria-labelledby="plan-h">
-      <h2 id="plan-h" className="text-[20px] font-extrabold">맞춤형 철거 플랜</h2>
+      <h2 className="text-[24px] font-extrabold leading-tight">어떤 업체가<br />필요하세요?</h2>
+      <ul className="mt-3 grid gap-2 sm:grid-cols-3">
+        {[
+          ["중개 업체", "공인중개사 가격 상담", "#inputs"],
+          ["철거 진행하기", "철거 맞춤 플랜", "#plan-h"],
+          ["리모델링 업체", "보유·리모델링 비용", "#inputs"],
+        ].map(([k, t, href]) => (
+          <li key={t}>
+            <a href={href} className="block rounded-lg bg-surface px-4 py-3 shadow-sm ring-1 ring-ink/70 transition hover:ring-2 hover:ring-brand">
+              <span className="block text-[11px] text-subtle">{k}</span>
+              <span className="block text-[15px] font-extrabold">{t}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[12px] text-subtle">제휴 업체는 없어요. 어디에 무엇을 물어볼지 정리해 드려요.</p>
+      <h2 id="plan-h" className="mt-8 text-[20px] font-extrabold">맞춤형 철거 플랜</h2>
       <p className="mt-1 text-[13px] text-subtle">업체에 연락하기 전에 이 순서로 확인하세요. 최종 선택과 실행은 직접 결정해요. 제휴 업체는 없어요.</p>
       <ol className="mt-3 space-y-2">
         {data.plan.map((s) => (
-          <li key={s.no} className="flex gap-3 rounded-2xl bg-fill p-4">
+          <li key={s.no} className="flex gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
             <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[13px] font-extrabold ${tone[s.status]}`}>{s.status === "done" ? "✓" : s.no}</span>
             <span><span className="block font-bold">{s.title}</span><span className="block text-[13px] text-muted">{s.detail}</span>
               {s.contact && <span className="block text-[12px] text-subtle">상담: {s.contact}</span>}</span>

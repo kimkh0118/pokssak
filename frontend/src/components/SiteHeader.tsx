@@ -11,11 +11,12 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
   const active = (m: string) => path === m || path.startsWith(`${m}/`) || (m === "/analyze" && path.startsWith("/analyses"));
   return (
-    <header className="sticky top-0 z-30 border-b border-line/60 bg-surface/95 backdrop-blur">
+    <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4">
         <Link href="/" className="flex shrink-0 items-center gap-2 text-[17px] font-extrabold tracking-tight text-ink" onClick={() => setOpen(false)}>
           <LogoMark />
-          {SITE.name}
+          <span className="text-[#c9483b]">{SITE.name}</span>
+          <span className="hidden text-[13px] font-semibold text-subtle sm:inline">{SITE.tagline}</span>
         </Link>
         <nav aria-label="주 메뉴" className="hidden items-center gap-1 md:flex">
           {NAV.map((n) => (
@@ -23,14 +24,12 @@ export function SiteHeader() {
               key={n.href}
               href={n.href}
               aria-current={active(n.match) ? "page" : undefined}
-              className={`rounded-lg px-3 py-2 text-[15px] font-bold transition ${active(n.match) ? "text-brand" : "text-muted hover:bg-fill hover:text-ink"}`}
+              className={`rounded-lg px-3 py-2 text-[15px] font-bold transition ${active(n.match) ? "text-brand-strong" : "text-muted hover:bg-fill hover:text-ink"}`}
             >
               {n.label}
             </Link>
           ))}
-          <Link href="/analyze?mode=sample" className="ml-2 rounded-full bg-ink px-4 py-2 text-[14px] font-bold text-white hover:opacity-90">
-            예시로 체험
-          </Link>
+
         </nav>
         <button
           type="button"
@@ -45,6 +44,7 @@ export function SiteHeader() {
           </svg>
         </button>
       </div>
+      <div className="brick-strip" aria-hidden />
       {open && (
         <nav id="mobile-nav" aria-label="주 메뉴" className="border-t border-line bg-surface px-4 pb-4 md:hidden">
           {NAV.map((n) => (
@@ -53,15 +53,13 @@ export function SiteHeader() {
               href={n.href}
               onClick={() => setOpen(false)}
               aria-current={active(n.match) ? "page" : undefined}
-              className={`flex h-12 items-center justify-between border-b border-line text-[16px] font-bold ${active(n.match) ? "text-brand" : "text-ink"}`}
+              className={`flex h-12 items-center justify-between border-b border-line text-[16px] font-bold ${active(n.match) ? "text-brand-strong" : "text-ink"}`}
             >
               {n.label}
               <span aria-hidden className="text-subtle">›</span>
             </Link>
           ))}
-          <Link href="/analyze?mode=sample" onClick={() => setOpen(false)} className="mt-3 flex h-12 items-center justify-center rounded-xl bg-ink text-[15px] font-bold text-white">
-            예시로 체험하기
-          </Link>
+
         </nav>
       )}
     </header>

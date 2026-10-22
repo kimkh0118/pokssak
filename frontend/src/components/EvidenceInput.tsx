@@ -42,7 +42,7 @@ export function AmountInput({ ev, onChange, unit = "만원", idPrefix }: { ev: E
           <span className="text-[14px]">{unit}</span>
         </>
       )}
-      <button type="button" className="text-[13px] font-bold text-brand underline-offset-2 hover:underline"
+      <button type="button" className="text-[13px] font-bold text-brand-strong underline-offset-2 hover:underline"
         onClick={() => onChange(isRange ? { ...ev, value: ev.min ?? ev.max, min: undefined, max: undefined } : { ...ev, min: ev.value, max: ev.value, value: undefined })}>
         {isRange ? "단일값으로" : "범위로 입력"}
       </button>

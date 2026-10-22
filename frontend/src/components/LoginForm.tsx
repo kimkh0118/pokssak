@@ -43,7 +43,7 @@ export function LoginForm() {
         {error && <Notice tone="bad">{error}</Notice>}
         <Button type="submit" size="lg" className="w-full" disabled={busy}>{busy ? "처리 중…" : mode === "login" ? "로그인" : "가입하고 로그인"}</Button>
       </form>
-      <button className="text-[14px] font-bold text-brand" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
+      <button className="text-[14px] font-bold text-brand-strong" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
         {mode === "login" ? "처음이세요? 회원가입" : "이미 계정이 있어요"}
       </button>
     </div>

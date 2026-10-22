@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export function PageHead({ eyebrow, title, lead }: { eyebrow?: string; title: ReactNode; lead?: ReactNode }) {
   return (
     <header className="mb-8">
-      {eyebrow && <p className="text-[14px] font-extrabold text-brand">{eyebrow}</p>}
+      {eyebrow && <p className="text-[14px] font-extrabold text-brand-strong">{eyebrow}</p>}
       <h1 className="mt-1 text-[28px] font-extrabold leading-tight tracking-tight sm:text-[34px]">{title}</h1>
       {lead && <p className="mt-3 text-[16px] leading-relaxed text-muted">{lead}</p>}
     </header>

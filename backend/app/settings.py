@@ -33,6 +33,8 @@ class Settings:
     llm_model: str = _env("LLM_MODEL") or "claude-sonnet-5-5"
     # 주간 수집 예약(한국 시간). 예: "MON 09:00"
     program_schedule: str = _env("PROGRAM_SCHEDULE") or "MON 09:00"
+    # 예시(가상) 주소·공고: 화면에서는 제거됨. 개발·테스트에서만 SAMPLE_MODE=1로 켬
+    sample_mode: bool = (_env("SAMPLE_MODE") or "0") == "1"
     scheduler_enabled: bool = (_env("SCHEDULER_ENABLED") or "1") == "1"
     # 외부 알림 공급자(없으면 앱 내 알림만)
     email_provider_url: str | None = _env("EMAIL_PROVIDER_URL")

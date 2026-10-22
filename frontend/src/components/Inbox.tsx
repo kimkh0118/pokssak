@@ -25,7 +25,7 @@ export function Inbox() {
   }, []);
 
   if (user === undefined) return <div className="mx-auto h-24 max-w-2xl animate-pulse rounded-2xl bg-fill" />;
-  if (!user) return <div className="mx-auto max-w-2xl"><Notice>알림은 로그인한 뒤 볼 수 있어요. <Link className="font-bold text-brand" href="/login?next=/notifications">로그인</Link></Notice></div>;
+  if (!user) return <div className="mx-auto max-w-2xl"><Notice>알림은 로그인한 뒤 볼 수 있어요. <Link className="font-bold text-brand-strong" href="/login?next=/notifications">로그인</Link></Notice></div>;
 
   async function saveSettings(next: Settings["settings"]) {
     try {
@@ -51,7 +51,7 @@ export function Inbox() {
               <p className="mt-1 text-[14px] text-muted">{n.body}</p>
               <div className="mt-2 flex items-center justify-between text-[12px] text-subtle">
                 <span>{new Date(n.created_at).toLocaleString("ko-KR")}</span>
-                {!n.read_at && <button className="font-bold text-brand" onClick={async () => { await api(`/api/notifications/${n.id}/read`, { method: "POST" }); setItems((it) => it?.map((x) => (x.id === n.id ? { ...x, read_at: "now" } : x)) ?? null); }}>읽음</button>}
+                {!n.read_at && <button className="font-bold text-brand-strong" onClick={async () => { await api(`/api/notifications/${n.id}/read`, { method: "POST" }); setItems((it) => it?.map((x) => (x.id === n.id ? { ...x, read_at: "now" } : x)) ?? null); }}>읽음</button>}
               </div>
             </Card>
           </li>

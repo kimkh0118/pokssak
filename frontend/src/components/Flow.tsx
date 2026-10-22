@@ -2,20 +2,21 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, type Address, type Answers, type Fetched, type Lookup, type Mode } from "@/lib/api";
+import { api, type Address, type Answers, type Fetched, type Lookup } from "@/lib/api";
 import { QUESTIONS } from "@/lib/labels";
-import { AddressSign } from "./AddressSign";
-import { BottomBar, Button, ChoiceGroup, Notice, Pill, ProvenanceBadge, ProviderErrorBox, SampleBanner } from "./ui";
+import { AddressPlate, AddressSign, plateTitle } from "./AddressSign";
+import { BottomBar, Button, ChoiceGroup, Notice, Pill, ProviderErrorBox } from "./ui";
 import { PublicInfo } from "./PublicInfo";
 
-type Step = "address" | "target" | "q1" | "q2" | "q3" | "q4";
-const STEP_LABEL: Record<Step, string> = { address: "주소", target: "대상 확인", q1: "질문 1", q2: "질문 2", q3: "질문 3", q4: "질문 4" };
-const ORDER: Step[] = ["address", "target", "q1", "q2", "q3", "q4"];
+type Step = "address" | "target" | "intro" | "q1" | "q2" | "q3" | "q4";
+const STEP_LABEL: Record<Step, string> = { address: "주소", target: "정보 제공", intro: "질문", q1: "질문 1", q2: "질문 2", q3: "질문 3", q4: "질문 4" };
+const ORDER: Step[] = ["address", "target", "intro", "q1", "q2", "q3", "q4"];
+const mode = "live";
 
-export function Flow({ mode, initialQuery }: { mode: Mode; initialQuery?: string }) {
+export function Flow({ initialQuery }: { initialQuery?: string }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("address");
-  const [q, setQ] = useState(initialQuery ?? (mode === "sample" ? "바다로" : ""));
+  const [q, setQ] = useState(initialQuery ?? "");
   const [found, setFound] = useState<Fetched<Address[]> | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,10 +81,9 @@ export function Flow({ mode, initialQuery }: { mode: Mode; initialQuery?: string
 
   return (
     <div className="mx-auto max-w-2xl">
-      {mode === "sample" && <SampleBanner />}
       <div className="mb-6" aria-label="진행 단계">
         <div className="flex justify-between text-[13px] font-bold">
-          <span className="text-brand">{STEP_LABEL[step]}</span>
+          <span className="text-brand-strong">{STEP_LABEL[step]}</span>
           <span className="text-subtle">{idx + 1} / {ORDER.length}</span>
         </div>
         <div className="mt-2 h-1 rounded-full bg-fill" role="progressbar" aria-valuemin={1} aria-valuemax={ORDER.length} aria-valuenow={idx + 1}>
@@ -95,28 +95,29 @@ export function Flow({ mode, initialQuery }: { mode: Mode; initialQuery?: string
       {step === "address" && (
         <div className="space-y-5">
           <h1 className="text-[26px] font-extrabold leading-tight tracking-tight">빈집 주소를 알려주세요</h1>
-          <AddressSign value={q} onChange={setQ} onSubmit={search} busy={busy} autoFocus />
+          <AddressSign value={q} onChange={setQ} onSubmit={search} busy={busy} autoFocus cta="주소 검색하기" />
           {found && !found.ok && <ProviderErrorBox error={found.error} title="주소 검색" />}
           {found?.ok && (
             <section aria-label="주소 후보">
               {found.meta.note && <Notice tone="warn">{found.meta.note}</Notice>}
               {found.data.length === 0 && <Notice>검색 결과가 없어요. 도로명과 건물번호를 함께 입력해 보세요.</Notice>}
-              <ul className="mt-2 divide-y divide-line">
+              {found.data.length > 0 && <p className="mb-2 text-[13px] text-subtle">{found.data.length}개의 검색 결과가 있어요</p>}
+              <ul className="space-y-2">
                 {found.data.map((ad) => (
                   <li key={ad.id}>
-                    <button type="button" disabled={busy} onClick={() => choose(ad)} className="flex w-full items-center justify-between gap-3 py-4 text-left disabled:opacity-60">
+                    <button type="button" disabled={busy} onClick={() => choose(ad)} className="flex w-full items-center justify-between gap-3 rounded-xl bg-surface px-4 py-3 text-left shadow-sm ring-1 ring-line transition hover:ring-2 hover:ring-brand disabled:opacity-60">
                       <span>
-                        <span className="flex flex-wrap items-center gap-1.5 text-[16px] font-bold">
-                          {ad.roadAddr} {ad.bdKdcd === "1" && <Pill tone="red">공동주택</Pill>}
+                        <span className="block text-[12px] text-subtle">{ad.roadAddr}</span>
+                        <span className="flex flex-wrap items-center gap-1.5 text-[17px] font-extrabold">
+                          {plateTitle(ad.jibunAddr, ad.roadAddr)} {ad.bdKdcd === "1" && <Pill tone="red">공동주택</Pill>}
                         </span>
-                        <span className="mt-0.5 block text-[13px] text-subtle">지번 {ad.jibunAddr} <ProvenanceBadge p={ad.provenance} /></span>
                       </span>
                       <span aria-hidden className="text-[22px] text-subtle">›</span>
                     </button>
                   </li>
                 ))}
               </ul>
-              {busy && <p className="text-[14px] font-semibold text-brand" aria-live="polite">공공자료 6종을 조회하고 있어요…</p>}
+              {busy && <p className="text-[14px] font-semibold text-brand-strong" aria-live="polite">공공자료 6종을 조회하고 있어요…</p>}
             </section>
           )}
         </div>
@@ -124,7 +125,8 @@ export function Flow({ mode, initialQuery }: { mode: Mode; initialQuery?: string
 
       {step === "target" && lookup && (
         <div className="space-y-6">
-          <PublicInfo lookup={lookup} />
+          <AddressPlate title={plateTitle(lookup.address.jibunAddr, lookup.address.roadAddr)} sub={lookup.address.roadAddr} />
+          <div className="rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line"><PublicInfo lookup={lookup} /></div>
           {multi && (
             <fieldset className="space-y-2 rounded-2xl bg-warn-soft p-5">
               <legend className="sr-only">분석 대상 건물</legend>
@@ -144,13 +146,22 @@ export function Flow({ mode, initialQuery }: { mode: Mode; initialQuery?: string
           {typeFail && <Notice tone="bad">이 물건은 맞춤 분석 대상(부산 단독·다가구주택)이 아니어서 금액 추천은 보류되지만, 공개 기본정보와 확인 경로는 계속 볼 수 있어요.</Notice>}
           <BottomBar>
             <Button variant="secondary" size="lg" className="w-28" onClick={() => setStep("address")}>다른 주소</Button>
-            <Button size="lg" className="flex-1" disabled={multi && !buildingKey} onClick={() => setStep("q1")}>질문으로</Button>
+            <Button size="lg" className="flex-1" disabled={multi && !buildingKey} onClick={() => setStep("intro")}>다음</Button>
           </BottomBar>
         </div>
       )}
 
+      {step === "intro" && (
+        <div className="mx-auto max-w-sm rounded-2xl bg-surface p-5 shadow-lg ring-1 ring-line">
+          <p className="text-[20px] font-extrabold">잠깐, 질문이 있어요</p>
+          <p className="mt-1 text-[13px] text-subtle">더 좋은 결과를 위해서 수집하는 정보예요. 네 가지만 답하면 돼요.</p>
+          <Button className="mt-4 w-full" onClick={() => setStep("q1")}>다음</Button>
+          <button type="button" className="mt-2 w-full text-[13px] text-subtle underline" onClick={() => setStep("target")}>이전으로</button>
+        </div>
+      )}
+
       {step === "q1" && (
-        <div className="space-y-6">
+        <div className="space-y-6 rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line sm:p-6">
           <QTitle n={1} text={QUESTIONS.ownership.title} hint={QUESTIONS.ownership.hint} />
           <ChoiceGroup name="ownership" legend="소유 형태" value={a.ownership ?? null} onChange={(v) => set("ownership", v)}
             options={Object.entries(QUESTIONS.ownership.options).map(([value, label]) => ({ value: value as Answers["ownership"], label }))} />
@@ -160,12 +171,12 @@ export function Flow({ mode, initialQuery }: { mode: Mode; initialQuery?: string
             <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4" checked={!!a.ownerMismatch} onChange={(e) => set("ownerMismatch", e.target.checked)} />건물과 토지의 소유자가 달라요</label>
             <p className="text-[12px] text-subtle">상속으로 받은 집도 단독소유라면 분석할 수 있어요. 응답은 공적 인증이 아니에요.</p>
           </fieldset>
-          <Nav back={() => setStep("target")} next={() => setStep("q2")} disabled={!a.ownership} />
+          <Nav back={() => setStep("intro")} next={() => setStep("q2")} disabled={!a.ownership} />
         </div>
       )}
 
       {step === "q2" && (
-        <div className="space-y-6">
+        <div className="space-y-6 rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line sm:p-6">
           <QTitle n={2} text="현재 집의 사용 상태와 원하는 방향은 무엇인가요?" />
           <ChoiceGroup name="usage" legend={QUESTIONS.usage.title} columns={2} value={a.usage ?? null} onChange={(v) => set("usage", v)}
             options={Object.entries(QUESTIONS.usage.options).map(([value, label]) => ({ value: value as Answers["usage"], label }))} />
@@ -192,7 +203,7 @@ export function Flow({ mode, initialQuery }: { mode: Mode; initialQuery?: string
       )}
 
       {step === "q3" && (
-        <div className="space-y-6">
+        <div className="space-y-6 rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line sm:p-6">
           <QTitle n={3} text={QUESTIONS.condition.title} hint="입력한 상태는 안전진단 결과가 아니며, 상태만으로 가격을 0원으로 바꾸거나 철거를 권하지 않아요." />
           <ChoiceGroup name="condition" legend="건물 상태" columns={2} value={a.condition ?? null} onChange={(v) => set("condition", v)}
             options={Object.entries(QUESTIONS.condition.options).map(([value, label]) => ({ value: value as Answers["condition"], label }))} />
@@ -201,11 +212,11 @@ export function Flow({ mode, initialQuery }: { mode: Mode; initialQuery?: string
       )}
 
       {step === "q4" && (
-        <div className="space-y-6">
+        <div className="space-y-6 rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line sm:p-6">
           <QTitle n={4} text={QUESTIONS.access.title} hint="철거 견적·현장 작업 가능성 확인에 쓰여요." />
           <ChoiceGroup name="access" legend="차량 진입" columns={2} value={a.access ?? null} onChange={(v) => set("access", v)}
             options={Object.entries(QUESTIONS.access.options).map(([value, label]) => ({ value: value as Answers["access"], label }))} />
-          <Nav back={() => setStep("q3")} next={submit} disabled={!a.access || busy} label={busy ? "비교하고 있어요…" : "참고 비교 보기"} />
+          <Nav back={() => setStep("q3")} next={submit} disabled={!a.access || busy} label={busy ? "비교하고 있어요…" : "완료"} />
         </div>
       )}
     </div>
@@ -215,8 +226,8 @@ export function Flow({ mode, initialQuery }: { mode: Mode; initialQuery?: string
 function QTitle({ n, text, hint }: { n: number; text: string; hint?: string }) {
   return (
     <div>
-      <p className="text-[14px] font-extrabold text-brand">질문 {n}</p>
-      <h2 className="mt-1 text-[24px] font-extrabold leading-tight tracking-tight">{text}</h2>
+      <p className="flex justify-between text-[12px] font-bold text-subtle"><span className="text-brand-strong">질문</span><span>{n}/4</span></p>
+      <h2 className="mt-1 text-[22px] font-extrabold leading-tight tracking-tight">Q{n}. {text}</h2>
       {hint && <p className="mt-2 text-[14px] text-subtle">{hint}</p>}
     </div>
   );

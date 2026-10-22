@@ -30,7 +30,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     dbm.connect().close()  # 마이그레이션
-    if os.getenv("SEED_SAMPLE", "1") == "1":
+    if settings.sample_mode and os.getenv("SEED_SAMPLE", "1") == "1":
         from .seed import seed_sample
         seed_sample()
     jobs.start_scheduler()
@@ -127,12 +127,16 @@ def me(request: Request):
 # ---------------------------------------------------------------- 주소·공공자료
 @app.get("/api/address")
 async def address(mode: str = Query(pattern="^(live|sample)$"), q: str = Query(min_length=2, max_length=80)):
+    if mode == "sample" and not settings.sample_mode:
+        raise HTTPException(404, "예시 모드는 제공하지 않아요.")
     r = await prop.search(mode, q.strip())
     return JSONResponse(r, status_code=200 if r["ok"] else 502)
 
 
 @app.post("/api/lookup")
 async def lookup(body: LookupRequest):
+    if body.mode == "sample" and not settings.sample_mode:
+        raise HTTPException(404, "예시 모드는 제공하지 않아요.")
     try:
         return await prop.lookup(body.mode, body.address)
     except ValueError as e:

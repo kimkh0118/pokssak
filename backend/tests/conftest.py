@@ -13,6 +13,7 @@ def isolated(tmp_path, monkeypatch):
     for k in ("juso_key", "data_go_kr_key", "vworld_key", "anthropic_api_key", "email_provider_url", "sms_provider_url", "push_provider_url"):
         monkeypatch.setattr(settings, k, None)
     monkeypatch.setattr(settings, "scheduler_enabled", False)
+    monkeypatch.setattr(settings, "sample_mode", True)  # 테스트용 가상 자료
     monkeypatch.setattr(settings, "admin_emails", ["admin@example.com"])
     clock.set_now(datetime(2026, 10, 22, 10, 0, tzinfo=clock.KST))
     yield

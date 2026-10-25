@@ -107,3 +107,23 @@ def test_AI_설명_검증():
     assert validate({"summary": "추천합니다", "nextSteps": []}, "hold")
     assert validate({"summary": "근거가 부족해 보류했습니다", "nextSteps": ["견적을 받아 보세요"]}, "hold") == []
     assert validate({"bad": 1}, "hold") == ["스키마 불일치"]
+
+
+def test_종료_사업은_사용자_목록에서_자동_제외_삭제_복구():
+    from datetime import datetime
+    from app import clock
+    seed_sample(with_change=False)
+    users = lambda: programs.published(active_only=True)
+    before = {p["id"] for p in users()}
+    assert before
+    clock.set_now(datetime(2027, 1, 1, 10, 0, tzinfo=clock.KST))  # 예시 공고 마감(2026-11-30) 이후
+    ended = [p for p in programs.published() if p["status"] == "마감"]
+    assert ended and not {p["id"] for p in ended} & {p["id"] for p in users()}
+    clock.set_now(datetime(2026, 10, 22, 10, 0, tzinfo=clock.KST))
+    pid = next(iter(before))
+    programs.remove(pid, "admin@example.com", "중복 공고")
+    assert pid not in {p["id"] for p in programs.published()}
+    removed = [p for p in programs.published(include_removed=True) if p["id"] == pid][0]
+    assert removed["removedReason"] == "중복 공고"
+    programs.restore(pid)
+    assert pid in {p["id"] for p in users()}

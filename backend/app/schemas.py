@@ -90,6 +90,7 @@ class ManualNotice(BaseModel):
     url: str = Field(min_length=8, max_length=500)
     text: str = Field(min_length=20, max_length=200_000)
     postedAt: str | None = None
+    publish: bool = False  # 관리자가 확인하고 직접 넣는 경우 검토 없이 바로 발행
 
 
 class ReviewAction(BaseModel):

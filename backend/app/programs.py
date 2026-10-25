@@ -427,17 +427,25 @@ def program_status(data: dict, at: datetime | None = None) -> str:
     return "접수중"
 
 
-def published(include_sample: bool = True) -> list[dict]:
+ENDED = ("마감", "예산소진", "취소")
+
+
+def published(include_sample: bool = True, active_only: bool = False, include_removed: bool = False) -> list[dict]:
+    """발행본 목록. active_only: 기간이 끝난(마감·예산소진·취소) 사업 제외 — 사용자 화면용(시각 기준으로 자동 제외).
+    관리자가 삭제한 사업은 include_removed 일 때만."""
     with dbm.connect() as c:
-        rows = c.execute("SELECT p.id, p.notice_key, p.review_state, p.last_success_fetch_at, p.is_sample, v.id AS vid, v.version_no, "
+        rows = c.execute("SELECT p.id, p.notice_key, p.review_state, p.last_success_fetch_at, p.is_sample, p.removed_at, p.removed_reason, "
+                         "v.id AS vid, v.version_no, "
                          "v.data, v.published_at, d.url FROM programs p JOIN program_versions v ON v.id = p.current_version_id "
                          "JOIN program_candidates k ON k.id = v.candidate_id JOIN program_documents d ON d.id = k.document_id").fetchall()
     out = []
     for r in rows:
-        if r["is_sample"] and not include_sample:
+        if (r["is_sample"] and not include_sample) or (r["removed_at"] and not include_removed):
             continue
         data = dbm.loads(r["data"])
-        out.append({"id": r["id"], "versionId": r["vid"], "versionNo": r["version_no"], "data": data, "url": r["url"],
+        if active_only and program_status(data) in ENDED:
+            continue
+        out.append({"removedAt": r["removed_at"], "removedReason": r["removed_reason"],"id": r["id"], "versionId": r["vid"], "versionNo": r["version_no"], "data": data, "url": r["url"],
                     "status": program_status(data), "reviewState": r["review_state"], "isSample": bool(r["is_sample"]),
                     "lastSuccessFetchAt": r["last_success_fetch_at"], "publishedAt": r["published_at"]})
     return out
@@ -484,3 +492,17 @@ def match(program: dict, asset: dict) -> dict:
     else:
         result = "partial_match"
     return {"result": result, "items": items}
+
+
+def remove(program_id: str, actor: str, reason: str | None) -> None:
+    """관리자 삭제: 사용자 화면·매칭·알림에서 빠진다. 기록은 남기고 복구할 수 있다."""
+    with dbm.connect() as c:
+        if not c.execute("SELECT 1 FROM programs WHERE id = ?", (program_id,)).fetchone():
+            raise ReviewError("사업을 찾을 수 없습니다.")
+        c.execute("UPDATE programs SET removed_at = ?, removed_by = ?, removed_reason = ? WHERE id = ?",
+                  (now_iso(), actor, reason or "관리자 삭제", program_id))
+
+
+def restore(program_id: str) -> None:
+    with dbm.connect() as c:
+        c.execute("UPDATE programs SET removed_at = NULL, removed_by = NULL, removed_reason = NULL WHERE id = ?", (program_id,))

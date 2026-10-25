@@ -125,7 +125,7 @@ def compute(row) -> dict:
                                       "floorArea": (building or {}).get("totArea"), "access": answers.get("access")})
     profile = asset_profile(lk, answers)
     matches = []
-    for p in programs.published(include_sample=lk["mode"] == "sample"):
+    for p in programs.published(include_sample=lk["mode"] == "sample", active_only=True):
         m = programs.match(p, profile)
         d = p["data"]
         matches.append({"programId": p["id"], "versionId": p["versionId"], "title": (d.get("title") or {}).get("value"),

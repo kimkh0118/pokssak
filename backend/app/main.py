@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from . import analyses, auth, db as dbm, google_oauth, jobs, notify, programs, property as prop
 from .clock import now, now_iso
@@ -325,7 +325,7 @@ def put_settings(body: NotificationSettings, request: Request):
 # ---------------------------------------------------------------- 지원사업(공개)
 @app.get("/api/programs")
 def list_programs(sample: bool = False):
-    return {"programs": programs.published(include_sample=sample), "note": "주간 갱신 자료이며 실시간 정보가 아닙니다."}
+    return {"programs": programs.published(include_sample=sample, active_only=True), "note": "주간 갱신 자료이며 실시간 정보가 아닙니다."}
 
 
 # ---------------------------------------------------------------- 관리자
@@ -379,8 +379,40 @@ def admin_review(cid: str, body: ReviewAction, request: Request):
 @app.post("/api/admin/notices")
 def admin_manual_notice(body: ManualNotice, request: Request):
     """자동 수집 조건이 불명확한 공식 공고를 관리자가 원문 그대로 등록(허용된 원문만)."""
+    u = require_admin(request)
+    res = programs.ingest(body.noticeKey, body.url, body.text.encode(), "text/plain", posted_at=body.postedAt)
+    if body.publish and res.get("candidate") and not res.get("autoPublished"):
+        programs.publish(res["candidate"], actor=f"admin:{u['email']}")
+        res["published"] = True
+    return res
+
+
+@app.get("/api/admin/programs")
+def admin_programs(request: Request):
+    """발행된 지원사업 전체(진행·예정·미확인 / 기간 종료 / 삭제됨)."""
     require_admin(request)
-    return programs.ingest(body.noticeKey, body.url, body.text.encode(), "text/plain", posted_at=body.postedAt)
+    return {"programs": programs.published(include_sample=False, include_removed=True)}
+
+
+class RemoveProgram(BaseModel):
+    reason: str | None = None
+
+
+@app.post("/api/admin/programs/{pid}/remove")
+def admin_remove_program(pid: str, body: RemoveProgram, request: Request):
+    u = require_admin(request)
+    try:
+        programs.remove(pid, u["email"], body.reason)
+    except programs.ReviewError as e:
+        raise HTTPException(404, str(e))
+    return {"ok": True}
+
+
+@app.post("/api/admin/programs/{pid}/restore")
+def admin_restore_program(pid: str, request: Request):
+    require_admin(request)
+    programs.restore(pid)
+    return {"ok": True}
 
 
 @app.get("/api/admin/jobs")

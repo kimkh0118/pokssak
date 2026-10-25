@@ -18,6 +18,12 @@ type Jobs = { coverage: Coverage; runs: { id: string; name: string; trigger: str
 
 const show = (v: unknown) => (v == null ? "—" : Array.isArray(v) ? v.join(", ") : typeof v === "boolean" ? (v ? "예" : "아니오") : String(v));
 
+type Prog = { id: string; url: string; status: string; removedAt: string | null; removedReason: string | null; publishedAt: string;
+  data: Record<string, { value: unknown } | undefined> };
+const v = (p: Prog, k: string) => p.data[k]?.value;
+const ENDED = ["마감", "예산소진", "취소"];
+const STATUS_TONE: Record<string, string> = { 접수중: "bg-[#e8f8f0] text-good", 예정: "bg-brand-soft text-brand-strong", 미확인: "bg-fill text-muted" };
+
 export function Admin() {
   const [error, setError] = useState<string | null>(null);
   const [cands, setCands] = useState<Cand[]>([]);
@@ -26,13 +32,15 @@ export function Admin() {
   const [jobs, setJobs] = useState<Jobs | null>(null);
   const [collecting, setCollecting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [notice, setNotice] = useState({ noticeKey: "", url: "", text: "" });
+  const [progs, setProgs] = useState<Prog[]>([]);
+  const [form, setForm] = useState({ title: "", agency: "", region: "", start: "", end: "", benefit: "", url: "", body: "" });
 
   const load = useCallback(async () => {
     try {
       const c = await api<{ candidates: Cand[]; extractFailures: typeof failures }>("/api/admin/candidates");
       setCands(c.candidates);
       setFailures(c.extractFailures);
+      setProgs((await api<{ programs: Prog[] }>("/api/admin/programs")).programs);
       const fetchedJobs = await api<Jobs>("/api/admin/jobs");
       setJobs(fetchedJobs);
       return fetchedJobs;
@@ -74,10 +82,62 @@ export function Admin() {
     } catch (e) { setMsg(`처리 실패: ${(e as Error).message}`); }
   }
 
+  async function removeProg(p: Prog) {
+    const reason = window.prompt(`'${show(v(p, "title"))}'을(를) 사용자 화면에서 뺄까요? 이유(선택)`, "");
+    if (reason === null) return;
+    try { await api(`/api/admin/programs/${p.id}/remove`, { method: "POST", body: { reason: reason || null } }); setMsg("삭제했어요. 아래 '삭제됨'에서 복구할 수 있어요."); await load(); }
+    catch (e) { setMsg(`삭제 실패: ${(e as Error).message}`); }
+  }
+  async function restoreProg(p: Prog) {
+    try { await api(`/api/admin/programs/${p.id}/restore`, { method: "POST" }); setMsg("복구했어요."); await load(); }
+    catch (e) { setMsg(`복구 실패: ${(e as Error).message}`); }
+  }
+  async function addManual(publish: boolean) {
+    const f = form;
+    if (!f.title || !f.url.startsWith("http")) return setMsg("사업명과 공식 원문 주소(http…)는 꼭 필요해요.");
+    // 구조화기가 읽는 '항목: 값' 형식으로 원문을 만든다(입력한 값만)
+    const text = [`사업명: ${f.title}`, f.agency && `기관: ${f.agency}`, `관할: 부산광역시${f.region ? ` ${f.region}` : ""}`,
+      f.region && `대상 지역: ${f.region}`, f.start && f.end && `신청기간: ${f.start} ~ ${f.end}`, f.benefit && `지원 내용: ${f.benefit}`,
+      f.body, `출처: ${f.url}`].filter(Boolean).join("\n");
+    try {
+      const r = await api<{ published?: boolean; unchanged?: boolean }>("/api/admin/notices", { method: "POST",
+        body: { noticeKey: `manual:${f.url}`, url: f.url, text: text.padEnd(20, " "), publish } });
+      setMsg(r.unchanged ? "이미 같은 내용이 등록돼 있어요." : r.published ? "등록하고 바로 발행했어요." : "등록했어요. 검토 대기를 확인하세요.");
+      setForm({ title: "", agency: "", region: "", start: "", end: "", benefit: "", url: "", body: "" });
+      await load();
+    } catch (e) { setMsg(`등록 실패: ${(e as Error).message}`); }
+  }
+  const live = progs.filter((p) => !p.removedAt && !ENDED.includes(p.status));
+  const ended = progs.filter((p) => !p.removedAt && ENDED.includes(p.status));
+  const removed = progs.filter((p) => p.removedAt);
+  const row = (p: Prog, action: React.ReactNode) => (
+    <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-line py-3 first:border-t-0">
+      <span className="min-w-0">
+        <span className={`mr-2 rounded px-1.5 py-0.5 text-[11px] font-bold ${STATUS_TONE[p.status] ?? "bg-bad-soft text-bad"}`}>{p.status}</span>
+        <a href={p.url} target="_blank" rel="noreferrer" className="font-bold underline">{show(v(p, "title"))}</a>
+        <span className="block text-[12px] text-subtle">{show(v(p, "agency"))} · 대상 {show(v(p, "regionSggs"))} · 신청 {show(v(p, "applyStart"))} ~ {show(v(p, "applyEnd"))}{p.removedReason ? ` · 삭제 이유: ${p.removedReason}` : ""}</span>
+      </span>
+      {action}
+    </li>
+  );
+
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <h1 className="text-[26px] font-extrabold">관리자 · 지원사업 공고</h1>
       {msg && <Notice>{msg}</Notice>}
+
+      <section className="space-y-3">
+        <h2 className="text-[20px] font-extrabold">사용자에게 보이는 지원사업 {live.length}건</h2>
+        <p className="text-[13px] text-subtle">신청 마감·예산 소진·취소된 사업은 그 시각부터 사용자 화면과 매칭에서 자동으로 빠져요(아래 &lsquo;기간 종료&rsquo;). 신청 기간이 없는 사업은 &lsquo;미확인&rsquo;으로 남으니 직접 확인해 주세요.</p>
+        <Card>
+          {live.length === 0 ? <p className="text-[14px] text-subtle">아직 발행된 사업이 없어요. 아래 검토 대기를 승인하거나 직접 추가하세요.</p>
+            : <ul>{live.map((p) => row(p, <Button variant="secondary" onClick={() => void removeProg(p)}>삭제</Button>))}</ul>}
+        </Card>
+        {ended.length > 0 && <details><summary className="cursor-pointer text-[14px] font-bold">기간 종료(자동 제외) {ended.length}건</summary>
+          <Card className="mt-2"><ul>{ended.map((p) => row(p, <Button variant="secondary" onClick={() => void removeProg(p)}>삭제</Button>))}</ul></Card></details>}
+        {removed.length > 0 && <details><summary className="cursor-pointer text-[14px] font-bold">삭제됨 {removed.length}건</summary>
+          <Card className="mt-2"><ul>{removed.map((p) => row(p, <Button variant="secondary" onClick={() => void restoreProg(p)}>복구</Button>))}</ul></Card></details>}
+      </section>
 
       <section>
         <h2 className="text-[20px] font-extrabold">검토 대기 {cands.length}건</h2>
@@ -183,13 +243,27 @@ export function Admin() {
         </section>
       )}
 
-      <section className="space-y-2">
-        <h2 className="text-[20px] font-extrabold">공고 수동 등록</h2>
-        <p className="text-[13px] text-subtle">자동 수집 조건이 불명확한 공식 공고를 허용된 범위에서 원문 그대로 붙여 넣어요. 등록 후 검토 대기로 들어가요.</p>
-        <input placeholder="공고 식별자" value={notice.noticeKey} onChange={(e) => setNotice({ ...notice, noticeKey: e.target.value })} className="block h-11 w-full rounded-xl bg-fill px-3" />
-        <input placeholder="원문 URL" value={notice.url} onChange={(e) => setNotice({ ...notice, url: e.target.value })} className="block h-11 w-full rounded-xl bg-fill px-3" />
-        <textarea placeholder="공고 원문" rows={6} value={notice.text} onChange={(e) => setNotice({ ...notice, text: e.target.value })} className="block w-full rounded-xl bg-fill p-3" />
-        <Button onClick={async () => { try { await api("/api/admin/notices", { method: "POST", body: notice }); setMsg("등록했어요. 검토 대기를 확인하세요."); await load(); } catch (e) { setMsg(`등록 실패: ${(e as Error).message}`); } }}>등록</Button>
+      <section className="space-y-3">
+        <h2 className="text-[20px] font-extrabold">지원사업 직접 추가</h2>
+        <p className="text-[13px] text-subtle">자동 수집이 못 찾은 사업(robots로 막힌 구청, 보도자료로만 나온 사업 등)을 공식 원문 주소와 함께 넣어요. 원문에 있는 내용만 적어 주세요.</p>
+        <Card className="space-y-2">
+          <input type="text" placeholder="사업명 (필수) 예: 2026년 빈집 철거 지원사업" aria-label="사업명 (필수) 예: 2026년 빈집 철거 지원사업" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="block h-11 w-full rounded-xl bg-fill px-3" />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input type="text" placeholder="기관 예: 부산광역시 남구 건축과" aria-label="기관 예: 부산광역시 남구 건축과" value={form.agency} onChange={(e) => setForm({ ...form, agency: e.target.value })} className="block h-11 w-full rounded-xl bg-fill px-3" />
+            <input type="text" placeholder="대상 구·군 예: 남구 (비우면 부산 전체)" aria-label="대상 구·군 예: 남구 (비우면 부산 전체)" value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} className="block h-11 w-full rounded-xl bg-fill px-3" />
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="text-[13px] font-bold">신청 시작<input type="date" placeholder="신청 시작" aria-label="신청 시작" value={form.start} onChange={(e) => setForm({ ...form, start: e.target.value })} className="block h-11 w-full rounded-xl bg-fill px-3" /></label>
+            <label className="text-[13px] font-bold">신청 마감 (지나면 자동 제외)<input type="date" placeholder="신청 마감" aria-label="신청 마감" value={form.end} onChange={(e) => setForm({ ...form, end: e.target.value })} className="block h-11 w-full rounded-xl bg-fill px-3" /></label>
+          </div>
+          <input type="text" placeholder="지원 내용 예: 철거비 최대 1,400만원" aria-label="지원 내용 예: 철거비 최대 1,400만원" value={form.benefit} onChange={(e) => setForm({ ...form, benefit: e.target.value })} className="block h-11 w-full rounded-xl bg-fill px-3" />
+          <input type="url" placeholder="공식 원문 주소 (필수) https://…" aria-label="공식 원문 주소 (필수) https://…" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} className="block h-11 w-full rounded-xl bg-fill px-3" />
+          <textarea placeholder="원문 내용(선택): 대상·조건·신청 방법 등" aria-label="원문 내용" rows={4} value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} className="block w-full rounded-xl bg-fill p-3" />
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => void addManual(true)}>추가하고 바로 발행</Button>
+            <Button variant="secondary" onClick={() => void addManual(false)}>검토 대기로 추가</Button>
+          </div>
+        </Card>
       </section>
     </div>
   );

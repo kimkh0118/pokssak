@@ -13,7 +13,7 @@ def test_예시자료_발행과_변경공고는_검토대기_HWP는_추출실패
     out = seed_sample()
     assert out["published"] == 2
     assert out["changed"]["pendingReview"] and set(out["changed"]["important"]) >= {"benefitCap", "applyEnd"}
-    assert out["hwp"]["extract"] == "unsupported"
+    assert out["hwp"]["extract"] == "failed"  # 예시 HWP는 실제 OLE 문서가 아닌 손상된 입력
     with dbm.connect() as c:
         assert c.execute("SELECT review_state FROM programs WHERE notice_key = 'sample-notice-1'").fetchone()[0] == "changing"
 

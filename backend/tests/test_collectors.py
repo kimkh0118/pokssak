@@ -81,3 +81,46 @@ def test_collect_builtin_ingests_and_reports(monkeypatch):
     out2 = {"fetched": 0, "unchanged": 0, "skipped": [], "failed": []}
     jobs.collect_builtin(out2, gov_client(), busan_transport(), sleep=lambda s: None)
     assert out2["unchanged"] == 1 and out2["fetched"] == 1  # 같은 원문은 다시 처리 안 함, 정부24 1건 추가
+
+
+# ---- 오탐·상세 주소·robots 와일드카드·PDF OCR 조건
+from app.adapters import discovery
+
+
+def test_keyword_filter_rejects_noise():
+    assert not discovery.is_program("도시재생사업소개", "도시재생 뉴딜 사업 소개")
+    assert not discovery.is_program("관내 석면해체·제거 작업장 현황", "석면 해체 작업장 목록")
+    assert not discovery.is_program("2026년 제5차 폐가철거정비사업 철거공사 견적제출", "폐가 철거 공사 견적 접수")
+    assert not discovery.is_program("빈집 정비 조례 일부개정조례안 입법예고", "빈집 정비 지원 조항 개정")
+    assert not discovery.is_program("빈집 현황", "관내 빈집 3,000호")  # 지원·모집 표현 없음
+    assert discovery.is_program("2026년 빈집 정비 지원사업 신청 안내", "빈집 철거비 최대 1,500만원 지원, 신청 접수")
+
+
+def test_busan_detail_url_keeps_gosi_type():
+    rows = busan_gosi.parse_list('<td class="title"><a href="/nbgosi/view?sno=78203&gosiGbn=P&curPage=1">빈집 지원</a></td>'
+                                 '<td>건축과</td><td> 2026.06.02</td>')
+    assert rows[0]["gosiGbn"] == "P"
+    notices = busan_gosi.crawl(programs.extract_text, busan_transport(), sleep=lambda s: None)
+    assert notices[0]["url"].endswith("sno=101&gosiGbn=A")
+
+
+def test_robots_wildcards():
+    r = programs.Robots("User-agent: *\nDisallow: /*bbs*\nDisallow: /*.pdf$\nAllow: /bbs/public/\n")
+    assert not r.can_fetch("https://x.test/kr/bbs/list.do")
+    assert not r.can_fetch("https://x.test/a/file.pdf")
+    assert r.can_fetch("https://x.test/a/file.pdf?x=1")
+    assert r.can_fetch("https://x.test/bbs/public/1")  # 더 긴 Allow 가 우선
+    assert r.can_fetch("https://x.test/news")
+    own = programs.Robots("User-agent: *\nDisallow: /\n\nUser-agent: BusanVacantHouseBot\nDisallow: /private\n")
+    assert own.can_fetch("https://x.test/news") and not own.can_fetch("https://x.test/private/a")
+
+
+def test_pdf_ocr_only_for_scanned():
+    assert not programs.needs_ocr(["본문 글자가 충분히 들어 있는 첫 페이지입니다", "둘째 페이지도 글자가 충분히 있어요 정말로요", ""])
+    assert programs.needs_ocr(["", "", "짧음"])
+    assert not programs.needs_ocr([])
+
+
+def test_regeneration_pages_are_not_programs():
+    assert not discovery.is_program("주거환경 정비사업", "집수리 지원 등을 통한 노후불량 거주환경 개선, 주민 신청")
+    assert not discovery.is_program("주례동 도시재생활성화계획 고시", "빈집 및 빈점포를 소공원으로 조성, 사업지원")

@@ -18,13 +18,13 @@ from datetime import datetime, timedelta
 import httpx
 
 from . import analyses, db as dbm, notify, programs
-from .adapters import busan_gosi, gov24
+from .adapters import busan_gosi, gov24, discovery
 from .clock import KST, now, now_iso
 from .settings import settings
 
 log = logging.getLogger("jobs")
 DAYS = {"MON": 0, "TUE": 1, "WED": 2, "THU": 3, "FRI": 4, "SAT": 5, "SUN": 6}
-LOCK_MINUTES = 60
+LOCK_MINUTES = 360
 RETRY_DELAYS = (5, 30)
 HOLDER = f"{socket.gethostname()}:{uuid.uuid4().hex[:6]}"
 
@@ -85,7 +85,7 @@ def run(name: str, trigger: str, fn, retry_delays=RETRY_DELAYS) -> dict:
     return {"id": run_id, "status": status, "summary": summary, "error": error}
 
 
-def collect() -> dict:
+def collect(backfill: bool = False) -> dict:
     """허용된 공식 출처만 자동 수집. 실패해도 마지막 정상 자료는 유지(사업 종료로 처리하지 않음)."""
     out = {"fetched": 0, "unchanged": 0, "skipped": [], "failed": []}
     with dbm.connect() as c:
@@ -105,6 +105,14 @@ def collect() -> dict:
         except Exception as e:  # noqa: BLE001
             out["failed"].append(f"{s['agency']}: {type(e).__name__}")
     collect_builtin(out)
+    if settings.district_crawl:
+        out["sources"] = []
+        for agency, url in discovery.SOURCES:
+            report = discovery.crawl_source(agency, url, programs.extract_text, programs.robots_guard(), programs.ingest, backfill=backfill)
+            out["sources"].append(report)
+            out["fetched"] += report["fetched"]
+            out["unchanged"] += report["unchanged"]
+            save_report(agency, url, report)
     return out
 
 
@@ -128,15 +136,18 @@ def collect_builtin(out: dict, gov_client=None, busan_client=None, sleep=time.sl
             out["skipped"].append("부산시 고시공고: robots.txt 에서 허용되지 않거나 확인 불가")
         else:
             try:
-                for n in busan_gosi.crawl(programs.extract_text, busan_client, sleep=sleep):
+                report = {}
+                for n in busan_gosi.crawl(programs.extract_text, busan_client, sleep=sleep, report=report):
                     _ingest_text(out, n["noticeKey"], n["url"], n["text"], n["postedAt"])
+                save_report("부산시 고시공고", busan_gosi.LIST, report)
+                out["busanGosi"] = report
             except Exception as e:  # noqa: BLE001
                 out["failed"].append(f"부산시 고시공고: {type(e).__name__}")
     return out
 
 
-def weekly() -> dict:
-    return {"collect": collect(), "notifications": notify.generate(analyses.profile_for), "dispatch": notify.dispatch()}
+def weekly(backfill: bool = False) -> dict:
+    return {"collect": collect(backfill=backfill), "notifications": notify.generate(analyses.profile_for), "dispatch": notify.dispatch()}
 
 
 def runs(limit: int = 30) -> list[dict]:
@@ -165,6 +176,27 @@ def start_scheduler():
     log.info("주간 지원사업 작업 예약: %s (한국 시간)", settings.program_schedule)
 
 
+
+
+def save_report(agency: str, url: str, report: dict):
+    with dbm.connect() as c:
+        c.execute("INSERT INTO collection_reports(agency,source_url,report,created_at) VALUES (?,?,?,?)", (agency,url,dbm.dumps(report),now_iso()))
+
+
+def coverage() -> dict:
+    with dbm.connect() as c:
+        counts = {
+            "collected": c.execute("SELECT count(*) FROM programs WHERE is_sample=0").fetchone()[0],
+            "published": c.execute("SELECT count(*) FROM programs WHERE is_sample=0 AND current_version_id IS NOT NULL").fetchone()[0],
+            "pending": c.execute("SELECT count(*) FROM program_candidates k JOIN programs p ON p.id=k.program_id WHERE p.is_sample=0 AND k.status='pending'").fetchone()[0],
+            "extractFailed": c.execute("SELECT count(*) FROM program_documents WHERE is_sample=0 AND extract_status!='ok'").fetchone()[0],
+        }
+        reports = c.execute("SELECT * FROM collection_reports WHERE id IN (SELECT max(id) FROM collection_reports GROUP BY source_url) ORDER BY agency").fetchall()
+    return {"counts": counts, "reports": [{"agency": r["agency"], "url":r["source_url"], "at":r["created_at"], "detail":dbm.loads(r["report"])} for r in reports],
+            "configuredSources": [{"agency":n,"url":u} for n,u in discovery.SOURCES],
+            "districtEnabled":settings.district_crawl}
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     cmd = sys.argv[1] if len(sys.argv) > 1 else "weekly"
@@ -172,4 +204,4 @@ if __name__ == "__main__":
         from .seed import seed_sample
         print(seed_sample())
     else:
-        print(run("weekly_programs", "manual", weekly))
+        print(run("weekly_programs", "manual", lambda: weekly(backfill=cmd == "backfill")))

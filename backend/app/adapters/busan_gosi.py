@@ -13,24 +13,30 @@ import time
 
 import httpx
 
+from ..settings import settings
+from ..clock import now
+from .discovery import EXCLUDE, KEYWORDS, SEARCH_TERMS, fetch, is_program
+from urllib.parse import urlencode
+from datetime import timedelta
+
 BASE = "https://www.busan.go.kr"
 LIST = f"{BASE}/nbgosi/list"
-KEYWORDS = ("빈집", "노후주택", "슬레이트", "철거 지원", "철거비")
-SKIP = ("공시송달", "입찰", "계약", "평가", "행정대집행", "제안서", "열람공고", "결정고시", "인가")
+SKIP = EXCLUDE
 UA = "BusanVacantHouseBot/1.0 (weekly support-program collection)"  # 헤더는 ASCII만 가능
 DELAY_SECONDS = 1.0
 MAX_ITEMS = 20
 
+# 상세 주소에는 gosiGbn(고시·공고 구분)이 꼭 있어야 한다(없으면 Page Not Found)
 ROW = re.compile(
-    r'<a href="/nbgosi/view\?sno=(\d+)[^"]*">([^<]+)</a></td>\s*<td[^>]*>([^<]*)</td>\s*<td[^>]*>\s*([\d.]+)')
+    r'<a href="/nbgosi/view\?sno=(\d+)(?:&(?:amp;)?gosiGbn=(\w+))?[^"]*">([^<]+)</a></td>\s*<td[^>]*>([^<]*)</td>\s*<td[^>]*>\s*([\d.]+)')
 ATTACH = re.compile(r'<a href="(/nbgosi/download\?fileId=[^"]+)" title="([^"]+)"')
 
 
 def parse_list(page: str) -> list[dict]:
     out = []
-    for sno, title, dept, day in ROW.findall(page):
+    for sno, gbn, title, dept, day in ROW.findall(page):
         title = html.unescape(title).strip()
-        out.append({"sno": sno, "title": title, "dept": dept.strip(), "postedAt": day.strip().replace(".", "-")})
+        out.append({"sno": sno, "gosiGbn": gbn or "A", "title": title, "dept": dept.strip(), "postedAt": day.strip().replace(".", "-").rstrip("-")})
     return out
 
 
@@ -51,41 +57,80 @@ def body_text(page: str) -> str:
 def attachments(page: str) -> list[tuple[str, str]]:
     seen, out = set(), []
     for href, name in ATTACH.findall(page):
-        if href not in seen and name.lower().endswith((".hwpx", ".pdf")):
+        if href not in seen and name.lower().endswith((".hwpx", ".hwp", ".pdf")):
             seen.add(href)
             out.append((BASE + html.unescape(href), name))
     return out
 
 
-def crawl(extract_text, client: httpx.Client | None = None, sleep=time.sleep) -> list[dict]:
+def crawl(extract_text, client: httpx.Client | None = None, sleep=time.sleep, report=None) -> list[dict]:
     """키워드별 첫 페이지 검색 → 대상 공고 상세·첨부 수집. extract_text(kind, raw) 는 programs.extract_text."""
     own = client is None
     client = client or httpx.Client(timeout=20, headers={"User-Agent": UA}, follow_redirects=True)
+    from ..programs import robots_guard
+    guard = robots_guard()
+    def get(url):
+        final, raw, ct, encoding = fetch(client, url, BASE, guard)
+        return raw, raw.decode(encoding, errors="replace")
     try:
         items: dict[str, dict] = {}
-        for kw in KEYWORDS:
-            r = client.get(LIST, params={"conGosiGbn": "", "schKeyType": "A", "srchText": kw})
-            r.raise_for_status()
-            for row in parse_list(r.text):
-                if wanted(row["title"]):
-                    items.setdefault(row["sno"], row)
-            sleep(DELAY_SECONDS)
+        report = report if report is not None else {}
+        report.update(pages=0, discovered=0, attachmentFailures=[], errors=[], limited=False)
+        for kw in SEARCH_TERMS:
+            signatures = set()
+            for page in range(1, settings.busan_max_pages + 1):
+                try:
+                    _, page_text = get(LIST + "?" + urlencode({"conGosiGbn": "", "schKeyType": "A", "srchText": kw, "curPage": page}))
+                except (httpx.HTTPError, ValueError) as e:
+                    report["errors"].append({"url": LIST, "reason": f"{kw} / {page}페이지: {type(e).__name__}"})
+                    break
+                rows = parse_list(page_text)
+                report["pages"] += 1
+                signature = tuple(row["sno"] for row in rows)
+                if not rows or signature in signatures:
+                    break
+                signatures.add(signature)
+                old = []
+                for row in rows:
+                    older = bool(row["postedAt"] and row["postedAt"] < (now() - timedelta(days=365 * settings.program_lookback_years)).date().isoformat())
+                    old.append(older)
+                    if wanted(row["title"]) and not older:
+                        items.setdefault(row["sno"], row)
+                sleep(DELAY_SECONDS)
+                if all(old) or len(items) >= settings.busan_max_items:
+                    break
+            else:
+                report["limited"] = True
+        report["discovered"] = len(items)
+        if len(items) > settings.busan_max_items:
+            report["limited"] = True
         out = []
-        for row in list(items.values())[:MAX_ITEMS]:
-            url = f"{BASE}/nbgosi/view?sno={row['sno']}"
-            r = client.get(url)
-            r.raise_for_status()
-            parts = [f"사업명: {row['title']}", f"기관: 부산광역시 {row['dept']}", "관할: 부산광역시", body_text(r.text)]
-            for href, name in attachments(r.text):
+        for row in list(items.values())[:settings.busan_max_items]:
+            url = f"{BASE}/nbgosi/view?sno={row['sno']}&gosiGbn={row['gosiGbn']}"
+            try:
+                _, view_text = get(url)
+            except (httpx.HTTPError, ValueError) as e:
+                report["errors"].append({"url": url, "reason": type(e).__name__})
+                continue
+            parts = [f"사업명: {row['title']}", f"기관: 부산광역시 {row['dept']}", "관할: 부산광역시", body_text(view_text)]
+            for href, name in attachments(view_text):
                 sleep(DELAY_SECONDS)
                 try:
-                    a = client.get(href)
-                    a.raise_for_status()
-                    text, status, _ = extract_text("pdf" if name.lower().endswith(".pdf") else "hwpx", a.content)
+                    attachment_raw, _ = get(href)
+                    text, status, reason = extract_text(name.rsplit(".", 1)[-1].lower(), attachment_raw)
                     if status == "ok" and text:
                         parts.append(f"[첨부: {name}]\n{text}")
-                except httpx.HTTPError:
+                    else:
+                        report["attachmentFailures"].append({"url": href, "name": name, "reason": reason or status})
+                        parts.append(f"[첨부 확인 필요: {name}] {reason or status}")
+                except (httpx.HTTPError, ValueError):
                     parts.append(f"[첨부: {name}] 내려받기 실패")
+                    report["attachmentFailures"].append({"url": href, "name": name, "reason": "내려받기 실패"})
+            if not is_program(row["title"], "\n".join(parts[3:])):
+                report.setdefault("skippedNotProgram", 0)
+                report["skippedNotProgram"] += 1
+                sleep(DELAY_SECONDS)
+                continue
             out.append({"noticeKey": f"busan-gosi:{row['sno']}", "url": url, "text": "\n".join(parts), "postedAt": row["postedAt"]})
             sleep(DELAY_SECONDS)
         return out

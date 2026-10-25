@@ -13,7 +13,7 @@ from ..settings import settings
 URL = "https://api.odcloud.kr/api/gov24/v3/serviceList"
 KEYWORDS = ("빈집", "빈 집", "폐가", "공가주택", "노후주택", "노후 주택", "슬레이트")
 HOUSE_WORDS = ("주택", "건축물", "가옥")  # '철거'는 집과 함께 나올 때만(간판·시설물 철거 제외)
-EXCLUDE = ("화재", "간판", "요금", "감면")  # 빈집 처리와 무관한 사업
+EXCLUDE = ("화재", "간판", "요금", "감면", "폐가전", "가전제품")  # 빈집 처리와 무관한 사업
 PER_PAGE = 500
 MAX_PAGES = 10
 

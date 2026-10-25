@@ -358,11 +358,21 @@ def admin_jobs(request: Request):
     with dbm.connect() as c:
         sources = [dict(r) for r in c.execute("SELECT * FROM program_sources")]
         locks = [dict(x) for x in c.execute("SELECT * FROM job_locks")]
-    return {"runs": jobs.runs(), "sources": sources, "locks": locks, "schedule": settings.program_schedule,
+    return {"coverage": jobs.coverage(), "runs": jobs.runs(), "sources": sources, "locks": locks, "schedule": settings.program_schedule,
             "nextRun": jobs.next_run(settings.program_schedule, now()).isoformat(), "schedulerEnabled": settings.scheduler_enabled}
 
 
 @app.post("/api/admin/jobs/weekly")
-def admin_run_weekly(request: Request):
+def admin_run_weekly(request: Request, backfill: bool = False):
     require_admin(request)
-    return jobs.run("weekly_programs", "manual", jobs.weekly, retry_delays=())
+    # Discovery can take minutes. Return immediately, keep progress in job_runs.
+    import threading
+    if not jobs.acquire("weekly_programs"):
+        return {"status": "skipped_locked"}
+    def worker():
+        try:
+            jobs.run("weekly_programs_worker", "backfill" if backfill else "manual", lambda: jobs.weekly(backfill=backfill), retry_delays=())
+        finally:
+            jobs.release("weekly_programs")
+    threading.Thread(target=worker, name="manual-program-collection", daemon=True).start()
+    return {"status": "queued"}

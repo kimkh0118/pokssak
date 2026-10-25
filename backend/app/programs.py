@@ -20,7 +20,6 @@ import uuid
 import zipfile
 from datetime import date, datetime
 from html.parser import HTMLParser
-from urllib import robotparser
 from urllib.parse import urlparse
 
 import httpx
@@ -30,7 +29,7 @@ from .clock import KST, now, now_iso
 from .settings import settings
 
 log = logging.getLogger("programs")
-PARSER_VERSION = "extract-2026.10.1"
+PARSER_VERSION = "extract-2026.10.2"
 SAMPLE_MODEL = "sample-extractor-1"
 IMPORTANT = ("benefitAmount", "benefitCap", "benefitRate", "selfPayment", "applyStart", "applyEnd", "targetHousing",
              "vacancyMonthsMin", "ownership", "publicUseObligation", "preApprovalRequired", "directExecution",
@@ -82,6 +81,14 @@ def detect_type(url: str, content_type: str | None, raw: bytes) -> str:
     return "html" if b"<" in raw[:2000] else "text"
 
 
+def needs_ocr(pages: list[str]) -> bool:
+    """스캔 PDF 판단: 글자가 있는 페이지(20자 이상)가 절반 미만일 때만. 빈 페이지 한두 장은 무시."""
+    if not pages:
+        return False
+    with_text = sum(1 for p in pages if len(p.strip()) >= 20)
+    return with_text * 2 < len(pages)
+
+
 def extract_text(kind: str, raw: bytes) -> tuple[str | None, str, str | None]:
     """(텍스트, 상태, 오류). 상태: ok | failed | unsupported"""
     try:
@@ -93,7 +100,24 @@ def extract_text(kind: str, raw: bytes) -> tuple[str | None, str, str | None]:
             text = raw.decode("utf-8", errors="replace")
         elif kind == "pdf":
             from pypdf import PdfReader
-            text = "\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(raw)).pages)
+            pages = [page.extract_text() or "" for page in PdfReader(io.BytesIO(raw)).pages]
+            text = "\n".join(pages)
+            if needs_ocr(pages):
+                # 글자가 거의 없는 스캔 PDF만 OCR. 실패하거나 꺼져 있으면 뽑힌 글자라도 쓴다.
+                ocr_text = None
+                if settings.ocr_enabled:
+                    try:
+                        from .documents import ocr_pdf
+                        ocr_text = ocr_pdf(raw, settings.ocr_max_pages)
+                    except Exception as e:  # noqa: BLE001
+                        log.warning("OCR 실패: %s", e)
+                if ocr_text and len(ocr_text.strip()) > len(text.strip()):
+                    text = ocr_text
+                elif not text.strip():
+                    return None, "unsupported", "스캔 PDF: OCR 비활성 또는 실패, 수동 확인 필요"
+        elif kind == "hwp":
+            from .documents import hwp_text
+            text = hwp_text(raw)
         elif kind == "hwpx":
             with zipfile.ZipFile(io.BytesIO(raw)) as z:
                 xml = "".join(z.read(n).decode("utf-8", "replace") for n in sorted(z.namelist()) if n.startswith("Contents/section"))
@@ -101,7 +125,7 @@ def extract_text(kind: str, raw: bytes) -> tuple[str | None, str, str | None]:
         else:
             return None, "unsupported", "HWP(바이너리) 형식은 아직 텍스트 추출을 지원하지 않습니다. 원문 링크로 안내합니다."
     except Exception as e:  # noqa: BLE001
-        return None, "failed", f"{kind} 추출 실패: {type(e).__name__}"
+        return None, "failed", f"{kind} 추출 실패: {str(e) if isinstance(e, ValueError) else type(e).__name__}"
     text = re.sub(r"[ \t]+", " ", re.sub(r"\n\s*\n+", "\n", text)).strip()
     return (text, "ok", None) if text else (None, "failed", "추출된 텍스트가 없습니다.")
 
@@ -184,21 +208,86 @@ def structure_llm(raw_text: str) -> dict | None:
 
 
 # ---------------------------------------------------------------- 수집·등록
-def robots_allows(url: str, client: httpx.Client | None = None) -> bool:
-    """RFC 9309: robots.txt 가 200 이면 규칙대로, 4xx(없음·접근 거부)면 규칙 없음(허용),
-    5xx·연결 실패면 확인 불가로 보고 수집하지 않는다."""
-    parts = urlparse(url)
+BOT_NAME = "busanvacanthousebot"
+
+
+class Robots:
+    """RFC 9309 robots.txt 해석: 와일드카드(*)·끝($), 가장 긴 규칙 우선, 같은 길이면 Allow 우선.
+    (파이썬 기본 robotparser 는 '*'·'$'를 글자 그대로 비교해 Disallow: /*bbs* 같은 규칙을 놓친다.)"""
+
+    def __init__(self, text: str):
+        groups, agents, rules, last_was_rule = [], [], [], False
+        for line in text.splitlines():
+            line = line.split("#", 1)[0].strip()
+            if ":" not in line:
+                continue
+            key, value = (x.strip() for x in line.split(":", 1))
+            key = key.lower()
+            if key == "user-agent":
+                if last_was_rule:
+                    groups.append((agents, rules))
+                    agents, rules = [], []
+                agents.append(value.lower())
+                last_was_rule = False
+            elif key in ("allow", "disallow") and agents:
+                rules.append((key == "allow", value))
+                last_was_rule = True
+        if agents:
+            groups.append((agents, rules))
+        mine = [r for a, r in groups if any(x != "*" and x in BOT_NAME for x in a)]
+        self.rules = [x for r in mine for x in r] if mine else [x for a, r in groups if "*" in a for x in r]
+
+    @staticmethod
+    def _regex(path: str):
+        end = path.endswith("$")
+        body = re.escape(path[:-1] if end else path).replace(r"\*", ".*")
+        return re.compile(body + ("$" if end else ""))
+
+    def can_fetch(self, url: str) -> bool:
+        p = urlparse(url)
+        target = (p.path or "/") + (f"?{p.query}" if p.query else "")
+        best = None  # (길이, 허용 여부)
+        for allow, path in self.rules:
+            if not path:
+                continue  # 빈 Disallow 는 모두 허용
+            if self._regex(path).match(target):
+                cand = (len(path), allow)
+                if best is None or cand[0] > best[0] or (cand[0] == best[0] and allow):
+                    best = cand
+        return True if best is None else best[1]
+
+
+def _robots_rule(origin: str, client) -> "Robots | bool":
+    """200 이면 규칙, 4xx 면 규칙 없음(허용), 5xx·연결 실패면 확인 불가(수집 안 함)."""
     try:
-        r = (client or httpx).get(f"{parts.scheme}://{parts.netloc}/robots.txt", timeout=10, follow_redirects=True)
+        r = (client or httpx).get(origin + "/robots.txt", timeout=10, follow_redirects=True)
     except httpx.HTTPError:
         return False
     if 400 <= r.status_code < 500:
         return True
     if r.status_code != 200:
         return False
-    rp = robotparser.RobotFileParser()
-    rp.parse(r.text.splitlines())
-    return rp.can_fetch("BusanVacantHouseBot", url)
+    return Robots(r.text)
+
+
+def robots_allows(url: str, client: httpx.Client | None = None) -> bool:
+    parts = urlparse(url)
+    rule = _robots_rule(f"{parts.scheme}://{parts.netloc}", client)
+    return rule if isinstance(rule, bool) else rule.can_fetch(url)
+
+
+def robots_guard():
+    """한 번의 수집 동안 출처별 robots 규칙을 캐시하고, 주소마다 검사한다."""
+    cache: dict = {}
+
+    def allows(url, client):
+        parts = urlparse(url)
+        origin = f"{parts.scheme}://{parts.netloc}"
+        if origin not in cache:
+            cache[origin] = _robots_rule(origin, client)
+        rule = cache[origin]
+        return rule if isinstance(rule, bool) else rule.can_fetch(url)
+    return allows
 
 
 def ingest(notice_key: str, url: str, raw: bytes, content_type: str | None, source_id: str | None = None,
@@ -216,7 +305,13 @@ def ingest(notice_key: str, url: str, raw: bytes, content_type: str | None, sour
         c.execute("UPDATE programs SET last_success_fetch_at = ? WHERE id = ?", (now_iso(), pid))
         dup = c.execute("SELECT id FROM program_documents WHERE notice_key = ? AND content_hash = ?", (notice_key, digest)).fetchone()
         if dup:
-            return {"programId": pid, "documentId": dup["id"], "unchanged": True}
+            candidate = c.execute("SELECT 1 FROM program_candidates WHERE document_id=?", (dup["id"],)).fetchone()
+            document = c.execute("SELECT raw_text, extract_status FROM program_documents WHERE id=?", (dup["id"],)).fetchone()
+            if candidate or document["extract_status"] != "ok":
+                return {"programId": pid, "documentId": dup["id"], "unchanged": True}
+    if dup:
+        return {"programId": pid, "documentId": dup["id"], **make_candidate(pid, dup["id"], document["raw_text"])}
+    with dbm.connect() as c:
         text, status, error = extract_text(kind, raw)
         doc_id = str(uuid.uuid4())
         c.execute("INSERT INTO program_documents VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

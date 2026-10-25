@@ -15,6 +15,7 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "scheduler_enabled", False)
     monkeypatch.setattr(settings, "sample_mode", True)
     monkeypatch.setattr(settings, "busan_gosi_crawl", False)  # 테스트에서 실제 사이트 접속 안 함
+    monkeypatch.setattr(settings, "district_crawl", False)
     monkeypatch.setattr(settings, "gov24_enabled", False)  # 테스트용 가상 자료
     monkeypatch.setattr(settings, "admin_emails", ["admin@example.com"])
     clock.set_now(datetime(2026, 10, 22, 10, 0, tzinfo=clock.KST))

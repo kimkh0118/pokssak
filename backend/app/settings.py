@@ -37,6 +37,16 @@ class Settings:
     sample_mode: bool = (_env("SAMPLE_MODE") or "0") == "1"
     # 지원사업 자동 수집: 부산시 고시공고 게시판 크롤링, 정부24 공공서비스 API(공공데이터포털 키·활용신청 필요)
     busan_gosi_crawl: bool = (_env("BUSAN_GOSI_CRAWL") or "1") == "1"
+    district_crawl: bool = (_env("DISTRICT_CRAWL") or "1") == "1"
+    discovery_pages: int = max(1, int(_env("DISCOVERY_PAGES") or 60))
+    discovery_backfill_pages: int = max(1, int(_env("DISCOVERY_BACKFILL_PAGES") or 300))
+    discovery_frontier_limit: int = max(100, int(_env("DISCOVERY_FRONTIER_LIMIT") or 5000))
+    discovery_delay: float = max(1.0, float(_env("DISCOVERY_DELAY") or 1))
+    busan_max_pages: int = max(1, int(_env("BUSAN_MAX_PAGES") or 100))
+    busan_max_items: int = max(1, int(_env("BUSAN_MAX_ITEMS") or 500))
+    program_lookback_years: int = max(1, int(_env("PROGRAM_LOOKBACK_YEARS") or 3))
+    ocr_enabled: bool = (_env("OCR_ENABLED") or "1") == "1"
+    ocr_max_pages: int = max(1, int(_env("OCR_MAX_PAGES") or 30))
     gov24_enabled: bool = (_env("GOV24_ENABLED") or "1") == "1"
     scheduler_enabled: bool = (_env("SCHEDULER_ENABLED") or "1") == "1"
     # 외부 알림 공급자(없으면 앱 내 알림만)

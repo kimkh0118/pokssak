@@ -9,7 +9,10 @@ type Cand = { id: string; url: string; content_type: string; important_changes: 
 type Detail = { candidate: Cand & { raw_text: string; data: Record<string, { value: unknown; evidence: string | null }> };
   current: { data: Record<string, { value: unknown }>; versionNo: number } | null; fields: Record<string, string>;
   log: { action: string; actor: string; at: string; note: string | null }[] };
-type Jobs = { runs: { id: string; name: string; trigger: string; status: string; started_at: string; finished_at: string | null; attempts: number; error: string | null; summary: string | null }[];
+type Coverage = { counts: { collected: number; published: number; pending: number; extractFailed: number };
+  configuredSources: { agency: string; url: string }[]; districtEnabled: boolean;
+  reports: { agency: string; url: string; at: string; detail: { visited?: number; pages?: number; discovered?: number; fetched?: number; remaining?: number; status?: string; limited?: boolean; javascriptLinks?: number; attachmentFailures?: number | { url: string; name: string; reason: string }[]; errors?: { url: string; reason: string }[] } }[] };
+type Jobs = { coverage: Coverage; runs: { id: string; name: string; trigger: string; status: string; started_at: string; finished_at: string | null; attempts: number; error: string | null; summary: string | null }[];
   sources: { id: string; agency: string; list_url: string; auto_fetch_allowed: number; terms_note: string }[];
   schedule: string; nextRun: string; schedulerEnabled: boolean; locks: { name: string; expires_at: string }[] };
 
@@ -21,6 +24,7 @@ export function Admin() {
   const [failures, setFailures] = useState<{ id: string; url: string; content_type: string; extract_status: string; extract_error: string }[]>([]);
   const [open, setOpen] = useState<Detail | null>(null);
   const [jobs, setJobs] = useState<Jobs | null>(null);
+  const [collecting, setCollecting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [notice, setNotice] = useState({ noticeKey: "", url: "", text: "" });
 
@@ -29,12 +33,35 @@ export function Admin() {
       const c = await api<{ candidates: Cand[]; extractFailures: typeof failures }>("/api/admin/candidates");
       setCands(c.candidates);
       setFailures(c.extractFailures);
-      setJobs(await api<Jobs>("/api/admin/jobs"));
+      const fetchedJobs = await api<Jobs>("/api/admin/jobs");
+      setJobs(fetchedJobs);
+      return fetchedJobs;
     } catch (e) {
       setError((e as Error).message);
     }
   }, []);
   useEffect(() => { void load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect
+
+  useEffect(() => {
+    if (!collecting && !jobs?.locks.length) return;
+    const timer = setInterval(() => { void load().then((latest) => {
+      if (latest && latest.locks.length === 0) {
+        setCollecting(false);
+        setMsg("수집이 끝났어요. 출처별 현황과 실행 결과를 확인하세요.");
+      }
+    }); }, 5000);
+    return () => clearInterval(timer);
+  }, [collecting, jobs?.locks.length, load]);
+
+  async function collect(backfill = false) {
+    setCollecting(true);
+    setMsg("수집을 시작했어요. 화면을 열어 두면 현황이 갱신돼요.");
+    try {
+      const r = await api<{ status: string }>(`/api/admin/jobs/weekly?backfill=${backfill}`, { method: "POST" });
+      setMsg(r.status === "skipped_locked" ? "이미 수집 중이에요." : "수집 중이에요. 출처별 현황은 처리되는 순서대로 갱신돼요.");
+      await load();
+    } catch (e) { setCollecting(false); setMsg(`실행 실패: ${(e as Error).message}`); }
+  }
 
   if (error) return <div className="mx-auto max-w-2xl"><Notice tone="bad">{error} — 관리자 계정으로 로그인해야 해요(ADMIN_EMAILS).</Notice></div>;
 
@@ -116,7 +143,32 @@ export function Admin() {
           <h2 className="text-[20px] font-extrabold">수집 작업</h2>
           <p className="text-[14px]">예약: 매주 {jobs.schedule} (한국 시간) · 다음 실행 {new Date(jobs.nextRun).toLocaleString("ko-KR")} · 예약 실행 {jobs.schedulerEnabled ? "켜짐" : "꺼짐"}
             {jobs.locks.length > 0 && <span className="text-warn"> · 실행 중 잠금 있음</span>}</p>
-          <Button onClick={async () => { setMsg("수동 실행 중…"); try { const r = await api<{ status: string }>("/api/admin/jobs/weekly", { method: "POST" }); setMsg(`수동 실행 결과: ${r.status}`); await load(); } catch (e) { setMsg(`실행 실패: ${(e as Error).message}`); } }}>지금 수집 실행</Button>
+          <div className="flex flex-wrap gap-2" aria-busy={collecting}>
+            <Button disabled={collecting || jobs.locks.length > 0} onClick={() => void collect()}>지금 수집 실행</Button>
+            <Button variant="secondary" disabled={collecting || jobs.locks.length > 0} onClick={() => void collect(true)}>과거 자료 심층 탐색</Button>
+          </div>
+          <p className="text-[13px] text-subtle" role="status">{collecting ? "수집 중 · 5초마다 현황 갱신" : "심층 탐색은 더 많은 페이지를 읽어요. 남은 목록은 다음 실행에서 이어 읽어요. 오래된 자료의 현재 접수 여부는 별도 확인이 필요해요."}</p>
+          {jobs.coverage && <Card>
+            <h3 className="font-bold">실제 지원사업 현황</h3>
+            <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[["수집한 공고", jobs.coverage.counts.collected], ["검토 대기", jobs.coverage.counts.pending], ["발행 완료", jobs.coverage.counts.published], ["원문 추출 실패", jobs.coverage.counts.extractFailed]].map(([label, count]) => <div key={label}><dt className="text-[13px] text-subtle">{label}</dt><dd className="text-xl font-bold">{count}건</dd></div>)}
+            </dl>
+            <p className="mt-3 text-[13px] text-subtle">구·군 탐색 {jobs.coverage.districtEnabled ? "켜짐" : "꺼짐"} · 설정된 공식 출처 {jobs.coverage.configuredSources.length}곳. 수집한 공고는 관리자 검토·발행 후 사용자에게 표시돼요.</p>
+            <ul className="mt-3 space-y-3 text-[13px]">
+              {jobs.coverage.configuredSources.map((source) => {
+                const latest = jobs.coverage.reports.find((r) => r.url === source.url);
+                const d = latest?.detail;
+                return <li key={source.url} className="border-t border-line pt-2">
+                  <a href={source.url} target="_blank" rel="noreferrer" className="font-bold underline">{source.agency}</a>
+                  {d ? <><p>탐색 {d.visited ?? d.pages ?? 0}페이지 · 발견 {d.discovered ?? 0}개 · 신규·변경 {d.fetched ?? 0}개 · 미탐색 {d.remaining ?? 0}개 · {d.status ?? "완료"}{d.limited ? " · 실행 한도 도달" : ""}</p>
+                    <p className="text-subtle">확인: {new Date(latest!.at).toLocaleString("ko-KR")}{d.javascriptLinks ? ` · 자동으로 읽지 못한 JavaScript 링크 ${d.javascriptLinks}개` : ""}</p>
+                    {!!d.errors?.length && <details><summary className="cursor-pointer text-warn">접근·추출 확인 필요 {d.errors.length}건</summary><ul className="break-words">{d.errors.map((e, i) => <li key={i}>{e.url} — {e.reason}</li>)}</ul></details>}
+                  </> : <p className="text-subtle">아직 실행 기록 없음</p>}
+                </li>;
+              })}
+            </ul>
+          </Card>}
+
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-[13px]">
               <thead><tr className="text-left text-subtle"><th>시작</th><th>방식</th><th>상태</th><th>시도</th><th>요약·오류</th></tr></thead>

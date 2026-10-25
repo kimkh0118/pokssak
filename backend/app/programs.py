@@ -29,7 +29,7 @@ from .clock import KST, now, now_iso
 from .settings import settings
 
 log = logging.getLogger("programs")
-PARSER_VERSION = "extract-2026.10.2"
+PARSER_VERSION = "extract-2026.10.3"
 SAMPLE_MODEL = "sample-extractor-1"
 IMPORTANT = ("benefitAmount", "benefitCap", "benefitRate", "selfPayment", "applyStart", "applyEnd", "targetHousing",
              "vacancyMonthsMin", "ownership", "publicUseObligation", "preApprovalRequired", "directExecution",
@@ -41,6 +41,7 @@ FIELDS = {
     "applyStart": "신청 시작일(YYYY-MM-DD)", "applyStartTime": "신청 시작 시각", "applyEnd": "신청 마감일(YYYY-MM-DD)",
     "applyEndTime": "신청 마감 시각(HH:MM)", "projectPeriod": "사업 수행 기간", "statusOverride": "예산소진·취소 등 공고상 상태",
     "targetHousing": "대상 주택 유형", "vacancyMonthsMin": "공실 기간 최소(개월)", "ownership": "소유 조건", "areaMax": "면적 상한(㎡)",
+    "summary": "사업 내용 한 줄 요약(원문 문장)",
     "benefitType": "지원 방식(cash 현금 보조 | direct 지자체 직접 수행 | tax 세제 혜택)", "benefitAmount": "지원 금액(원)",
     "benefitCap": "지원 상한(원)", "benefitRate": "지원 비율(%)", "selfPayment": "자기부담", "paymentTiming": "지급 시점(pre 사전 | post 사후)",
     "directExecution": "지자체 직접 수행 여부", "preApprovalRequired": "사전 신청·승인 필요 여부", "documents": "필요서류",
@@ -162,6 +163,11 @@ def region_from_agency(raw_text: str) -> dict | None:
     return {"value": [m.group(1)] if m.group(1) else ["부산광역시 전체"], "evidence": m.group(0).strip()}
 
 
+# 신청·접수·모집 기간: 2026. 3. 2.(월) ~ 2026. 4. 30. / 2026-03-02 ~ 04-30 등
+PERIOD = re.compile(r"(?:신청|접수|모집)[^\n]{0,15}?(?P<y1>20\d{2})\s*[.\-/년]\s*(?P<m1>\d{1,2})\s*[.\-/월]\s*(?P<d1>\d{1,2})\.?\s*일?"
+                    r"(?:\s*\([^)]*\))?\s*[~∼～\-]\s*(?:(?P<y2>20\d{2})\s*[.\-/년]\s*)?(?P<m2>\d{1,2})\s*[.\-/월]\s*(?P<d2>\d{1,2})")
+
+
 def structure_sample(raw_text: str) -> dict:
     """예시 추출기(LLM 키가 없을 때). 정해진 표현만 읽고 나머지는 null. 근거 문장도 함께 돌려준다."""
     out = {}
@@ -194,6 +200,26 @@ def structure_sample(raw_text: str) -> dict:
     grab("clawback", r"환수\s*[:：]\s*(.+)")
     grab("duplicateRestriction", r"중복지원\s*[:：]\s*(.+)")
     grab("contact", r"문의\s*[:：]\s*(.+)")
+    # 형식이 정해지지 않은 공고 본문에서도 금액·기간·내용을 찾는다(원문 문장을 근거로 남김)
+    if "benefitCap" not in out:
+        grab("benefitCap", r"(?:최대|한도|최고)\s*([\d,]+)\s*만\s*원", lambda m: int(m.group(1).replace(",", "")) * 10_000)
+    if "benefitCap" not in out:
+        grab("benefitCap", r"([\d,]+)\s*만\s*원\s*(?:이내|한도|까지|범위)", lambda m: int(m.group(1).replace(",", "")) * 10_000)
+    if "benefitRate" not in out:
+        grab("benefitRate", r"(?:비용|공사비|철거비)[^\n%]{0,15}?(\d{1,3})\s*%", lambda m: int(m.group(1)))
+    if "applyStart" not in out:
+        m = PERIOD.search(raw_text)
+        if m:
+            line = next((ln for ln in raw_text.splitlines() if m.group(0) in ln), m.group(0)).strip()
+            y1, m1, d1, y2, m2, d2 = m.group("y1", "m1", "d1", "y2", "m2", "d2")
+            out["applyStart"] = {"value": f"{int(y1):04d}-{int(m1):02d}-{int(d1):02d}", "evidence": line}
+            out["applyEnd"] = {"value": f"{int(y2 or y1):04d}-{int(m2):02d}-{int(d2):02d}", "evidence": line}
+    if "summary" not in out:
+        line = next((ln.strip() for ln in raw_text.splitlines()
+                     if "지원" in ln and any(k in ln for k in ("빈집", "철거", "수리", "개량", "슬레이트", "리모델링", "주택"))
+                     and 8 <= len(ln.strip()) <= 200 and not ln.strip().startswith(("사업명", "기관", "관할"))), None)
+        if line:
+            out["summary"] = {"value": line, "evidence": line}
     grab("statusOverride", r"(예산 소진|사업 취소)")
     return out
 

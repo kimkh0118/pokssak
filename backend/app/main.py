@@ -334,13 +334,22 @@ def admin_candidates(request: Request, status: str = "pending"):
     require_admin(request)
     with dbm.connect() as c:
         rows = c.execute("SELECT k.id, k.program_id, k.status, k.important_changes, k.validation, k.model_version, k.parser_version, "
-                         "k.created_at, d.url, d.content_type, p.review_state, p.is_sample FROM program_candidates k "
+                         "k.created_at, k.data, d.url, d.content_type, p.review_state, p.is_sample FROM program_candidates k "
                          "JOIN program_documents d ON d.id = k.document_id JOIN programs p ON p.id = k.program_id "
                          "WHERE k.status = ? ORDER BY k.created_at DESC", (status,)).fetchall()
         docs = c.execute("SELECT id, url, content_type, extract_status, extract_error, fetched_at, is_sample FROM program_documents "
                          "WHERE extract_status != 'ok' ORDER BY fetched_at DESC").fetchall()
-    return {"candidates": [dict(r) | {"important_changes": dbm.loads(r["important_changes"]), "validation": dbm.loads(r["validation"])}
-                           for r in rows],
+    def row(r):
+        data = dbm.loads(r["data"])
+        val = lambda k: (data.get(k) or {}).get("value")
+        # 관리자 표: 사업명·내용·금액·기한 중심(원문 주소는 링크로만)
+        summary = {"title": val("title"), "agency": val("agency"), "regionSggs": val("regionSggs"), "summary": val("summary"),
+                   "benefitAmount": val("benefitAmount"), "benefitCap": val("benefitCap"), "benefitRate": val("benefitRate"),
+                   "applyStart": val("applyStart"), "applyEnd": val("applyEnd"), "status": programs.program_status(data)}
+        out = dict(r) | {"important_changes": dbm.loads(r["important_changes"]), "validation": dbm.loads(r["validation"]), "fields": summary}
+        out.pop("data")
+        return out
+    return {"candidates": [row(r) for r in rows],
             "extractFailures": [dict(d) for d in docs]}
 
 

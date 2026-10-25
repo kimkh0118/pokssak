@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Button, Card, Notice, Pill } from "./ui";
 
-type Cand = { id: string; url: string; content_type: string; important_changes: string[]; validation: { errors: string[] };
+type Fields = { title: string | null; agency: string | null; regionSggs: string[] | null; summary: string | null; benefitAmount: number | null;
+  benefitCap: number | null; benefitRate: number | null; applyStart: string | null; applyEnd: string | null; status: string };
+type Cand = { id: string; url: string; content_type: string; important_changes: string[]; validation: { errors: string[] }; fields: Fields;
   model_version: string; parser_version: string; created_at: string; review_state: string; is_sample: number };
 type Detail = { candidate: Cand & { raw_text: string; data: Record<string, { value: unknown; evidence: string | null }> };
   current: { data: Record<string, { value: unknown }>; versionNo: number } | null; fields: Record<string, string>;
@@ -16,6 +18,7 @@ type Jobs = { coverage: Coverage; runs: { id: string; name: string; trigger: str
   sources: { id: string; agency: string; list_url: string; auto_fetch_allowed: number; terms_note: string }[];
   schedule: string; nextRun: string; schedulerEnabled: boolean; locks: { name: string; expires_at: string }[] };
 
+const won = (n: number) => (n >= 10_000 ? `${(n / 10_000).toLocaleString("ko-KR")}만 원` : `${n.toLocaleString("ko-KR")}원`);
 const show = (v: unknown) => (v == null ? "—" : Array.isArray(v) ? v.join(", ") : typeof v === "boolean" ? (v ? "예" : "아니오") : String(v));
 
 type Prog = { id: string; url: string; status: string; removedAt: string | null; removedReason: string | null; publishedAt: string;
@@ -115,7 +118,7 @@ export function Admin() {
       <span className="min-w-0">
         <span className={`mr-2 rounded px-1.5 py-0.5 text-[11px] font-bold ${STATUS_TONE[p.status] ?? "bg-bad-soft text-bad"}`}>{p.status}</span>
         <a href={p.url} target="_blank" rel="noreferrer" className="font-bold underline">{show(v(p, "title"))}</a>
-        <span className="block text-[12px] text-subtle">{show(v(p, "agency"))} · 대상 {show(v(p, "regionSggs"))} · 신청 {show(v(p, "applyStart"))} ~ {show(v(p, "applyEnd"))}{p.removedReason ? ` · 삭제 이유: ${p.removedReason}` : ""}</span>
+        <span className="block text-[12px] text-subtle">{show(v(p, "agency"))} · 대상 {show(v(p, "regionSggs"))} · 지원 {typeof v(p, "benefitCap") === "number" ? `최대 ${won(v(p, "benefitCap") as number)}` : "금액 미확인"} · 신청 {show(v(p, "applyStart"))} ~ {show(v(p, "applyEnd"))}{p.removedReason ? ` · 삭제 이유: ${p.removedReason}` : ""}</span>
       </span>
       {action}
     </li>
@@ -142,21 +145,44 @@ export function Admin() {
       <section>
         <h2 className="text-[20px] font-extrabold">검토 대기 {cands.length}건</h2>
         <p className="text-[13px] text-subtle">금액·기간·대상·공공활용·사전승인·직접 수행이 새로 생기거나 바뀐 공고는 검토 후 발행돼요. 검토 전에는 기존 발행본이 유지되고 사업은 &lsquo;변경 확인 중&rsquo;이에요.</p>
-        <ul className="mt-3 space-y-2">
-          {cands.map((c) => (
-            <li key={c.id}>
-              <Card>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-bold">{c.url}{c.is_sample ? " (예시)" : ""}</span>
-                  <span className="flex gap-1.5">{c.review_state === "changing" && <Pill tone="orange">변경 확인 중</Pill>}<Pill>{c.content_type}</Pill></span>
-                </div>
-                <p className="mt-1 text-[13px] text-muted">중요 항목: {c.important_changes.join(", ") || "없음"} · 모델 {c.model_version} · 파서 {c.parser_version}</p>
-                {c.validation.errors.length > 0 && <p className="text-[13px] text-warn">근거 검증: {c.validation.errors.join(" / ")}</p>}
-                <Button variant="secondary" className="mt-2" onClick={async () => setOpen(await api<Detail>(`/api/admin/candidates/${c.id}`))}>원문과 비교</Button>
-              </Card>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-3 overflow-x-auto rounded-2xl bg-surface shadow-sm ring-1 ring-line">
+          <table className="w-full min-w-[860px] text-left text-[13px]">
+            <thead className="bg-fill text-[12px] text-subtle">
+              <tr>
+                <th className="px-3 py-2">사업명</th><th className="px-3 py-2">기관 · 대상</th><th className="px-3 py-2">내용</th>
+                <th className="px-3 py-2">지원금액</th><th className="px-3 py-2">신청 기한</th><th className="px-3 py-2">처리</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cands.map((c) => {
+                const f = c.fields;
+                const money = [f.benefitCap && `최대 ${won(f.benefitCap)}`, f.benefitAmount && won(f.benefitAmount), f.benefitRate && `${f.benefitRate}%`].filter(Boolean).join(" · ");
+                return (
+                  <tr key={c.id} className="border-t border-line align-top">
+                    <td className="px-3 py-2.5">
+                      <a href={c.url} target="_blank" rel="noreferrer" className="font-bold underline">{f.title || "(사업명 없음)"}</a>
+                      {c.review_state === "changing" && <span className="ml-1"><Pill tone="orange">변경 확인 중</Pill></span>}
+                      {c.validation.errors.length > 0 && <span className="block text-[11px] text-warn">근거 못 찾은 항목 {c.validation.errors.length}개</span>}
+                    </td>
+                    <td className="px-3 py-2.5">{f.agency || "—"}<span className="block text-subtle">{f.regionSggs?.join(", ") || "대상 미확인"}</span></td>
+                    <td className="max-w-[280px] px-3 py-2.5 text-muted">{f.summary ? f.summary.slice(0, 90) : "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 font-bold">{money || <span className="font-normal text-subtle">미확인</span>}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">{f.applyStart || f.applyEnd ? `${f.applyStart ?? "?"} ~ ${f.applyEnd ?? "?"}` : <span className="text-subtle">미확인</span>}
+                      <span className="block text-[11px] text-subtle">{f.status}</span></td>
+                    <td className="whitespace-nowrap px-3 py-2.5">
+                      <div className="flex gap-1">
+                        <Button className="!min-h-8 !px-2.5 !text-[12px]" onClick={() => void review(c.id, "approve")}>발행</Button>
+                        <Button variant="secondary" className="!min-h-8 !px-2.5 !text-[12px]" onClick={() => void review(c.id, "reject")}>반려</Button>
+                        <Button variant="ghost" className="!min-h-8 !px-1 !text-[12px]" onClick={async () => setOpen(await api<Detail>(`/api/admin/candidates/${c.id}`))}>원문</Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {cands.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-subtle">검토할 공고가 없어요.</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {open && (

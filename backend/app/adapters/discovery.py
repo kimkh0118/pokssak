@@ -27,7 +27,7 @@ DISTRICTS = (
 SOURCES = [("부산광역시", "https://www.busan.go.kr/")] + [(f"부산광역시 {n}", f"https://www.{d}.go.kr/") for n, d in DISTRICTS]
 # 빈집 처리와 직접 관련된 표현만(도시재생·주거환경·해체·'철거' 단독은 오탐이 많아 제외)
 # 주간 서버 수집이라 넓게 잡는다(사용자 검색 속도와 무관). 대신 후보는 '지원·모집 표현' + 제목/본문 반복 조건으로 거른다.
-KEYWORDS = ("빈집", "빈 집", "공가", "폐가", "햇살둥지", "노후주택", "노후 주택", "노후불량주택", "슬레이트", "석면",
+KEYWORDS = ("빈집", "빈 집", "공가", "폐가", "햇살둥지", "노후주택", "노후 주택", "노후불량주택", "슬레이트", "석면 슬레이트",
             "주택 철거", "철거 지원", "철거비", "집수리", "주택개량", "지붕개량", "리모델링", "주거환경개선", "주택정비")
 # 검색칸·게시판 검색어
 SEARCH_TERMS = ("빈집", "폐가", "공가", "햇살둥지", "슬레이트", "노후주택", "집수리", "주택개량", "철거 지원", "리모델링")
@@ -35,7 +35,7 @@ SEARCH_TERMS = ("빈집", "폐가", "공가", "햇살둥지", "슬레이트", "�
 SUPPORT_WORDS = ("지원", "보조", "모집", "신청", "접수")
 NAV = ("고시", "공고", "새소식", "알림", "공지", "건축", "주택", "환경", "도시재생", "업무계획", "예산", "보도자료", "검색", "사이트맵", "전체메뉴", "대표", "누리집", "바로가기")
 EXCLUDE = ("공시송달", "입찰", "계약", "견적", "채용", "철거명령", "행정대집행", "작업장 현황", "축제", "박람회",
-           "조례", "입법예고", "결정고시", "인가", "열람공고", "폐가전", "가전제품", "결과 공고", "선정결과")
+           "조례", "입법예고", "결정고시", "인가", "열람공고", "폐가전", "가전제품", "결과 공고", "선정결과", "건강검진", "조사 결과", "석면관리", "석면관련")
 UA = "BusanVacantHouseBot/2.0"
 MAX_BYTES = 20 * 1024 * 1024
 
@@ -44,6 +44,14 @@ def relevant(text: str) -> bool:
     # 폐가전(used appliances) contains 폐가 but is unrelated to vacant houses.
     text = text.replace('폐가전', '').replace('가전제품', '')
     return any(k in text for k in KEYWORDS)
+
+
+LISTING = re.compile(r"/list|[?&](?:keyword|query|srchText|searchWrd|searchKeyword|searchText|kwd|q)=|search", re.I)
+
+
+def is_listing(url: str, title: str) -> bool:
+    """검색 결과·게시판 목록 페이지(공고 하나가 아님). 링크는 따라가되 후보로는 만들지 않는다."""
+    return title.startswith("검색 ") or bool(LISTING.search(urlsplit(url).path + "?" + urlsplit(url).query))
 
 
 def is_program(title: str, text: str) -> bool:
@@ -228,7 +236,7 @@ def crawl_source(agency, root, extract_text, robots, ingest, *, client=None, sle
                         except Exception as e:
                             report['attachmentFailures'] += 1
                             error(attachment, type(e).__name__)
-                candidate = not historical and is_program(title, '\n'.join(parts[3:])) and (detail or relevant(title))
+                candidate = not historical and not is_listing(final, title) and is_program(title, '\n'.join(parts[3:])) and (detail or relevant(title))
                 if candidate:
                     report['relevant'] += 1
                     key = 'official:' + hashlib.sha256(canonical(final).encode()).hexdigest()[:24]

@@ -143,3 +143,19 @@ def test_district_program_only_matches_that_district():
     prog = {"status": "접수중", "reviewState": "published", "data": {"regionSggs": {"value": ["남구"]}}}
     assert programs.match(prog, {"sggName": "해운대구"})["result"] == "mismatch"   # 다른 구 소유자에게 알림 안 감
     assert programs.match(prog, {"sggName": "남구"})["result"] != "mismatch"
+
+
+def test_search_and_list_pages_are_not_candidates():
+    assert discovery.is_listing("https://www.bsseogu.go.kr/board/list.bsseogu?boardId=B&keyword=%EC%8A%AC", "공지사항")
+    assert discovery.is_listing("https://www.busan.go.kr/search/front/Search.jsp?query=빈집", "검색 빈집")
+    assert not discovery.is_listing("https://www.haeundae.go.kr/board/view.do?boardId=B&dataSid=1", "빈집 정비 지원 안내")
+
+
+def test_free_text_amount_period_summary():
+    t = ("사업명: 2026년 빈집 정비 지원사업\n기관: 부산광역시 남구 건축과\n관할: 부산광역시 남구\n"
+         "□ 신청기간 : 2026. 3. 2.(월) ~ 2026. 4. 30.(목) 18:00\n□ 지원내용: 빈집 철거비 지원, 동당 최대 1,400만 원 이내\n")
+    d, errors = programs.validate_evidence(programs.structure_sample(t), t)
+    assert not errors
+    assert d["benefitCap"]["value"] == 14_000_000
+    assert (d["applyStart"]["value"], d["applyEnd"]["value"]) == ("2026-03-02", "2026-04-30")
+    assert "철거비" in d["summary"]["value"]

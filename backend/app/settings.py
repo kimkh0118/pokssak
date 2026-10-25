@@ -38,9 +38,12 @@ class Settings:
     # 지원사업 자동 수집: 부산시 고시공고 게시판 크롤링, 정부24 공공서비스 API(공공데이터포털 키·활용신청 필요)
     busan_gosi_crawl: bool = (_env("BUSAN_GOSI_CRAWL") or "1") == "1"
     district_crawl: bool = (_env("DISTRICT_CRAWL") or "1") == "1"
-    discovery_pages: int = max(1, int(_env("DISCOVERY_PAGES") or 60))
-    discovery_backfill_pages: int = max(1, int(_env("DISCOVERY_BACKFILL_PAGES") or 300))
-    discovery_frontier_limit: int = max(100, int(_env("DISCOVERY_FRONTIER_LIMIT") or 5000))
+    discovery_pages: int = max(1, int(_env("DISCOVERY_PAGES") or 300))
+    discovery_backfill_pages: int = max(1, int(_env("DISCOVERY_BACKFILL_PAGES") or 1500))
+    # 출처 1곳당 시간 한도(초). 주간 기본 15분, 심층 45분 — 서버에서 따로 돌아 사용자 검색과 무관
+    discovery_seconds: int = max(30, int(_env("DISCOVERY_SECONDS") or 900))
+    discovery_backfill_seconds: int = max(60, int(_env("DISCOVERY_BACKFILL_SECONDS") or 2700))
+    discovery_frontier_limit: int = max(100, int(_env("DISCOVERY_FRONTIER_LIMIT") or 20000))
     discovery_delay: float = max(1.0, float(_env("DISCOVERY_DELAY") or 1))
     busan_max_pages: int = max(1, int(_env("BUSAN_MAX_PAGES") or 100))
     busan_max_items: int = max(1, int(_env("BUSAN_MAX_ITEMS") or 500))

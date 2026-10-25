@@ -124,3 +124,22 @@ def test_pdf_ocr_only_for_scanned():
 def test_regeneration_pages_are_not_programs():
     assert not discovery.is_program("주거환경 정비사업", "집수리 지원 등을 통한 노후불량 거주환경 개선, 주민 신청")
     assert not discovery.is_program("주례동 도시재생활성화계획 고시", "빈집 및 빈점포를 소공원으로 조성, 사업지원")
+
+
+def test_broad_keywords_still_filter_noise():
+    assert discovery.is_program("2026년 노후주택 집수리 지원사업 모집", "집수리 지원 신청")
+    assert discovery.is_program("주거취약계층 지원 안내", "빈집 철거비 지원 신청, 빈집 소유자 대상")  # 본문 2회
+    assert not discovery.is_program("망미동 주민공모사업 모집", "간단 집수리 지원 등 마을 사업 신청")  # 본문 1회 언급
+    assert not discovery.is_program("슬레이트 처리 지원사업 선정결과 공고", "슬레이트 지원 선정")
+
+
+def test_region_from_agency():
+    assert programs.region_from_agency("사업명: x\n기관: 부산광역시 남구 건축과\n관할: 부산광역시 남구\n")["value"] == ["남구"]
+    assert programs.region_from_agency("관할: 부산광역시\n")["value"] == ["부산광역시 전체"]
+    assert programs.region_from_agency("관할: 부산광역시 기장군\n")["value"] == ["기장군"]
+
+
+def test_district_program_only_matches_that_district():
+    prog = {"status": "접수중", "reviewState": "published", "data": {"regionSggs": {"value": ["남구"]}}}
+    assert programs.match(prog, {"sggName": "해운대구"})["result"] == "mismatch"   # 다른 구 소유자에게 알림 안 감
+    assert programs.match(prog, {"sggName": "남구"})["result"] != "mismatch"

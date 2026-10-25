@@ -24,7 +24,7 @@ from .settings import settings
 
 log = logging.getLogger("jobs")
 DAYS = {"MON": 0, "TUE": 1, "WED": 2, "THU": 3, "FRI": 4, "SAT": 5, "SUN": 6}
-LOCK_MINUTES = 360
+LOCK_MINUTES = 900  # 17곳 × 최대 45분 심층 탐색까지
 RETRY_DELAYS = (5, 30)
 HOLDER = f"{socket.gethostname()}:{uuid.uuid4().hex[:6]}"
 

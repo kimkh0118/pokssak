@@ -153,6 +153,15 @@ def validate_evidence(data: dict, raw_text: str) -> tuple[dict, list[str]]:
     return out, errors
 
 
+def region_from_agency(raw_text: str) -> dict | None:
+    """대상 지역이 없으면 공고 기관의 관할로 정한다: '관할: 부산광역시 남구' → 남구, '부산광역시'만 → 부산 전체.
+    (지역이 비면 모든 부산 소유자에게 '추가 확인 필요' 알림이 가므로)"""
+    m = re.search(r"관할\s*[:：]\s*(?:부산광역시)?\s*(\S+?(?:구|군))?\s*$", raw_text, re.M)
+    if not m:
+        return None
+    return {"value": [m.group(1)] if m.group(1) else ["부산광역시 전체"], "evidence": m.group(0).strip()}
+
+
 def structure_sample(raw_text: str) -> dict:
     """예시 추출기(LLM 키가 없을 때). 정해진 표현만 읽고 나머지는 null. 근거 문장도 함께 돌려준다."""
     out = {}
@@ -167,6 +176,7 @@ def structure_sample(raw_text: str) -> dict:
     grab("agency", r"기관\s*[:：]\s*(.+)")
     grab("region", r"관할\s*[:：]\s*(.+)")
     grab("regionSggs", r"대상 지역\s*[:：]\s*(.+)", lambda m: [x.strip() for x in m.group(1).split(",")])
+
     grab("applyStart", r"신청기간\s*[:：]\s*(\d{4}-\d{2}-\d{2})")
     grab("applyEnd", r"신청기간\s*[:：]\s*\d{4}-\d{2}-\d{2}\s*~\s*(\d{4}-\d{2}-\d{2})")
     grab("applyEndTime", r"~\s*\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2})")
@@ -327,6 +337,10 @@ def make_candidate(program_id: str, document_id: str, text: str) -> dict:
     model = settings.llm_model if use_llm else SAMPLE_MODEL
     if raw is None:
         return {"candidate": None, "error": "LLM 구조화 실패(다음 실행에서 재시도)"}
+    if not (raw.get("regionSggs") or {}).get("value"):
+        region = region_from_agency(text)
+        if region:
+            raw["regionSggs"] = region
     data, errors = validate_evidence(raw, text)
     with dbm.connect() as c:
         prog = c.execute("SELECT current_version_id FROM programs WHERE id = ?", (program_id,)).fetchone()

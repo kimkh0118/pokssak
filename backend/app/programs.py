@@ -29,7 +29,7 @@ from .clock import KST, now, now_iso
 from .settings import settings
 
 log = logging.getLogger("programs")
-PARSER_VERSION = "extract-2026.10.3"
+PARSER_VERSION = "extract-2026.10.4"
 SAMPLE_MODEL = "sample-extractor-1"
 IMPORTANT = ("benefitAmount", "benefitCap", "benefitRate", "selfPayment", "applyStart", "applyEnd", "targetHousing",
              "vacancyMonthsMin", "ownership", "publicUseObligation", "preApprovalRequired", "directExecution",
@@ -42,6 +42,8 @@ FIELDS = {
     "applyEndTime": "신청 마감 시각(HH:MM)", "projectPeriod": "사업 수행 기간", "statusOverride": "예산소진·취소 등 공고상 상태",
     "targetHousing": "대상 주택 유형", "vacancyMonthsMin": "공실 기간 최소(개월)", "ownership": "소유 조건", "areaMax": "면적 상한(㎡)",
     "summary": "사업 내용 한 줄 요약(원문 문장)",
+    "eligibility": "지원 대상·신청 자격(원문)",
+    "applyAlways": "연중·상시·예산 소진 시까지 접수 여부",
     "benefitType": "지원 방식(cash 현금 보조 | direct 지자체 직접 수행 | tax 세제 혜택)", "benefitAmount": "지원 금액(원)",
     "benefitCap": "지원 상한(원)", "benefitRate": "지원 비율(%)", "selfPayment": "자기부담", "paymentTiming": "지급 시점(pre 사전 | post 사후)",
     "directExecution": "지자체 직접 수행 여부", "preApprovalRequired": "사전 신청·승인 필요 여부", "documents": "필요서류",
@@ -168,6 +170,11 @@ PERIOD = re.compile(r"(?:신청|접수|모집)[^\n]{0,15}?(?P<y1>20\d{2})\s*[.\-
                     r"(?:\s*\([^)]*\))?\s*[~∼～\-]\s*(?:(?P<y2>20\d{2})\s*[.\-/년]\s*)?(?P<m2>\d{1,2})\s*[.\-/월]\s*(?P<d2>\d{1,2})")
 
 
+# '기간'이 들어간 줄의 날짜 범위(사업 기간과 헷갈리지 않게 '사업'으로 시작하는 줄은 PERIOD 에서 이미 제외되지 않으므로 마지막 수단)
+PERIOD_ANY = re.compile(r"기간[^\n]{0,15}?(?P<y1>20\d{2})\s*[.\-/년]\s*(?P<m1>\d{1,2})\s*[.\-/월]\s*(?P<d1>\d{1,2})\.?\s*일?"
+                        r"(?:\s*\([^)]*\))?\s*[~∼～\-]\s*(?:(?P<y2>20\d{2})\s*[.\-/년]\s*)?(?P<m2>\d{1,2})\s*[.\-/월]\s*(?P<d2>\d{1,2})")
+
+
 def structure_sample(raw_text: str) -> dict:
     """예시 추출기(LLM 키가 없을 때). 정해진 표현만 읽고 나머지는 null. 근거 문장도 함께 돌려준다."""
     out = {}
@@ -214,13 +221,29 @@ def structure_sample(raw_text: str) -> dict:
             y1, m1, d1, y2, m2, d2 = m.group("y1", "m1", "d1", "y2", "m2", "d2")
             out["applyStart"] = {"value": f"{int(y1):04d}-{int(m1):02d}-{int(d1):02d}", "evidence": line}
             out["applyEnd"] = {"value": f"{int(y2 or y1):04d}-{int(m2):02d}-{int(d2):02d}", "evidence": line}
+    grab("applyAlways", r"(연중\s*(?:상시|수시)?\s*(?:접수|신청|모집)|상시\s*(?:접수|신청|모집)|수시\s*(?:접수|신청)|예산\s*소진\s*시\s*까지)", lambda m: True)
+    if "eligibility" not in out:
+        grab("eligibility", r"(?:지원|신청)\s*(?:대상|자격)\s*[:：]?\s*(.{4,160})")
+    if "contact" not in out:
+        grab("contact", r"(?:문의|담당|연락처)[^\n]{0,30}?(0\d{1,2}[-)\s]?\d{3,4}-\d{4})")
+    if "benefitCap" not in out:
+        grab("benefitCap", r"지원[^\n]{0,40}?([\d,]+)\s*만\s*원", lambda m: int(m.group(1).replace(",", "")) * 10_000)
+    if "applyStart" not in out:
+        m = PERIOD_ANY.search(raw_text)
+        if m:
+            line = next((ln for ln in raw_text.splitlines() if m.group(0) in ln), m.group(0)).strip()
+            y1, m1, d1, y2, m2, d2 = m.group("y1", "m1", "d1", "y2", "m2", "d2")
+            out["applyStart"] = {"value": f"{int(y1):04d}-{int(m1):02d}-{int(d1):02d}", "evidence": line}
+            out["applyEnd"] = {"value": f"{int(y2 or y1):04d}-{int(m2):02d}-{int(d2):02d}", "evidence": line}
     if "summary" not in out:
         line = next((ln.strip() for ln in raw_text.splitlines()
                      if "지원" in ln and any(k in ln for k in ("빈집", "철거", "수리", "개량", "슬레이트", "리모델링", "주택"))
                      and 8 <= len(ln.strip()) <= 200 and not ln.strip().startswith(("사업명", "기관", "관할"))), None)
         if line:
             out["summary"] = {"value": line, "evidence": line}
-    grab("statusOverride", r"(예산 소진|사업 취소)")
+    # '예산 소진 시까지'는 마감이 아니라 상시 접수. 이미 끝났다고 쓴 경우만 상태로
+    grab("statusOverride", r"(예산\s*소진으로\s*(?:조기\s*)?(?:마감|종료)|조기\s*마감되었|접수가?\s*마감되었|사업\s*취소)",
+         lambda m: "사업 취소" if "취소" in m.group(1) else "예산 소진")
     return out
 
 
@@ -442,8 +465,11 @@ def program_status(data: dict, at: datetime | None = None) -> str:
     if override == "사업 취소":
         return "취소"
     start, end = _v(data, "applyStart"), _v(data, "applyEnd")
+    years = [int(y) for y in re.findall(r"(20\d{2})\s*년(?:도)?", _v(data, "title") or "")]
+    if not end and years and max(years) < at.year:
+        return "마감"  # 기간이 없어도 제목이 지난 연도 공고면 마감으로(사용자 화면에서 자동 제외)
     if not start or not end:
-        return "미확인"
+        return "상시 접수" if _v(data, "applyAlways") else "미확인"
     hh, mm = (_v(data, "applyEndTime") or "23:59").split(":")
     end_at = datetime.fromisoformat(end).replace(hour=int(hh), minute=int(mm), tzinfo=KST)
     if at > end_at:

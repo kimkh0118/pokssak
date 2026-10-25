@@ -24,7 +24,26 @@ TITLES = {
     "opened": "지원사업 접수가 시작되었습니다",
     "changed": "지원사업 조건 확인이 필요합니다",
     "closed": "지원사업이 마감·취소되었습니다",
+    "admin_alert": "[관리자] 수집 확인 필요",
 }
+
+
+def admin_alert(kind: str, body: str) -> int:
+    """관리자 전원에게 앱 알림(같은 종류는 하루 한 번). 알림함 표시는 dispatch 후."""
+    day = now_iso()[:10]
+    made = 0
+    with dbm.connect() as c:
+        admins = c.execute("SELECT id FROM users WHERE is_admin = 1").fetchall()
+        for a in admins:
+            key = f"admin:{kind}:{day}:{a['id']}"
+            if c.execute("SELECT 1 FROM notifications WHERE dedupe_key = ?", (key,)).fetchone():
+                continue
+            nid = str(uuid.uuid4())
+            c.execute("INSERT INTO notifications (id, user_id, dedupe_key, asset_id, program_id, event, title, body, created_at) "
+                      "VALUES (?, ?, ?, NULL, NULL, 'admin_alert', ?, ?, ?)", (nid, a["id"], key, TITLES["admin_alert"], body, now_iso()))
+            c.execute("INSERT INTO outbox VALUES (?, ?, 'in_app', 'pending', 0, ?, NULL, NULL)", (str(uuid.uuid4()), nid, now_iso()))
+            made += 1
+    return made
 
 
 def providers() -> dict:
@@ -92,8 +111,9 @@ def dispatch() -> dict:
                          "WHERE o.status = 'pending' AND o.next_attempt_at <= ?", (now_iso(),)).fetchall()
         for o in rows:
             s = c.execute("SELECT * FROM notification_settings WHERE user_id = ?", (o["user_id"],)).fetchone()
-            watching = c.execute("SELECT 1 FROM watched_assets WHERE user_id = ? AND asset_id = ? AND deleted_at IS NULL",
-                                 (o["user_id"], o["asset_id"])).fetchone()
+            # 관리자 알림처럼 관심자산과 무관한 알림(asset_id 없음)은 자산 확인을 하지 않는다
+            watching = o["asset_id"] is None or c.execute("SELECT 1 FROM watched_assets WHERE user_id = ? AND asset_id = ? AND deleted_at IS NULL",
+                                                          (o["user_id"], o["asset_id"])).fetchone()
             if not watching or (s is not None and not s[o["channel"]]):
                 c.execute("UPDATE outbox SET status = 'skipped', last_error = ? WHERE id = ?",
                           ("자산 삭제 또는 수신 해제", o["id"]))

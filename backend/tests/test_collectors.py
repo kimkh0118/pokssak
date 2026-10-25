@@ -127,8 +127,8 @@ def test_regeneration_pages_are_not_programs():
 
 
 def test_broad_keywords_still_filter_noise():
-    assert discovery.is_program("2026년 노후주택 집수리 지원사업 모집", "집수리 지원 신청")
-    assert discovery.is_program("주거취약계층 지원 안내", "빈집 철거비 지원 신청, 빈집 소유자 대상")  # 본문 2회
+    assert not discovery.is_program("2026년 노후주택 집수리 지원사업 모집", "집수리 지원 신청, 최대 500만원")  # 철거 아님
+    assert discovery.is_program("주거취약계층 지원 안내", "빈집 철거비 지원 신청, 빈집 소유자 대상, 최대 1,000만원 지원, 신청방법: 방문 접수")  # 본문 2회
     assert not discovery.is_program("망미동 주민공모사업 모집", "간단 집수리 지원 등 마을 사업 신청")  # 본문 1회 언급
     assert not discovery.is_program("슬레이트 처리 지원사업 선정결과 공고", "슬레이트 지원 선정")
 
@@ -159,3 +159,56 @@ def test_free_text_amount_period_summary():
     assert d["benefitCap"]["value"] == 14_000_000
     assert (d["applyStart"]["value"], d["applyEnd"]["value"]) == ("2026-03-02", "2026-04-30")
     assert "철거비" in d["summary"]["value"]
+
+
+# ---- 부실한 후보 개선: 제목·중복·보도자료·필드
+def test_best_title_prefers_page_heading():
+    page = discovery.Page('<html><head><title>부산광역시</title></head><body><main><h3 class="view_tit">'
+                          '생활 SOC 조성 사업 및 빈집 플러스드림사업 2개 구 선정</h3><p>본문</p></main></body></html>')
+    assert discovery.best_title("... SOC) 조성 사업 및 빈집 플러스드림사업 2개 구 선정 ...", page) == "생활 SOC 조성 사업 및 빈집 플러스드림사업 2개 구 선정"
+
+
+def test_same_article_under_different_menus_has_one_key():
+    keys = {discovery.article_key(u) for u in ("https://www.busan.go.kr/globalhubcity/news/1736690",
+                                               "https://www.busan.go.kr/bsi/news/1736690", "https://www.busan.go.kr/nbtnewsBU/1736690")}
+    assert len(keys) == 1
+    a = discovery.article_key("https://www.haeundae.go.kr/board/view.do?boardId=B1&dataSid=9&menuCd=X&startPage=1")
+    b = discovery.article_key("https://www.haeundae.go.kr/board/view.do?boardId=B1&dataSid=9&menuCd=Y&startPage=3")
+    assert a == b
+
+
+def test_news_articles_need_more_program_signals():
+    news = "지방시대특위는 빈집 활용 재생 사업의 성공사례를 둘러보며 빈집 문제에 대한 정책적 지원 방안을 논의했다."
+    assert not discovery.is_program("지방시대특위, 빈집 활용 방안·지방소멸 해법 모색", news)
+    notice = ("빈집 철거 지원사업 신청 안내\n지원대상: 1년 이상 비어 있는 빈집 소유자\n지원금액: 동당 최대 1,400만 원\n"
+              "신청방법: 구청 건축과 방문 접수\n문의: 건축과 051-607-4321")
+    assert discovery.is_program("2026년 빈집 철거 지원사업 신청 안내", notice)
+
+
+def test_budget_until_exhausted_is_always_open_not_closed():
+    t = ("사업명: 슬레이트 철거지원사업\n관할: 부산광역시 서구\n신청기간: 연중(예산 소진 시까지)\n"
+         "지원대상: 슬레이트 지붕 주택 소유자\n지원금액: 최대 700만원\n문의: 환경위생과 051-240-4321\n")
+    d, _ = programs.validate_evidence(programs.structure_sample(t), t)
+    assert d["statusOverride"]["value"] is None
+    assert d["applyAlways"]["value"] is True and programs.program_status(d) == "상시 접수"
+    assert "051-240-4321" in d["contact"]["value"] and "슬레이트" in d["eligibility"]["value"]
+
+
+def test_vacant_house_bank_is_not_support():
+    assert not discovery.is_program("빈집뱅크란", "빈집 소유자와 수요자를 연결, 매물 등록 신청, 문의 051-600-4000")
+
+
+def test_only_individual_demolition_programs():
+    rural = ("농어촌 취약지역 생활여건 개조 지원", "노후주택정비 지원\n지원 대상: 최소 30가구 이상이며 슬레이트지붕 주택 비율이 40% 이상인 마을\n지원 금액 15억원")
+    assert not discovery.is_program(*rural)
+    remodel = ("2026년 햇살둥지 빈집 리모델링 지원 모집", "빈집 리모델링 공사비 최대 2,900만원 지원, 신청방법: 방문 접수")
+    assert not discovery.is_program(*remodel)  # 철거가 아님
+    old = ("[개금2동] 2023년 슬레이트 철거 및 지붕개량 지원사업 안내", "슬레이트 철거 지원 최대 700만원, 신청기간 확인")
+    assert not discovery.is_program(*old)  # 지난 연도
+    ok = ("2026년 빈집 철거 지원사업 모집", "빈집 철거비 최대 1,400만원 지원, 신청방법: 구청 방문")
+    assert discovery.is_program(*ok)
+
+
+def test_old_year_title_is_closed():
+    data = {"title": {"value": "2023년 슬레이트 철거 지원사업"}}
+    assert programs.program_status(data) == "마감"

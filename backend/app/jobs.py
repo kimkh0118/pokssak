@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 import httpx
 
 from . import analyses, db as dbm, notify, programs
-from .adapters import busan_gosi, gov24, discovery
+from .adapters import bokjiro, busan_gosi, discovery, gov24, kakao
 from .clock import KST, now, now_iso
 from .settings import settings
 
@@ -131,6 +131,15 @@ def collect_builtin(out: dict, gov_client=None, busan_client=None, sleep=time.sl
             out["skipped"].append(f"정부24: {e}")
         except Exception as e:  # noqa: BLE001
             out["failed"].append(f"정부24: {type(e).__name__}")
+    if settings.bokjiro_enabled:
+        try:
+            for item in bokjiro.fetch(sleep=sleep):
+                _ingest_text(out, *bokjiro.to_notice(item))
+        except bokjiro.BokjiroError as e:
+            out["skipped"].append(f"복지로: {e}")
+        except Exception as e:  # noqa: BLE001
+            out["failed"].append(f"복지로: {type(e).__name__}")
+    collect_search(out, sleep=sleep)
     if settings.busan_gosi_crawl:
         if not programs.robots_allows(busan_gosi.LIST, busan_client):
             out["skipped"].append("부산시 고시공고: robots.txt 에서 허용되지 않거나 확인 불가")
@@ -178,6 +187,48 @@ def start_scheduler():
 
 
 
+def collect_search(out: dict, client=None, sleep=time.sleep) -> dict:
+    """카카오 검색 단서: 모두 단서 목록에 저장, 공식 기관 주소는 해당 출처의 탐색 목록 맨 앞에 넣어 이번·다음 탐색에서 직접 읽는다."""
+    if not kakao.configured():
+        out["skipped"].append("카카오 검색: API 키 미설정(KAKAO_REST_API_KEY)")
+        return out
+    quota = None
+    try:
+        leads = kakao.search(client, sleep=sleep)
+    except kakao.KakaoQuotaError as e:
+        # 한도 초과: 찾은 만큼은 저장하고 관리자에게 알림(요금은 청구되지 않고 그날만 막힘)
+        leads, quota = e.partial, e
+        out["skipped"].append(f"카카오 검색: {e}")
+        notify.admin_alert("kakao_quota", f"카카오 검색 API 하루 한도를 넘었어요. {e.done_queries}/{e.total_queries}개 검색어까지 진행했고 "
+                                          f"찾은 {len(e.partial)}건은 저장했어요. 내일 이후 '지금 수집 실행'을 누르거나 다음 주 자동 수집 때 다시 검색해요.")
+        save_report("카카오 검색", kakao.URL, {"status": "quota_exceeded", "doneQueries": e.done_queries,
+                                             "totalQueries": e.total_queries, "found": len(e.partial)})
+        notify.dispatch()
+    except kakao.KakaoError as e:
+        out["skipped"].append(f"카카오 검색: {e}")
+        return out
+    except Exception as e:  # noqa: BLE001
+        out["failed"].append(f"카카오 검색: {type(e).__name__}")
+        return out
+    roots = {(httpx.URL(u).host or "").removeprefix("www."): u for _, u in discovery.SOURCES}
+    new = queued = 0
+    with dbm.connect() as c:
+        for l in leads:
+            cur = c.execute("INSERT OR IGNORE INTO program_leads (source, query, title, link, description, region, official, published_at, found_at) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (l["source"], l["query"], l["title"][:300], l["link"], (l["description"] or "")[:1000],
+                                                                 l["region"], int(l["official"]), l["publishedAt"], now_iso()))
+            new += cur.rowcount
+            root = roots.get((httpx.URL(l["link"]).host or "").removeprefix("www."))
+            if root:
+                c.execute("INSERT OR IGNORE INTO discovery_frontier(source_url, url, depth, title, priority) VALUES (?, ?, 1, ?, 200)",
+                          (root, discovery.canonical(l["link"]), l["title"][:300]))
+                queued += 1
+    out["search"] = {"found": len(leads), "newLeads": new, "officialQueued": queued, "quotaExceeded": bool(quota)}
+    if not quota:  # 정상 완료하면 관리자 화면의 한도 경고가 사라진다
+        save_report("카카오 검색", kakao.URL, {"status": "succeeded", "found": len(leads), "newLeads": new})
+    return out
+
+
 def save_report(agency: str, url: str, report: dict):
     with dbm.connect() as c:
         c.execute("INSERT INTO collection_reports(agency,source_url,report,created_at) VALUES (?,?,?,?)", (agency,url,dbm.dumps(report),now_iso()))
@@ -191,10 +242,13 @@ def coverage() -> dict:
             "pending": c.execute("SELECT count(*) FROM program_candidates k JOIN programs p ON p.id=k.program_id WHERE p.is_sample=0 AND k.status='pending'").fetchone()[0],
             "extractFailed": c.execute("SELECT count(*) FROM program_documents WHERE is_sample=0 AND extract_status!='ok'").fetchone()[0],
         }
+        quota = c.execute("SELECT report, created_at FROM collection_reports WHERE agency = '카카오 검색' ORDER BY id DESC LIMIT 1").fetchone()
         reports = c.execute("SELECT * FROM collection_reports WHERE id IN (SELECT max(id) FROM collection_reports GROUP BY source_url) ORDER BY agency").fetchall()
     return {"counts": counts, "reports": [{"agency": r["agency"], "url":r["source_url"], "at":r["created_at"], "detail":dbm.loads(r["report"])} for r in reports],
             "configuredSources": [{"agency":n,"url":u} for n,u in discovery.SOURCES],
-            "districtEnabled":settings.district_crawl}
+            "districtEnabled":settings.district_crawl,
+            "searchQuota": ({"at": quota["created_at"], **dbm.loads(quota["report"])}
+                            if quota and dbm.loads(quota["report"]).get("status") == "quota_exceeded" else None)}
 
 
 if __name__ == "__main__":

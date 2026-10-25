@@ -345,7 +345,8 @@ def admin_candidates(request: Request, status: str = "pending"):
         # 관리자 표: 사업명·내용·금액·기한 중심(원문 주소는 링크로만)
         summary = {"title": val("title"), "agency": val("agency"), "regionSggs": val("regionSggs"), "summary": val("summary"),
                    "benefitAmount": val("benefitAmount"), "benefitCap": val("benefitCap"), "benefitRate": val("benefitRate"),
-                   "applyStart": val("applyStart"), "applyEnd": val("applyEnd"), "status": programs.program_status(data)}
+                   "applyStart": val("applyStart"), "applyEnd": val("applyEnd"), "eligibility": val("eligibility"),
+                   "contact": val("contact"), "status": programs.program_status(data)}
         out = dict(r) | {"important_changes": dbm.loads(r["important_changes"]), "validation": dbm.loads(r["validation"]), "fields": summary}
         out.pop("data")
         return out
@@ -421,6 +422,31 @@ def admin_remove_program(pid: str, body: RemoveProgram, request: Request):
 def admin_restore_program(pid: str, request: Request):
     require_admin(request)
     programs.restore(pid)
+    return {"ok": True}
+
+
+@app.get("/api/admin/leads")
+def admin_leads(request: Request, status: str = "new"):
+    """외부 검색 단서(카카오 웹문서·블로그·카페 등). 공식 공고가 아니므로 확인 후 '직접 추가'로 등록한다."""
+    require_admin(request)
+    with dbm.connect() as c:
+        rows = c.execute("SELECT * FROM program_leads WHERE status = ? ORDER BY official DESC, COALESCE(published_at, found_at) DESC LIMIT 300",
+                         (status,)).fetchall()
+        counts = dict(c.execute("SELECT status, count(*) FROM program_leads GROUP BY status").fetchall())
+    return {"leads": [dict(r) for r in rows], "counts": counts}
+
+
+class LeadAction(BaseModel):
+    status: str
+
+
+@app.post("/api/admin/leads/{lid}")
+def admin_lead_action(lid: int, body: LeadAction, request: Request):
+    require_admin(request)
+    if body.status not in ("new", "done", "hidden"):
+        raise HTTPException(400, "status 는 new·done·hidden 중 하나")
+    with dbm.connect() as c:
+        c.execute("UPDATE program_leads SET status = ? WHERE id = ?", (body.status, lid))
     return {"ok": True}
 
 

@@ -47,12 +47,16 @@ class Settings:
     discovery_seconds: int = max(30, int(_env("DISCOVERY_SECONDS") or 900))
     discovery_backfill_seconds: int = max(60, int(_env("DISCOVERY_BACKFILL_SECONDS") or 2700))
     discovery_frontier_limit: int = max(100, int(_env("DISCOVERY_FRONTIER_LIMIT") or 20000))
-    discovery_delay: float = max(1.0, float(_env("DISCOVERY_DELAY") or 1))
+    discovery_delay: float = max(1.0, float(_env("DISCOVERY_DELAY") or 2.5))  # 너무 빠르면 기관 보안 장치가 접속을 막음
     busan_max_pages: int = max(1, int(_env("BUSAN_MAX_PAGES") or 100))
     busan_max_items: int = max(1, int(_env("BUSAN_MAX_ITEMS") or 500))
     program_lookback_years: int = max(1, int(_env("PROGRAM_LOOKBACK_YEARS") or 3))
     ocr_enabled: bool = (_env("OCR_ENABLED") or "1") == "1"
     ocr_max_pages: int = max(1, int(_env("OCR_MAX_PAGES") or 30))
+    # 카카오(다음) 검색 API(developers.kakao.com > 내 애플리케이션 > REST API 키). 없으면 건너뜀
+    kakao_rest_api_key: str | None = _env("KAKAO_REST_API_KEY")
+    kakao_pages: int = max(1, min(50, int(_env("KAKAO_PAGES") or 3)))  # 검색어·종류별 50건 × 페이지
+    bokjiro_enabled: bool = (_env("BOKJIRO_ENABLED") or "1") == "1"
     gov24_enabled: bool = (_env("GOV24_ENABLED") or "1") == "1"
     scheduler_enabled: bool = (_env("SCHEDULER_ENABLED") or "1") == "1"
     # 외부 알림 공급자(없으면 앱 내 알림만)

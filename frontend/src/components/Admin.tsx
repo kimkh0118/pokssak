@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { Button, Card, Notice, Pill } from "./ui";
 
 type Fields = { title: string | null; agency: string | null; regionSggs: string[] | null; summary: string | null; benefitAmount: number | null;
-  benefitCap: number | null; benefitRate: number | null; applyStart: string | null; applyEnd: string | null; status: string };
+  benefitCap: number | null; benefitRate: number | null; applyStart: string | null; applyEnd: string | null; eligibility: string | null; contact: string | null; status: string };
 type Cand = { id: string; url: string; content_type: string; important_changes: string[]; validation: { errors: string[] }; fields: Fields;
   model_version: string; parser_version: string; created_at: string; review_state: string; is_sample: number };
 type Detail = { candidate: Cand & { raw_text: string; data: Record<string, { value: unknown; evidence: string | null }> };
@@ -13,6 +13,7 @@ type Detail = { candidate: Cand & { raw_text: string; data: Record<string, { val
   log: { action: string; actor: string; at: string; note: string | null }[] };
 type Coverage = { counts: { collected: number; published: number; pending: number; extractFailed: number };
   configuredSources: { agency: string; url: string }[]; districtEnabled: boolean;
+  searchQuota: { at: string; doneQueries: number; totalQueries: number; found: number } | null;
   reports: { agency: string; url: string; at: string; detail: { visited?: number; pages?: number; discovered?: number; fetched?: number; remaining?: number; status?: string; limited?: boolean; javascriptLinks?: number; attachmentFailures?: number | { url: string; name: string; reason: string }[]; errors?: { url: string; reason: string }[] } }[] };
 type Jobs = { coverage: Coverage; runs: { id: string; name: string; trigger: string; status: string; started_at: string; finished_at: string | null; attempts: number; error: string | null; summary: string | null }[];
   sources: { id: string; agency: string; list_url: string; auto_fetch_allowed: number; terms_note: string }[];
@@ -21,11 +22,14 @@ type Jobs = { coverage: Coverage; runs: { id: string; name: string; trigger: str
 const won = (n: number) => (n >= 10_000 ? `${(n / 10_000).toLocaleString("ko-KR")}만 원` : `${n.toLocaleString("ko-KR")}원`);
 const show = (v: unknown) => (v == null ? "—" : Array.isArray(v) ? v.join(", ") : typeof v === "boolean" ? (v ? "예" : "아니오") : String(v));
 
+type Lead = { id: number; source: string; title: string; link: string; description: string | null; region: string | null; official: number; published_at: string | null };
+const SOURCE_LABEL: Record<string, string> = { kakao_web: "웹문서", kakao_blog: "블로그", kakao_cafe: "카페", manual: "조사" };
+
 type Prog = { id: string; url: string; status: string; removedAt: string | null; removedReason: string | null; publishedAt: string;
   data: Record<string, { value: unknown } | undefined> };
 const v = (p: Prog, k: string) => p.data[k]?.value;
 const ENDED = ["마감", "예산소진", "취소"];
-const STATUS_TONE: Record<string, string> = { 접수중: "bg-[#e8f8f0] text-good", 예정: "bg-brand-soft text-brand-strong", 미확인: "bg-fill text-muted" };
+const STATUS_TONE: Record<string, string> = { 접수중: "bg-[#e8f8f0] text-good", "상시 접수": "bg-[#e8f8f0] text-good", 예정: "bg-brand-soft text-brand-strong", 미확인: "bg-fill text-muted" };
 
 export function Admin() {
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +40,7 @@ export function Admin() {
   const [collecting, setCollecting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [progs, setProgs] = useState<Prog[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [form, setForm] = useState({ title: "", agency: "", region: "", start: "", end: "", benefit: "", url: "", body: "" });
 
   const load = useCallback(async () => {
@@ -44,6 +49,7 @@ export function Admin() {
       setCands(c.candidates);
       setFailures(c.extractFailures);
       setProgs((await api<{ programs: Prog[] }>("/api/admin/programs")).programs);
+      setLeads((await api<{ leads: Lead[] }>("/api/admin/leads")).leads);
       const fetchedJobs = await api<Jobs>("/api/admin/jobs");
       setJobs(fetchedJobs);
       return fetchedJobs;
@@ -95,6 +101,17 @@ export function Admin() {
     try { await api(`/api/admin/programs/${p.id}/restore`, { method: "POST" }); setMsg("복구했어요."); await load(); }
     catch (e) { setMsg(`복구 실패: ${(e as Error).message}`); }
   }
+  async function leadAction(l: Lead, status: "done" | "hidden") {
+    try { await api(`/api/admin/leads/${l.id}`, { method: "POST", body: { status } }); setLeads((xs) => xs.filter((x) => x.id !== l.id)); }
+    catch (e) { setMsg(`처리 실패: ${(e as Error).message}`); }
+  }
+  function leadToForm(l: Lead) {
+    // 단서 내용으로 직접 추가 폼을 채움(원문 주소는 공식 공고를 찾아 바꿔 넣는 게 좋음)
+    setForm({ title: l.title, agency: "", region: l.region ?? "", start: "", end: "", benefit: "", url: l.link, body: l.description ?? "" });
+    document.getElementById("manual-add")?.scrollIntoView({ behavior: "smooth" });
+    void leadAction(l, "done");
+  }
+
   async function addManual(publish: boolean) {
     const f = form;
     if (!f.title || !f.url.startsWith("http")) return setMsg("사업명과 공식 원문 주소(http…)는 꼭 필요해요.");
@@ -128,6 +145,12 @@ export function Admin() {
     <div className="mx-auto max-w-5xl space-y-8">
       <h1 className="text-[26px] font-extrabold">관리자 · 지원사업 공고</h1>
       {msg && <Notice>{msg}</Notice>}
+      {jobs?.coverage?.searchQuota && (
+        <Notice tone="warn">
+          카카오 검색 API 하루 한도를 넘었어요({new Date(jobs.coverage.searchQuota.at).toLocaleString("ko-KR")}). 검색어 {jobs.coverage.searchQuota.doneQueries}/{jobs.coverage.searchQuota.totalQueries}개까지 진행했고 {jobs.coverage.searchQuota.found}건은 저장했어요.
+          요금은 청구되지 않아요. 내일 이후 &lsquo;지금 수집 실행&rsquo;을 누르거나 다음 주 자동 수집 때 다시 검색해요.
+        </Notice>
+      )}
 
       <section className="space-y-3">
         <h2 className="text-[20px] font-extrabold">사용자에게 보이는 지원사업 {live.length}건</h2>
@@ -165,9 +188,11 @@ export function Admin() {
                       {c.validation.errors.length > 0 && <span className="block text-[11px] text-warn">근거 못 찾은 항목 {c.validation.errors.length}개</span>}
                     </td>
                     <td className="px-3 py-2.5">{f.agency || "—"}<span className="block text-subtle">{f.regionSggs?.join(", ") || "대상 미확인"}</span></td>
-                    <td className="max-w-[280px] px-3 py-2.5 text-muted">{f.summary ? f.summary.slice(0, 90) : "—"}</td>
+                    <td className="max-w-[300px] px-3 py-2.5 text-muted">{f.summary ? f.summary.slice(0, 90) : "—"}
+                      {f.eligibility && <span className="mt-1 block text-[12px]"><b className="text-ink">대상</b> {f.eligibility.slice(0, 70)}</span>}
+                      {f.contact && <span className="block text-[12px]"><b className="text-ink">문의</b> {f.contact}</span>}</td>
                     <td className="whitespace-nowrap px-3 py-2.5 font-bold">{money || <span className="font-normal text-subtle">미확인</span>}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5">{f.applyStart || f.applyEnd ? `${f.applyStart ?? "?"} ~ ${f.applyEnd ?? "?"}` : <span className="text-subtle">미확인</span>}
+                    <td className="whitespace-nowrap px-3 py-2.5">{f.applyStart || f.applyEnd ? `${f.applyStart ?? "?"} ~ ${f.applyEnd ?? "?"}` : <span className={f.status === "상시 접수" ? "font-bold text-good" : "text-subtle"}>{f.status === "상시 접수" ? "상시" : "미확인"}</span>}
                       <span className="block text-[11px] text-subtle">{f.status}</span></td>
                     <td className="whitespace-nowrap px-3 py-2.5">
                       <div className="flex gap-1">
@@ -270,6 +295,27 @@ export function Admin() {
       )}
 
       <section className="space-y-3">
+        <h2 className="text-[20px] font-extrabold">외부 검색 단서 {leads.length}건</h2>
+        <p className="text-[13px] text-subtle">카카오(다음) 웹문서·블로그·카페에서 찾은 부산 빈집 지원 관련 글이에요. 공식 공고가 아니라서 바로 발행하지 않아요. 내용을 보고 &lsquo;추가로 옮기기&rsquo;를 누르면 아래 직접 추가 폼이 채워져요. 공식 기관 주소는 다음 수집 때 자동으로 직접 읽어요.</p>
+        <Card>
+          {leads.length === 0 ? <p className="text-[14px] text-subtle">단서가 없어요. 카카오 검색 API 키(KAKAO_REST_API_KEY)를 넣고 수집을 실행하면 채워져요.</p> : (
+            <ul>{leads.slice(0, 100).map((l) => (
+              <li key={l.id} className="flex flex-wrap items-start justify-between gap-2 border-t border-line py-3 first:border-t-0">
+                <span className="min-w-0 flex-1">
+                  <span className="mr-1 rounded bg-fill px-1.5 py-0.5 text-[11px] font-bold">{l.official ? "공식" : SOURCE_LABEL[l.source] ?? l.source}</span>
+                  {l.region && <span className="mr-1 rounded bg-brand-soft px-1.5 py-0.5 text-[11px] font-bold text-brand-strong">{l.region}</span>}
+                  <a href={l.link} target="_blank" rel="noreferrer" className="font-bold underline">{l.title}</a>
+                  <span className="block text-[12px] text-subtle">{l.published_at ?? ""} {l.description?.slice(0, 140)}</span>
+                </span>
+                <span className="flex gap-1">
+                  <Button className="!min-h-8 !px-2.5 !text-[12px]" onClick={() => leadToForm(l)}>추가로 옮기기</Button>
+                  <Button variant="secondary" className="!min-h-8 !px-2.5 !text-[12px]" onClick={() => void leadAction(l, "hidden")}>숨기기</Button>
+                </span>
+              </li>))}</ul>)}
+        </Card>
+      </section>
+
+      <section id="manual-add" className="space-y-3">
         <h2 className="text-[20px] font-extrabold">지원사업 직접 추가</h2>
         <p className="text-[13px] text-subtle">자동 수집이 못 찾은 사업(robots로 막힌 구청, 보도자료로만 나온 사업 등)을 공식 원문 주소와 함께 넣어요. 원문에 있는 내용만 적어 주세요.</p>
         <Card className="space-y-2">

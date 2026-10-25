@@ -16,7 +16,7 @@ def test_resume_finds_hidden_body_and_hwp_failure(monkeypatch):
     pages = {
         '/': '<a href="/board">고시공고</a>',
         '/board': '<a href="/view?seq=2">2026 주거환경 개선사업</a><a href="/board?page=2">2</a>',
-        '/view': '<main>빈집 소유자에게 철거비 지원. 신청기간 확인 필요.<a href="/file.hwp">공고문.hwp</a></main>',
+        '/view': '<main>빈집 소유자에게 철거비 최대 1,000만원 지원. 신청기간 확인 필요.<a href="/file.hwp">공고문.hwp</a></main>',
         '/file.hwp': 'broken',
     }
     client = httpx.Client(transport=httpx.MockTransport(lambda r:httpx.Response(200,text=pages.get(r.url.path,''),headers={'content-type':'text/html'})))
@@ -119,7 +119,7 @@ def test_attachment_only_support_is_discovered(monkeypatch):
         if req.url.path == '/view':
             return httpx.Response(200,text='<main>자세한 사항은 첨부 참고<a href="/grant.pdf">신청안내.pdf</a></main>',headers={'content-type':'text/html'})
         return httpx.Response(200,content=b'%PDF fake',headers={'content-type':'application/pdf'})
-    result=discovery.crawl_source('테스트구','https://example.go.kr/',lambda kind,raw:('빈집 철거비 지원사업', 'ok', None),lambda u,c:True,programs.ingest,
+    result=discovery.crawl_source('테스트구','https://example.go.kr/',lambda kind,raw:('빈집 철거비 지원사업\n지원금액: 최대 1,400만원\n신청기간: 2026. 11. 1. ~ 2026. 12. 31.', 'ok', None),lambda u,c:True,programs.ingest,
                                   client=httpx.Client(transport=httpx.MockTransport(response)),sleep=lambda _:None)
     assert result['fetched'] == 1
 

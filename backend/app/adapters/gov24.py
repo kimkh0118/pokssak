@@ -27,6 +27,9 @@ def _matches(item: dict) -> bool:
     name = str(item.get("서비스명") or "")
     if any(x in name for x in EXCLUDE):
         return False
+    from .discovery import demolition_related
+    if not demolition_related(name, text.replace(" ", " ")):  # 철거 관련·개인 대상만
+        return False
     if any(k in text for k in KEYWORDS):
         return True
     return "철거" in name and any(w in text for w in HOUSE_WORDS)
@@ -51,10 +54,30 @@ def fetch(client: httpx.Client | None = None) -> list[dict]:
             found += [x for x in rows if _matches(x)]
             if page * PER_PAGE >= int(body.get("totalCount") or 0) or not rows:
                 break
+        found += national(client)
         return found
     finally:
         if own:
             client.close()
+
+
+def national(client: httpx.Client) -> list[dict]:
+    """중앙부처(국토부·농식품부·환경부 등)의 개인·가구 대상 사업도 부산 주민이 신청할 수 있으므로 포함.
+    (서비스명 조건 검색이 동작하지 않아 전체를 받아 거른다 — 주 1회라 부담 적음)"""
+    out = []
+    for page in range(1, 20):
+        r = client.get(URL, params={"page": page, "perPage": 1000, "serviceKey": settings.data_go_kr_key,
+                                    "cond[소관기관유형::EQ]": "중앙행정기관"})
+        r.raise_for_status()
+        body = r.json()
+        rows = body.get("data") or []
+        out += [x for x in rows if x.get("소관기관유형") == "중앙행정기관" and _matches(x)
+                and any(w in str(x.get("사용자구분") or "개인") for w in ("개인", "가구"))]
+        if page * 1000 >= int(body.get("totalCount") or 0) or not rows:
+            break
+    for x in out:
+        x["_national"] = True
+    return out
 
 
 def to_notice(item: dict) -> tuple[str, str, str, str | None]:
@@ -63,7 +86,8 @@ def to_notice(item: dict) -> tuple[str, str, str, str | None]:
     lines = [
         f"사업명: {item.get('서비스명') or ''}",
         f"기관: {agency}",
-        f"관할: {item.get('소관기관명') or ''}",
+        # 중앙부처 사업은 부산 전체에 해당(신청은 구·군 담당 부서)
+        f"관할: {'부산광역시' if item.get('_national') else item.get('소관기관명') or ''}",
         f"지원 유형: {item.get('지원유형') or ''}",
         f"사업 목적: {item.get('서비스목적요약') or ''}",
         f"지원 대상: {item.get('지원대상') or ''}",

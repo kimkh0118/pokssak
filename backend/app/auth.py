@@ -50,15 +50,41 @@ def signup(email: str, password: str) -> dict:
     return {"id": uid, "email": email}
 
 
+def _new_session(c, user_id: str) -> str:
+    token = secrets.token_urlsafe(32)
+    c.execute("INSERT INTO sessions VALUES (?, ?, ?, ?)",
+              (token_hash(token), user_id, now_iso(), (now() + timedelta(days=SESSION_DAYS)).isoformat()))
+    return token
+
+
+def _sync_admin(c, user_id: str, email: str):
+    """ADMIN_EMAILS 를 바꾸면 다음 로그인 때 바로 반영(추가·해제 모두)."""
+    c.execute("UPDATE users SET is_admin = ? WHERE id = ?", (int(email in settings.admin_emails), user_id))
+
+
+def google_login(email: str, subject: str) -> str:
+    """구글 계정(확인된 이메일)으로 로그인. 처음이면 가입. 같은 이메일의 기존 계정이 있으면 그 계정으로."""
+    email = email.strip().lower()
+    with dbm.connect() as c:
+        row = c.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        if row:
+            uid = row["id"]
+        else:
+            uid = str(uuid.uuid4())
+            # 비밀번호 로그인은 막고 구글 로그인만(해시 형식이 아니라 비밀번호가 맞을 수 없음)
+            c.execute("INSERT INTO users VALUES (?, ?, ?, ?, ?)", (uid, email, f"google:{subject}", 0, now_iso()))
+            c.execute("INSERT INTO notification_settings (user_id, updated_at) VALUES (?, ?)", (uid, now_iso()))
+        _sync_admin(c, uid, email)
+        return _new_session(c, uid)
+
+
 def login(email: str, password: str) -> str:
     with dbm.connect() as c:
         row = c.execute("SELECT id, password_hash FROM users WHERE email = ?", (email.strip().lower(),)).fetchone()
-        if not row or not _check_password(password, row["password_hash"]):
+        if not row or row["password_hash"].startswith("google:") or not _check_password(password, row["password_hash"]):
             raise AuthError("이메일 또는 비밀번호가 맞지 않습니다.")
-        token = secrets.token_urlsafe(32)
-        c.execute("INSERT INTO sessions VALUES (?, ?, ?, ?)",
-                  (token_hash(token), row["id"], now_iso(), (now() + timedelta(days=SESSION_DAYS)).isoformat()))
-    return token
+        _sync_admin(c, row["id"], email.strip().lower())
+        return _new_session(c, row["id"])
 
 
 def logout(token: str | None):

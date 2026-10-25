@@ -28,6 +28,9 @@ class Settings:
     frontend_origin: str = _env("FRONTEND_ORIGIN") or "http://localhost:3000"
     # 관리자: 이 이메일로 가입하면 관리자 권한
     admin_emails: list[str] = field(default_factory=lambda: [e.strip().lower() for e in (_env("ADMIN_EMAILS") or "").split(",") if e.strip()])
+    # 구글 로그인(OAuth). Google Cloud 콘솔에서 발급. 리디렉션 URI 는 {FRONTEND_ORIGIN}/api/auth/google/callback
+    google_client_id: str | None = _env("GOOGLE_CLIENT_ID")
+    google_client_secret: str | None = _env("GOOGLE_CLIENT_SECRET")
     # 지원사업 구조화(LLM). 키가 없으면 예시 추출기로 동작
     anthropic_api_key: str | None = _env("ANTHROPIC_API_KEY")
     llm_model: str = _env("LLM_MODEL") or "claude-sonnet-5-5"

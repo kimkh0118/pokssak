@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import ValidationError
 
-from . import analyses, auth, db as dbm, jobs, notify, programs, property as prop
+from . import analyses, auth, db as dbm, google_oauth, jobs, notify, programs, property as prop
 from .clock import now, now_iso
 from .schemas import (
     Answers, CreateAnalysis, Credentials, Evidence, LookupRequest, ManualNotice, NotificationSettings, ReviewAction, UpdateAnalysis,
@@ -117,6 +117,37 @@ def logout(request: Request, response: Response):
     auth.logout(request.cookies.get(auth.SESSION_COOKIE))
     response.delete_cookie(auth.SESSION_COOKIE)
     return {"ok": True}
+
+
+@app.get("/api/auth/google/start")
+def google_start(next: str | None = None):
+    if not google_oauth.configured():
+        return RedirectResponse(f"{settings.frontend_origin}/login?error=google_not_configured", status_code=302)
+    url, state = google_oauth.start(next)
+    resp = RedirectResponse(url, status_code=302)
+    resp.set_cookie(google_oauth.STATE_COOKIE, state, max_age=600, httponly=True, samesite="lax",
+                    secure=settings.frontend_origin.startswith("https"))
+    return resp
+
+
+@app.get("/api/auth/google/callback")
+def google_callback(request: Request, code: str | None = None, state: str | None = None, error: str | None = None):
+    fail = f"{settings.frontend_origin}/login?error="
+    if error or not code:
+        return RedirectResponse(fail + "google_cancelled", status_code=302)
+    try:
+        email, sub, next_path = google_oauth.finish(code, state or "", request.cookies.get(google_oauth.STATE_COOKIE))
+    except google_oauth.GoogleError:
+        return RedirectResponse(fail + "google_failed", status_code=302)
+    resp = RedirectResponse(f"{settings.frontend_origin}{next_path}", status_code=302)
+    _cookie(resp, auth.SESSION_COOKIE, auth.google_login(email, sub), auth.SESSION_DAYS)
+    resp.delete_cookie(google_oauth.STATE_COOKIE)
+    return resp
+
+
+@app.get("/api/auth/config")
+def auth_config():
+    return {"google": google_oauth.configured()}
 
 
 @app.get("/api/auth/me")

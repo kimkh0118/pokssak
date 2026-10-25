@@ -1,14 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { NAV, SITE } from "@/lib/site";
 import { LogoMark } from "./Logo";
 
 export function SiteHeader() {
   const path = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [user, setUser] = useState<{ email: string; isAdmin: boolean } | null | undefined>(undefined);
+  // 페이지가 바뀔 때마다 로그인 상태를 다시 확인(로그인·로그아웃 직후 반영)
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((d) => alive && setUser(d.user ?? null)).catch(() => alive && setUser(null));
+    return () => { alive = false; };
+  }, [path]);
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    setUser(null);
+    setOpen(false);
+    router.push("/");
+    router.refresh();
+  }
+  const loginHref = `/login?next=${encodeURIComponent(path)}`;
   const active = (m: string) => path === m || path.startsWith(`${m}/`) || (m === "/analyze" && path.startsWith("/analyses"));
   return (
     <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur">
@@ -29,7 +45,15 @@ export function SiteHeader() {
               {n.label}
             </Link>
           ))}
-
+          {user?.isAdmin && <Link href="/admin" className="rounded-lg px-3 py-2 text-[15px] font-bold text-muted hover:bg-fill hover:text-ink">관리자</Link>}
+          {user === undefined ? <span className="ml-2 h-9 w-20" aria-hidden /> : user ? (
+            <span className="ml-2 flex items-center gap-2">
+              <span className="max-w-40 truncate text-[13px] text-subtle" title={user.email}>{user.email}</span>
+              <button type="button" onClick={logout} className="rounded-lg bg-fill px-3 py-2 text-[14px] font-bold hover:bg-fill-strong">로그아웃</button>
+            </span>
+          ) : (
+            <Link href={loginHref} className="ml-2 rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white hover:bg-brand-strong">로그인</Link>
+          )}
         </nav>
         <button
           type="button"
@@ -59,7 +83,24 @@ export function SiteHeader() {
               <span aria-hidden className="text-subtle">›</span>
             </Link>
           ))}
-
+          {user?.isAdmin && <Link href="/admin" className="rounded-lg px-3 py-2 text-[15px] font-bold text-muted hover:bg-fill hover:text-ink">관리자</Link>}
+          {user === undefined ? <span className="ml-2 h-9 w-20" aria-hidden /> : user ? (
+            <span className="ml-2 flex items-center gap-2">
+              <span className="max-w-40 truncate text-[13px] text-subtle" title={user.email}>{user.email}</span>
+              <button type="button" onClick={logout} className="rounded-lg bg-fill px-3 py-2 text-[14px] font-bold hover:bg-fill-strong">로그아웃</button>
+            </span>
+          ) : (
+            <Link href={loginHref} className="ml-2 rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white hover:bg-brand-strong">로그인</Link>
+          )}
+          {user?.isAdmin && <Link href="/admin" onClick={() => setOpen(false)} className="flex h-12 items-center border-b border-line text-[16px] font-bold">관리자</Link>}
+          {user ? (
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <span className="truncate text-[14px] text-subtle">{user.email}</span>
+              <button type="button" onClick={logout} className="h-11 shrink-0 rounded-xl bg-fill px-4 text-[15px] font-bold">로그아웃</button>
+            </div>
+          ) : user === null && (
+            <Link href={loginHref} onClick={() => setOpen(false)} className="mt-3 flex h-12 items-center justify-center rounded-xl bg-brand text-[15px] font-bold text-white">로그인 · 회원가입</Link>
+          )}
         </nav>
       )}
     </header>

@@ -105,6 +105,17 @@ def asset_profile(lk: dict, answers: dict) -> dict:
             "landArea": (lk["land"]["data"] or {}).get("lndpclAr") if lk["land"]["ok"] else None}
 
 
+MATCH_ORDER = {"partial_match": 0, "needs_check": 1, "mismatch": 2, "closed": 3}
+
+
+def rank_programs(matches: list[dict]) -> list[dict]:
+    """다른 구·군 사업(관할 지역 불일치)은 결과에서 빼고, 맞는 사업부터(일부 일치 → 추가 확인 → 그 외) 보여준다."""
+    def other_region(m):
+        return any(i["label"] == "관할 지역" and i["status"] == "fail" for i in m.get("items", []))
+    kept = [m for m in matches if not other_region(m)]
+    return sorted(kept, key=lambda m: (MATCH_ORDER.get(m["result"], 9), -(m.get("benefitCap") or 0)))
+
+
 def compute(row) -> dict:
     lk = get_lookup(row["lookup_id"])
     answers = dbm.loads(row["answers"])
@@ -135,6 +146,7 @@ def compute(row) -> dict:
                         "paymentTiming": (d.get("paymentTiming") or {}).get("value"),
                         "saleCompatible": (d.get("saleCompatible") or {}).get("value"),
                         "contact": (d.get("contact") or {}).get("value"), **m})
+    matches = rank_programs(matches)
     out = {
         "id": row["id"], "mode": lk["mode"], "ruleVersion": row["rule_version"], "createdAt": row["created_at"], "updatedAt": row["updated_at"],
         "address": lk["address"], "pnu": lk["pnu"], "checks": lk["checks"],

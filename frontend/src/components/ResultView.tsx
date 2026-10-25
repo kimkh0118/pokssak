@@ -310,6 +310,7 @@ function Programs({ data }: { data: Analysis }) {
     <section aria-labelledby="prog">
       <h2 id="prog" className="text-[20px] font-extrabold">지원사업 후보</h2>
       <p className="mt-1 text-[13px] text-subtle">공식 공고를 주 1회 정리한 자료예요(실시간 아님). 후보는 지원 확정이 아니며, 확인된 금액만 &lsquo;확인된 지원 반영&rsquo;에 들어가요.</p>
+      <BinzibeLink />
       {data.programs.length === 0 && <NoPrograms sgg={data.address.sggNm} />}
       <div className="mt-3 space-y-3">
         {data.programs.map((p) => (
@@ -393,6 +394,24 @@ function NoPrograms({ sgg }: { sgg?: string | null }) {
         <a href="tel:051120" className="rounded-lg bg-fill px-4 py-2 text-[14px] font-bold">051-120 전화</a>
       </div>
       <p className="mt-3 text-[12px] text-subtle">공고를 찾으면 &lsquo;지원금&rsquo; 칸에 확인된 금액을 넣어 &lsquo;확인된 지원 반영&rsquo; 결과를 볼 수 있어요.</p>
+    </div>
+  );
+}
+
+// 국가 빈집 누리집(한국부동산원 운영)으로 연결만 한다(내용을 가져오지 않음)
+function BinzibeLink() {
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
+      <span className="min-w-0">
+        <span className="block text-[15px] font-extrabold">빈집 철거 지원은 &lsquo;빈집애&rsquo;에서 온라인 신청할 수 있어요</span>
+        <span className="block text-[13px] text-muted">국토교통부·농림축산식품부 빈집철거지원사업 통합 창구예요. 심사·지원은 관할 구·군청이 해요.</span>
+      </span>
+      <span className="flex shrink-0 flex-wrap gap-2">
+        <a href="https://www.binzibe.kr/main/" target="_blank" rel="noopener noreferrer"
+          className="rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white hover:bg-brand-strong">빈집애 바로가기</a>
+        <a href="https://www.binzibe.kr/main/html/maintenance5.html" target="_blank" rel="noopener noreferrer"
+          className="rounded-lg bg-fill px-4 py-2 text-[14px] font-bold hover:bg-fill-strong">구청 담당 부서 찾기</a>
+      </span>
     </div>
   );
 }

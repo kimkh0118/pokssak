@@ -127,3 +127,15 @@ def test_종료_사업은_사용자_목록에서_자동_제외_삭제_복구():
     assert removed["removedReason"] == "중복 공고"
     programs.restore(pid)
     assert pid in {p["id"] for p in users()}
+
+
+def test_결과에서_다른_구_사업은_숨기고_맞는_사업부터():
+    from app.analyses import rank_programs
+    region = lambda st: {"label": "관할 지역", "status": st}
+    ms = [
+        {"title": "남구 철거", "result": "mismatch", "benefitCap": 14_000_000, "items": [region("fail")]},
+        {"title": "전국 철거", "result": "needs_check", "benefitCap": None, "items": [region("unknown")]},
+        {"title": "해운대 철거", "result": "partial_match", "benefitCap": 29_000_000, "items": [region("pass")]},
+        {"title": "해운대 소유조건 불일치", "result": "mismatch", "benefitCap": None, "items": [region("pass"), {"label": "소유 조건", "status": "fail"}]},
+    ]
+    assert [m["title"] for m in rank_programs(ms)] == ["해운대 철거", "전국 철거", "해운대 소유조건 불일치"]

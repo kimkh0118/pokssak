@@ -54,10 +54,10 @@ export function ResultView({ id }: { id: string }) {
 
       <Verdict data={data} />
 
-      <ActionBar data={data} withSupport={withSupport} setWithSupport={setWithSupport} />
+      <SectionNav data={data} blocked={blocked} withSupport={withSupport} setWithSupport={setWithSupport} />
 
 
-      {!blocked && <section aria-labelledby="cmp">
+      {!blocked && <section aria-labelledby="cmp" className="panel">
         <div className="flex items-end justify-between gap-2">
           <h2 id="cmp" className="text-[20px] font-extrabold">두 판매 방식 비교</h2>
           <span className="text-[12px] text-subtle">{withSupport ? "확인된 지원 반영" : "지원금 미반영(기본)"}</span>
@@ -72,7 +72,7 @@ export function ResultView({ id }: { id: string }) {
       <AnswersEditor key={`a-${data.updatedAt}`} data={data} onSaved={setData} />
       <InputsPanel data={data} onSaved={setData} />
 
-      <section aria-labelledby="ref">
+      <section aria-labelledby="ref" className="panel">
         <h2 id="ref" className="text-[20px] font-extrabold">공공 실거래 참고가격</h2>
         <p className="mt-1 text-[13px] text-subtle">같은 법정동 최근 12개월 거래 중 면적 70~130%, 건축연도 10년 이내 사례(개발 설정이며 감정평가 기준 아님). 추천에는 상담 가격이 필요해요.</p>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -81,7 +81,7 @@ export function ResultView({ id }: { id: string }) {
         </div>
       </section>
 
-      <section aria-labelledby="detail">
+      <section aria-labelledby="detail" className="panel">
         <h2 id="detail" className="text-[20px] font-extrabold">방식별 상세</h2>
         <div className="mt-3 flex gap-1.5" role="tablist">
           {([["sell", "현 상태 판매"], ["demolish", "철거 후 판매"], ["hold", "보유·리모델링"]] as const).map(([k, t]) => (
@@ -139,17 +139,43 @@ function SaveBanner({ state, user, analysisId, onChange }: { state: string | nul
   );
 }
 
-function ActionBar({ data, withSupport, setWithSupport }: { data: Analysis; withSupport: boolean; setWithSupport: (v: boolean) => void }) {
+// 위에 붙어 따라오는 구역 이동 탭. 지금 보이는 구역을 표시한다.
+function SectionNav({ data, blocked, withSupport, setWithSupport }: { data: Analysis; blocked: boolean; withSupport: boolean; setWithSupport: (v: boolean) => void }) {
+  const items = [
+    ["status", "결과"], ...(blocked ? [] : [["cmp", "두 방법 비교"]]), ["answers", "질문 답"], ["inputs", "가격·견적"],
+    ["ref", "실거래가"], ["prog", "지원사업"], ["plan", "철거 플랜"],
+  ] as [string, string][];
+  const [active, setActive] = useState("status");
+  useEffect(() => {
+    // 화면 위쪽(탭 아래)을 지난 마지막 구역을 현재 위치로
+    const onScroll = () => {
+      let cur = items[0][0];
+      for (const [id] of items) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top < 170) cur = id;
+      }
+      setActive(cur);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [blocked]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <nav aria-label="결과 화면 동작" className="flex flex-wrap gap-2">
-      <a href="#answers" className="rounded-full bg-ink px-4 py-2 text-[14px] font-bold text-white">질문 답 수정</a>
-      <a href="#inputs" className="rounded-full bg-ink px-4 py-2 text-[14px] font-bold text-white">가격·견적 입력</a>
-      <button disabled={!data.result.calc?.withSupport} onClick={() => setWithSupport(!withSupport)}
-        className="rounded-full bg-fill px-4 py-2 text-[14px] font-bold text-ink disabled:text-subtle">
-        다른 경우 보기: {withSupport ? "지원금 미반영" : "확인된 지원 반영"}
-      </button>
-      <a href="#plan" className="rounded-full bg-fill px-4 py-2 text-[14px] font-bold text-ink">상담·플랜</a>
-      <Link href="/" className="rounded-full bg-fill px-4 py-2 text-[14px] font-bold text-ink">종료</Link>
+    <nav aria-label="결과 화면 구역" className="sticky top-[78px] z-20 -mx-4 bg-[#f1eeea]/95 px-4 py-2 backdrop-blur">
+      <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none]">
+        {items.map(([id, label]) => (
+          <a key={id} href={`#${id}`} aria-current={active === id ? "true" : undefined}
+            className={`shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-bold transition-colors ${active === id ? "bg-sign text-white" : "bg-surface text-muted ring-1 ring-line hover:text-ink"}`}>
+            {label}
+          </a>
+        ))}
+        {data.result.calc?.withSupport && (
+          <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-2 rounded-full bg-surface px-3 py-1.5 text-[13px] font-bold ring-1 ring-line">
+            <input type="checkbox" className="h-4 w-4 accent-[var(--brand)]" checked={withSupport} onChange={(e) => setWithSupport(e.target.checked)} />
+            확인된 지원금 반영
+          </label>
+        )}
+      </div>
     </nav>
   );
 }
@@ -307,7 +333,7 @@ function HoldDetail({ data }: { data: Analysis }) {
 
 function Programs({ data }: { data: Analysis }) {
   return (
-    <section aria-labelledby="prog">
+    <section aria-labelledby="prog" className="panel">
       <h2 id="prog" className="text-[20px] font-extrabold">지원사업 후보</h2>
       <p className="mt-1 text-[13px] text-subtle">공식 공고를 주 1회 정리한 자료예요(실시간 아님). 후보는 지원 확정이 아니며, 확인된 금액만 &lsquo;확인된 지원 반영&rsquo;에 들어가요.</p>
       <BinzibeLink />
@@ -342,7 +368,7 @@ function Programs({ data }: { data: Analysis }) {
 function Plan({ data }: { data: Analysis }) {
   const tone = { done: "bg-good text-white", todo: "bg-fill text-muted", blocked: "bg-bad text-white" };
   return (
-    <section id="plan" aria-labelledby="plan-h">
+    <section id="plan" aria-labelledby="plan-h" className="panel">
       <h2 className="text-[24px] font-extrabold leading-tight">어떤 업체가<br />필요하세요?</h2>
       <ul className="mt-3 grid gap-2 sm:grid-cols-3">
         {[

@@ -110,3 +110,17 @@ body {
 .road-sign {
   clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 50%, calc(100% - 22px) 100%, 0 100%);
 }
+
+/* 결과 화면: 벽돌 위에 바로 놓이던 구역을 흰 판으로 */
+.panel {
+  background: var(--surface);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  box-shadow: 0 1px 2px rgba(60, 40, 30, 0.06);
+  outline: 1px solid var(--line);
+}
+@media (min-width: 640px) {
+  .panel { padding: 1.5rem; }
+}
+/* 위에 붙는 탭(헤더 56px + 벽돌 띠 22px) 아래로 구역 제목이 보이게 */
+[id] { scroll-margin-top: 140px; }

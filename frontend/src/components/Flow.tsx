@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, type Address, type Answers, type Fetched, type Lookup } from "@/lib/api";
 import { QUESTIONS } from "@/lib/labels";
@@ -12,6 +12,9 @@ type Step = "address" | "target" | "intro" | "q1" | "q2" | "q3" | "q4";
 const STEP_LABEL: Record<Step, string> = { address: "주소", target: "정보 제공", intro: "질문", q1: "질문 1", q2: "질문 2", q3: "질문 3", q4: "질문 4" };
 const ORDER: Step[] = ["address", "target", "intro", "q1", "q2", "q3", "q4"];
 const mode = "live";
+// 진행 표시는 사용자가 이해하는 세 덩어리로(주소 → 정보 확인 → 질문)
+const GROUPS = [{ label: "주소", first: 0, last: 0 }, { label: "정보 확인", first: 1, last: 1 }, { label: "질문 4개", first: 2, last: 6 }];
+const LOOKUP_STEPS = ["주소·지번 확인", "건축물대장", "토지특성·공시지가", "토지이용계획", "주택 실거래(최근 2년)", "토지 실거래(최근 2년)"];
 
 export function Flow({ initialQuery }: { initialQuery?: string }) {
   const router = useRouter();
@@ -25,13 +28,21 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
   const [costsSeparable, setCostsSeparable] = useState(false);
   const [a, setA] = useState<Partial<Answers>>({ corporate: false, ownerMismatch: false });
 
-  async function search() {
+  // 첫 화면에서 주소를 넣고 넘어오면 바로 검색(예전에는 한 번 더 눌러야 했음)
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (autoRan.current || !initialQuery || initialQuery.trim().length < 2) return;
+    autoRan.current = true;
+    void search(initialQuery);
+  }, [initialQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function search(text: string = q) {
     setError(null);
     setFound(null);
-    if (q.trim().length < 2) return setError("주소를 두 글자 이상 입력해 주세요.");
+    if (text.trim().length < 2) return setError("주소를 두 글자 이상 입력해 주세요. 예: 해운대로 570, 우동 655-1");
     setBusy(true);
     try {
-      const res = await fetch(`/api/address?mode=${mode}&q=${encodeURIComponent(q.trim())}`);
+      const res = await fetch(`/api/address?mode=${mode}&q=${encodeURIComponent(text.trim())}`);
       const body = await res.json();
       if (typeof body.error === "string") setError(body.error);
       else setFound(body);
@@ -81,28 +92,30 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-6" aria-label="진행 단계">
-        <div className="flex justify-between text-[13px] font-bold">
-          <span className="text-brand-strong">{STEP_LABEL[step]}</span>
-          <span className="text-subtle">{idx + 1} / {ORDER.length}</span>
-        </div>
-        <div className="mt-2 h-1 rounded-full bg-fill" role="progressbar" aria-valuemin={1} aria-valuemax={ORDER.length} aria-valuenow={idx + 1}>
-          <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${((idx + 1) / ORDER.length) * 100}%` }} />
-        </div>
-      </div>
+      <ol className="mb-6 flex gap-1" aria-label={`진행 단계 ${idx + 1}/${ORDER.length}: ${STEP_LABEL[step]}`}>
+        {GROUPS.map((g) => {
+          const state = idx > g.last ? "done" : idx >= g.first ? "now" : "todo";
+          return (
+            <li key={g.label} className="flex-1">
+              <span className={`block h-1.5 rounded-full ${state === "todo" ? "bg-line" : state === "now" ? "bg-sign" : "bg-sign/40"}`} />
+              <span className={`mt-1.5 block text-[12px] font-bold ${state === "now" ? "text-sign" : "text-subtle"}`}>{g.label}</span>
+            </li>
+          );
+        })}
+      </ol>
       {error && <div className="mb-4"><Notice tone="bad">{error}</Notice></div>}
 
       {step === "address" && (
         <div className="space-y-5">
           <h1 className="text-[26px] font-extrabold leading-tight tracking-tight">빈집 주소를 알려주세요</h1>
-          <AddressSign value={q} onChange={setQ} onSubmit={search} busy={busy} autoFocus cta="주소 검색하기" />
+          <AddressSign value={q} onChange={setQ} onSubmit={() => void search()} busy={busy} autoFocus={!initialQuery} cta="주소 검색하기" />
           {found && !found.ok && <ProviderErrorBox error={found.error} title="주소 검색" />}
           {found?.ok && (
             <section aria-label="주소 후보">
               {found.meta.note && <Notice tone="warn">{found.meta.note}</Notice>}
               {found.data.length === 0 && <Notice>검색 결과가 없어요. 도로명과 건물번호를 함께 입력해 보세요.</Notice>}
-              {found.data.length > 0 && <p className="mb-2 text-[13px] text-subtle">{found.data.length}개의 검색 결과가 있어요</p>}
-              <ul className="space-y-2">
+              {found.data.length > 0 && !busy && <p className="mb-2 text-[13px] text-subtle">{found.data.length}개의 검색 결과가 있어요. 빈집 주소를 골라 주세요.</p>}
+              {!busy && <ul className="space-y-2">
                 {found.data.map((ad) => (
                   <li key={ad.id}>
                     <button type="button" disabled={busy} onClick={() => choose(ad)} className="flex w-full items-center justify-between gap-3 rounded-xl bg-surface px-4 py-3 text-left shadow-sm ring-1 ring-line transition hover:ring-2 hover:ring-brand disabled:opacity-60">
@@ -116,8 +129,8 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
                     </button>
                   </li>
                 ))}
-              </ul>
-              {busy && <p className="text-[14px] font-semibold text-brand-strong" aria-live="polite">공공자료 6종을 조회하고 있어요…</p>}
+              </ul>}
+              {busy && found?.ok && <LookupProgress />}
             </section>
           )}
         </div>
@@ -252,6 +265,29 @@ function YesNo({ label, value, onChange }: { label: string; value?: string; onCh
             className={`rounded-full px-4 py-2 text-[14px] font-bold ${value === v ? "bg-ink text-white" : "bg-fill text-muted"}`}>{t}</button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// 공공자료 6종 조회 중: 무엇을 확인하고 있는지 보여준다(보통 5~15초)
+function LookupProgress() {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setN((v) => Math.min(v + 1, LOOKUP_STEPS.length - 1)), 1600);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div role="status" aria-live="polite" className="mt-4 rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line">
+      <p className="text-[16px] font-extrabold">공공자료 6종을 확인하고 있어요</p>
+      <p className="mt-0.5 text-[13px] text-subtle">기관 서버 상태에 따라 5~15초 걸려요.</p>
+      <ul className="mt-3 space-y-1.5 text-[14px]">
+        {LOOKUP_STEPS.map((label, i) => (
+          <li key={label} className={`flex items-center gap-2 ${i > n ? "text-subtle" : "text-ink"}`}>
+            <span aria-hidden className={`grid h-5 w-5 place-items-center rounded-full text-[11px] font-bold ${i < n ? "bg-sign text-white" : i === n ? "border-2 border-sign border-t-transparent animate-spin motion-reduce:animate-none" : "bg-fill"}`}>{i < n ? "✓" : ""}</span>
+            {label}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

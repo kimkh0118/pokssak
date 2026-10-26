@@ -23,9 +23,11 @@ export function AddressPlate({ title, sub = "Enter the address" }: { title: stri
 
 /** 지번 주소에서 '동 번지'만 뽑아 표지판에 쓴다(예: 반송동 250-2809) */
 export function plateTitle(jibun?: string | null, road?: string | null) {
+  // 지번 주소 끝의 건물명(예: '용호동 80-23 동천한의원')은 빼고 '동(리) 번지'만
+  const m = (jibun ?? "").match(/(\S+(?:동|리|가)\d*)\s+(산\s?\d+(?:-\d+)?|\d+(?:-\d+)?)/);
+  if (m) return `${m[1]} ${m[2]}`;
   const parts = (jibun ?? "").trim().split(/\s+/);
-  if (parts.length >= 2) return parts.slice(-2).join(" ");
-  return road ?? "주소";
+  return parts.length >= 2 ? parts.slice(-2).join(" ") : road ?? "주소";
 }
 
 export function AddressSign({
@@ -60,6 +62,8 @@ export function AddressSign({
           onChange={(e) => onChange(e.target.value)}
           placeholder="도로명/주소 입력"
           autoComplete="street-address"
+          enterKeyHint="search"
+          onKeyDown={(e) => { if (e.key === "Enter" && e.nativeEvent.isComposing) e.preventDefault(); }}
           className="w-full bg-transparent text-[26px] font-bold leading-tight tracking-tight text-white caret-white outline-none placeholder:text-white/85 sm:text-[30px]"
         />
         <p className="text-[11px] font-medium text-white/75">Enter the address · 도로명 또는 동 이름 + 번지</p>

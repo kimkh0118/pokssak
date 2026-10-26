@@ -78,22 +78,3 @@ class Credentials(BaseModel):
     password: str = Field(min_length=8, max_length=200)
 
 
-class NotificationSettings(BaseModel):
-    in_app: bool = True
-    email: bool = False
-    sms: bool = False
-    push: bool = False
-
-
-class ManualNotice(BaseModel):
-    noticeKey: str = Field(min_length=3, max_length=200)
-    url: str = Field(min_length=8, max_length=500)
-    text: str = Field(min_length=20, max_length=200_000)
-    postedAt: str | None = None
-    publish: bool = False  # 관리자가 확인하고 직접 넣는 경우 검토 없이 바로 발행
-
-
-class ReviewAction(BaseModel):
-    action: Literal["approve", "reject"]
-    note: str | None = None
-    edited: dict | None = None

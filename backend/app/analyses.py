@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid
 
-from . import valuation, comps, db as dbm, eligibility, engine, explain, plan, programs
+from . import valuation, comps, db as dbm, eligibility, engine, explain, plan
 from .auth import token_hash
 from .clock import now_iso, today_kst
 from .property import get_lookup, is_main
@@ -95,27 +95,6 @@ def update(analysis_id: str, user, guest, inputs: dict | None, answers: dict | N
     return get(analysis_id, user, guest)
 
 
-def asset_profile(lk: dict, answers: dict) -> dict:
-    main = lk["mainBuildings"]
-    key = (answers.get("scope") or {}).get("buildingKey")
-    b = next((x for x in main if x.get("mgmBldrgstPk") == key), main[0] if main else {})
-    return {"sggName": lk["address"].get("sggNm"), "housingType": b.get("mainPurpsCdNm"),
-            "vacancyMonths": answers.get("vacancyMonths"), "ownership": answers.get("ownership"),
-            "ownershipLabel": eligibility.OWNERSHIP.get(answers.get("ownership")),
-            "landArea": (lk["land"]["data"] or {}).get("lndpclAr") if lk["land"]["ok"] else None}
-
-
-MATCH_ORDER = {"partial_match": 0, "needs_check": 1, "mismatch": 2, "closed": 3}
-
-
-def rank_programs(matches: list[dict]) -> list[dict]:
-    """다른 구·군 사업(관할 지역 불일치)은 결과에서 빼고, 맞는 사업부터(일부 일치 → 추가 확인 → 그 외) 보여준다."""
-    def other_region(m):
-        return any(i["label"] == "관할 지역" and i["status"] == "fail" for i in m.get("items", []))
-    kept = [m for m in matches if not other_region(m)]
-    return sorted(kept, key=lambda m: (MATCH_ORDER.get(m["result"], 9), -(m.get("benefitCap") or 0)))
-
-
 def compute(row) -> dict:
     lk = get_lookup(row["lookup_id"])
     answers = dbm.loads(row["answers"])
@@ -141,19 +120,6 @@ def compute(row) -> dict:
     elig = eligibility.evaluate(answers, lk["checks"], scope)
     result = engine.evaluate(inputs, {"eligibility": elig, "reference": reference,
                                       "floorArea": (building or {}).get("totArea"), "access": answers.get("access")})
-    profile = asset_profile(lk, answers)
-    matches = []
-    for p in programs.published(include_sample=lk["mode"] == "sample", active_only=True):
-        m = programs.match(p, profile)
-        d = p["data"]
-        matches.append({"programId": p["id"], "versionId": p["versionId"], "title": (d.get("title") or {}).get("value"),
-                        "agency": (d.get("agency") or {}).get("value"), "status": p["status"], "reviewState": p["reviewState"],
-                        "isSample": p["isSample"], "url": p["url"], "lastSuccessFetchAt": p["lastSuccessFetchAt"],
-                        "benefitType": (d.get("benefitType") or {}).get("value"), "benefitCap": (d.get("benefitCap") or {}).get("value"),
-                        "paymentTiming": (d.get("paymentTiming") or {}).get("value"),
-                        "saleCompatible": (d.get("saleCompatible") or {}).get("value"),
-                        "contact": (d.get("contact") or {}).get("value"), **m})
-    matches = rank_programs(matches)
     out = {
         "id": row["id"], "mode": lk["mode"], "ruleVersion": row["rule_version"], "createdAt": row["created_at"], "updatedAt": row["updated_at"],
         "address": lk["address"], "pnu": lk["pnu"], "checks": lk["checks"],
@@ -161,7 +127,7 @@ def compute(row) -> dict:
         "tradeStatus": {k: {kk: lk[k].get(kk) for kk in ("ok", "failedMonths", "meta", "error")} for k in ("houseTrades", "landTrades")},
         "answers": answers, "inputs": inputs, "eligibility": elig, "reference": reference, "result": result,
         "explanation": explain.ai_explain(result, answers.get("direction")),
-        "holding": engine.holding_guide(inputs), "remodel": engine.remodel_option(inputs), "programs": matches,
+        "holding": engine.holding_guide(inputs), "remodel": engine.remodel_option(inputs),
     }
     out["plan"] = plan.build(out)
     return out
@@ -171,11 +137,3 @@ def get(analysis_id: str, user: dict | None, guest: str | None) -> dict:
     return compute(_row(analysis_id, user, guest))
 
 
-def profile_for(analysis_id: str) -> tuple[dict, dict] | None:
-    """알림 매칭용(권한 검사 없이 내부에서만 사용)."""
-    with dbm.connect() as c:
-        row = c.execute("SELECT lookup_id, answers FROM analyses WHERE id = ?", (analysis_id,)).fetchone()
-    if not row:
-        return None
-    lk = get_lookup(row["lookup_id"])
-    return lk, asset_profile(lk, dbm.loads(row["answers"]))

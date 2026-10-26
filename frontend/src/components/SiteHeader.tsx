@@ -10,7 +10,7 @@ export function SiteHeader() {
   const path = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [user, setUser] = useState<{ email: string; isAdmin: boolean } | null | undefined>(undefined);
+  const [user, setUser] = useState<{ email: string } | null | undefined>(undefined);
   // 페이지가 바뀔 때마다 로그인 상태를 다시 확인(로그인·로그아웃 직후 반영)
   useEffect(() => {
     let alive = true;
@@ -45,7 +45,6 @@ export function SiteHeader() {
               {n.label}
             </Link>
           ))}
-          {user?.isAdmin && <Link href="/admin" className="rounded-lg px-3 py-2 text-[15px] font-bold text-muted hover:bg-fill hover:text-ink">관리자</Link>}
           {user === undefined ? <span className="ml-2 h-9 w-20" aria-hidden /> : user ? (
             <span className="ml-2 flex items-center gap-2">
               <span className="max-w-40 truncate text-[13px] text-subtle" title={user.email}>{user.email}</span>
@@ -83,7 +82,6 @@ export function SiteHeader() {
               <span aria-hidden className="text-subtle">›</span>
             </Link>
           ))}
-          {user?.isAdmin && <Link href="/admin" className="rounded-lg px-3 py-2 text-[15px] font-bold text-muted hover:bg-fill hover:text-ink">관리자</Link>}
           {user === undefined ? <span className="ml-2 h-9 w-20" aria-hidden /> : user ? (
             <span className="ml-2 flex items-center gap-2">
               <span className="max-w-40 truncate text-[13px] text-subtle" title={user.email}>{user.email}</span>
@@ -92,7 +90,6 @@ export function SiteHeader() {
           ) : (
             <Link href={loginHref} className="ml-2 rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white hover:bg-brand-strong">로그인</Link>
           )}
-          {user?.isAdmin && <Link href="/admin" onClick={() => setOpen(false)} className="flex h-12 items-center border-b border-line text-[16px] font-bold">관리자</Link>}
           {user ? (
             <div className="mt-3 flex items-center justify-between gap-2">
               <span className="truncate text-[14px] text-subtle">{user.email}</span>

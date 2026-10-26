@@ -27,6 +27,6 @@ a = (await j(`/api/analyses/${id}`, { method: "PUT", body: { inputs: { H: c(2400
   D: { quote: { kind: "consult", value: 25000000, source: "예시철거", checkedOn: "2026-10-12", items } }, C_H: cost, C_L: cost,
   period_H: { kind: "consult", value: 3 }, period_L: { kind: "consult", value: 8 }, funding: { prefund: "yes", available: 40000000 } } } })).body;
 check("상담·견적 보완 후 재계산", ["conditional", "uncertain"].includes(a.result.status), `${a.result.status} / ${a.result.executionRecommendation}`);
-check("지원사업 후보·철거 플랜", a.programs.length > 0 && a.plan.length === 6);
+check("철거 플랜", a.plan.length === 6);
 console.log(failures ? `\n${failures}건 실패` : "\n모든 E2E 검사 통과");
 process.exit(failures ? 1 : 0);

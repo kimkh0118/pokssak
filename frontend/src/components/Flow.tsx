@@ -209,7 +209,7 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
             비어 있던 기간(개월, 아는 경우)
             <input type="number" min={0} inputMode="numeric" value={a.vacancyMonths ?? ""} onChange={(e) => set("vacancyMonths", e.target.value === "" ? null : Number(e.target.value))}
               className="mt-2 block h-12 w-40 rounded-xl bg-fill px-4 text-[17px] font-bold outline-none focus:ring-2 focus:ring-brand" />
-            <span className="mt-1 block text-[12px] font-normal text-subtle">지원사업 공실 기간 조건 확인에만 써요. 모르면 비워 두세요.</span>
+            <span className="mt-1 block text-[12px] font-normal text-subtle">빈집 철거 지원 조건(보통 1년 이상 비어 있음) 확인에 참고해요. 모르면 비워 두세요.</span>
           </label>
           <Nav back={() => setStep("q1")} next={() => setStep("q3")} disabled={!a.usage || !a.direction} />
         </div>

@@ -50,7 +50,7 @@ export function LoginForm() {
     <div className="mx-auto max-w-sm space-y-6 rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-line">
       <div>
         <h1 className="text-[26px] font-extrabold">로그인</h1>
-        <p className="mt-1 text-[14px] text-subtle">로그인하면 조회한 빈집을 관심자산으로 저장하고 새 지원사업 알림을 받을 수 있어요. 계정 연결은 실제 소유권 인증이 아니에요.</p>
+        <p className="mt-1 text-[14px] text-subtle">로그인하면 조회한 빈집을 관심자산으로 저장해 두고 다시 볼 수 있어요. 계정 연결은 실제 소유권 인증이 아니에요.</p>
       </div>
 
       {error && <Notice tone="bad">{error}</Notice>}

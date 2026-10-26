@@ -11,7 +11,6 @@ export const KIND_LABEL: Record<string, string> = {
 };
 export const STATUS_LABEL = { conditional: "조건부 추천", uncertain: "우열 불확실", hold: "추천 보류" } as const;
 export const OPTION_LABEL: Record<string, string> = { sell_as_is: "현 상태 판매", demolish: "철거 후 토지 판매", tie: "동률", mixed: "점검마다 다름" };
-export const MATCH_LABEL = { partial_match: "조건 일부 일치 후보", needs_check: "추가 확인 필요", mismatch: "조건 불일치", closed: "마감·비활성" } as const;
 export const ERROR_LABEL: Record<string, string> = {
   not_configured: "인증키 미설정", auth: "인증 오류", rate_limit: "호출 제한 초과", no_result: "조회 결과 없음",
   invalid_request: "요청값 오류", upstream: "기관 서버 일시 오류", network: "네트워크 오류", parse: "응답 해석 오류",

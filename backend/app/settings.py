@@ -31,38 +31,11 @@ class Settings:
     # 구글 로그인(OAuth). Google Cloud 콘솔에서 발급. 리디렉션 URI 는 {FRONTEND_ORIGIN}/api/auth/google/callback
     google_client_id: str | None = _env("GOOGLE_CLIENT_ID")
     google_client_secret: str | None = _env("GOOGLE_CLIENT_SECRET")
-    # 지원사업 구조화(LLM). 키가 없으면 예시 추출기로 동작
+    # AI 설명(선택). 키가 없으면 규칙 기반 설명
     anthropic_api_key: str | None = _env("ANTHROPIC_API_KEY")
     llm_model: str = _env("LLM_MODEL") or "claude-sonnet-5-5"
-    # 주간 수집 예약(한국 시간). 예: "MON 09:00"
-    program_schedule: str = _env("PROGRAM_SCHEDULE") or "MON 09:00"
-    # 예시(가상) 주소·공고: 화면에서는 제거됨. 개발·테스트에서만 SAMPLE_MODE=1로 켬
+    # 예시(가상) 주소: 화면에서는 제거됨. 개발·테스트에서만 SAMPLE_MODE=1로 켬
     sample_mode: bool = (_env("SAMPLE_MODE") or "0") == "1"
-    # 지원사업 자동 수집: 부산시 고시공고 게시판 크롤링, 정부24 공공서비스 API(공공데이터포털 키·활용신청 필요)
-    busan_gosi_crawl: bool = (_env("BUSAN_GOSI_CRAWL") or "1") == "1"
-    district_crawl: bool = (_env("DISTRICT_CRAWL") or "1") == "1"
-    discovery_pages: int = max(1, int(_env("DISCOVERY_PAGES") or 300))
-    discovery_backfill_pages: int = max(1, int(_env("DISCOVERY_BACKFILL_PAGES") or 1500))
-    # 출처 1곳당 시간 한도(초). 주간 기본 15분, 심층 45분 — 서버에서 따로 돌아 사용자 검색과 무관
-    discovery_seconds: int = max(30, int(_env("DISCOVERY_SECONDS") or 900))
-    discovery_backfill_seconds: int = max(60, int(_env("DISCOVERY_BACKFILL_SECONDS") or 2700))
-    discovery_frontier_limit: int = max(100, int(_env("DISCOVERY_FRONTIER_LIMIT") or 20000))
-    discovery_delay: float = max(1.0, float(_env("DISCOVERY_DELAY") or 2.5))  # 너무 빠르면 기관 보안 장치가 접속을 막음
-    busan_max_pages: int = max(1, int(_env("BUSAN_MAX_PAGES") or 100))
-    busan_max_items: int = max(1, int(_env("BUSAN_MAX_ITEMS") or 500))
-    program_lookback_years: int = max(1, int(_env("PROGRAM_LOOKBACK_YEARS") or 3))
-    ocr_enabled: bool = (_env("OCR_ENABLED") or "1") == "1"
-    ocr_max_pages: int = max(1, int(_env("OCR_MAX_PAGES") or 30))
-    # 카카오(다음) 검색 API(developers.kakao.com > 내 애플리케이션 > REST API 키). 없으면 건너뜀
-    kakao_rest_api_key: str | None = _env("KAKAO_REST_API_KEY")
-    kakao_pages: int = max(1, min(50, int(_env("KAKAO_PAGES") or 3)))  # 검색어·종류별 50건 × 페이지
-    bokjiro_enabled: bool = (_env("BOKJIRO_ENABLED") or "1") == "1"
-    gov24_enabled: bool = (_env("GOV24_ENABLED") or "1") == "1"
-    scheduler_enabled: bool = (_env("SCHEDULER_ENABLED") or "1") == "1"
-    # 외부 알림 공급자(없으면 앱 내 알림만)
-    email_provider_url: str | None = _env("EMAIL_PROVIDER_URL")
-    sms_provider_url: str | None = _env("SMS_PROVIDER_URL")
-    push_provider_url: str | None = _env("PUSH_PROVIDER_URL")
 
 
 settings = Settings()

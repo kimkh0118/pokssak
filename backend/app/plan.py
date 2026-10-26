@@ -5,7 +5,6 @@ from __future__ import annotations
 
 def build(analysis: dict) -> list[dict]:
     elig, result, answers = analysis["eligibility"], analysis["result"], analysis["answers"]
-    matches = analysis.get("programs", [])
     inputs = analysis["inputs"]
 
     def st(done: bool, blocked: bool = False) -> str:
@@ -15,7 +14,6 @@ def build(analysis: dict) -> list[dict]:
     usage_ok = answers.get("usage") == "vacant" or (answers.get("usage") == "storage" and (answers.get("storageFollowup") or {}).get("inUse") == "no")
     prices = all((inputs.get(k) or {}).get("kind") == "consult" for k in ("H", "L"))
     quote = bool(((inputs.get("D") or {}).get("quote") or {}).get("value") or ((inputs.get("D") or {}).get("quote") or {}).get("min"))
-    candidates = [m for m in matches if m["result"] in ("partial_match", "needs_check")]
     funding = (inputs.get("funding") or {}).get("prefund") == "yes"
     return [
         {"no": 1, "title": "소유·점유·건물·필지 범위 확인", "status": st(owner_ok and usage_ok and elig["amountRecommendationAllowed"]),
@@ -23,11 +21,11 @@ def build(analysis: dict) -> list[dict]:
         {"no": 2, "title": "공인중개사에게 두 가지 매각 가격 확인", "status": st(prices),
          "detail": "같은 시점에 '현 상태 일괄 매각'과 '철거 후 토지 매각' 가격을 따로 물어보고, 현장 상태·진입 조건을 전달하세요.",
          "contact": "인근 공인중개사"},
-        {"no": 3, "title": "지원사업 후보와 사전 신청·승인·공공활용 조건 확인",
-         "status": st(bool(candidates) and all(m["result"] != "needs_check" for m in candidates)),
-         "detail": f"후보 {len(candidates)}건. 사전 신청·승인이 필요한지, 공공활용 의무로 즉시 매각이 어려운지 확인하세요."
-         if candidates else "현재 조건에 맞는 후보가 없거나 확인되지 않았습니다. 지원이 항상 가능하거나 가장 유리한 것은 아닙니다.",
-         "contact": "관할 구청 건축·도시재생 부서(공고문 연락처)"},
+        {"no": 3, "title": "빈집 철거 지원 신청 가능 여부 확인(빈집애·구청)",
+         "status": st(bool(inputs.get("supports"))),
+         "detail": "빈집애(www.binzibe.kr)에서 철거 지원을 신청하거나 구청 빈집 담당 부서에 올해 지원 여부를 물어보세요. "
+                   "사전 승인이 필요한지, 철거 후 공공활용 의무로 바로 팔 수 없는지 꼭 확인하세요.",
+         "contact": "빈집애 · 관할 구청 빈집 담당 부서"},
         {"no": 4, "title": "현장 접근·작업 범위·총 견적·행정절차 상담", "status": st(quote),
          "detail": "철거·폐기물·장비·석면·부대 업무·부가세·정리비 포함 여부를 확인하고 해체 신고·허가 절차를 묻습니다.",
          "contact": "철거업체(공개 연락처만, 제휴 아님)"},

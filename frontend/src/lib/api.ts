@@ -86,12 +86,6 @@ export interface Valuation {
   factors: { label: string; factor: number }[];
   officialPrice?: { stdrYear: string; housePc: number } | null;
 }
-export interface ProgramMatch {
-  programId: string; versionId: string; title: string | null; agency: string | null; status: string; reviewState: string; isSample: boolean;
-  url: string; lastSuccessFetchAt: string | null; benefitType: string | null; benefitCap: number | null; paymentTiming: string | null;
-  saleCompatible: boolean | null; contact: string | null; result: "partial_match" | "needs_check" | "mismatch" | "closed";
-  items: { label: string; status: string; detail: string }[];
-}
 export interface PlanStep { no: number; title: string; status: "done" | "todo" | "blocked"; detail: string; contact?: string }
 export interface Analysis {
   id: string; mode: Mode; ruleVersion: string; updatedAt: string; address: Address; pnu: string; checks: Check[];
@@ -103,7 +97,7 @@ export interface Analysis {
   explanation: { summary: string; nextSteps: string[]; source: "rule" | "ai"; aiError?: string };
   holding: { perYear: Pair | null; totals: Record<string, Pair> | null; unreflected: string[]; plan: string | null; note: string };
   remodel: { enabled: boolean; need?: string[]; N_R?: number; range?: Pair; note?: string };
-  programs: ProgramMatch[]; plan: PlanStep[];
+  plan: PlanStep[];
 }
 export interface User { id: string; email: string; isAdmin: boolean }
 

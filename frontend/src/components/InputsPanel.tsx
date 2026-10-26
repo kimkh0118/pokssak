@@ -92,7 +92,7 @@ export function InputsPanel({ data, onSaved }: { data: Analysis; onSaved: (a: An
         </div>
       )}
 
-      {tab === "지원금" && <SupportsForm programs={data.programs} supports={inp.supports ?? []} onChange={(s) => set("supports", s)} />}
+      {tab === "지원금" && <SupportsForm supports={inp.supports ?? []} onChange={(s) => set("supports", s)} />}
 
       {tab === "보유·리모델링" && (
         <div className="grid gap-5 md:grid-cols-2">
@@ -206,36 +206,36 @@ function MonthField({ label, ev, onChange }: { label: string; ev?: Evidence; onC
   );
 }
 
-function SupportsForm({ programs, supports, onChange }: { programs: Analysis["programs"]; supports: any[]; onChange: (s: any[]) => void }) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  const cands = programs.filter((p) => p.result === "partial_match" || p.result === "needs_check");
-  if (!cands.length) return <Notice>조건 일부 일치·확인 필요 지원사업이 없어요. 지원금은 반영하지 않아요(기본 비교는 지원금 미반영).</Notice>;
-  const get = (id: string) => supports.find((s) => s.programId === id) ?? { programId: id };
-  const put = (id: string, patch: object) => onChange([...supports.filter((s) => s.programId !== id), { ...get(id), ...patch }]);
+// 빈집애·구청에서 확인받은 지원을 직접 입력(공고 최대액이 아니라 이 집에 확인된 금액만)
+function SupportsForm({ supports, onChange }: { supports: any[]; onChange: (s: any[]) => void }) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const put = (i: number, patch: object) => onChange(supports.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   return (
     <div className="space-y-3">
-      <p className="text-[13px] text-subtle">공고의 최대 지원액은 개인의 확정 지원액이 아니에요. 기관에서 확인한 금액만 &lsquo;확인된 지원 반영&rsquo; 비교에 넣어요.</p>
-      {cands.map((p) => {
-        const s = get(p.programId);
-        return (
-          <fieldset key={p.programId} className="space-y-2 rounded-xl ring-1 ring-line p-3">
-            <legend className="px-1 font-bold">{p.title}{p.isSample ? " (예시)" : ""}</legend>
-            <Check checked={s.confirmed} onChange={(v) => put(p.programId, { confirmed: v, name: p.title, type: s.type ?? p.benefitType ?? "cash", payment: s.payment ?? p.paymentTiming, saleCompatible: s.saleCompatible ?? p.saleCompatible })}>
-              기관에서 이 대상의 지원액을 확인받았어요
-            </Check>
-            {s.confirmed && (
-              <>
-                <AmountInput idPrefix={`g-${p.programId}`} ev={{ kind: "consult", value: s.confirmedAmount }} onChange={(e) => put(p.programId, { confirmedAmount: e.value })} />
-                <div className="flex flex-wrap gap-3 text-[13px]">
-                  <label>방식 <select value={s.type ?? "cash"} onChange={(e) => put(p.programId, { type: e.target.value })} className="rounded bg-fill px-2 py-1"><option value="cash">현금 보조</option><option value="direct">지자체 직접 수행</option><option value="tax">세제 혜택</option></select></label>
-                  <label>지급 <select value={s.payment ?? "post"} onChange={(e) => put(p.programId, { payment: e.target.value })} className="rounded bg-fill px-2 py-1"><option value="post">사후 지급</option><option value="pre">사전 지급</option></select></label>
-                </div>
-                <Check checked={s.saleCompatible === true} onChange={(v) => put(p.programId, { saleCompatible: v })}>철거 후 바로 매각해도 되는 지원이에요(공공활용 의무 없음)</Check>
-                <Check checked={s.noDuplicationConfirmed} onChange={(v) => put(p.programId, { noDuplicationConfirmed: v })}>다른 지원과 중복수혜·상충이 없다고 확인했어요</Check>
-              </>
-            )}
-          </fieldset>
-        );
-      })}
+      <p className="text-[13px] text-subtle">빈집애나 구청에서 <b>이 집에 대해 확인받은 지원액</b>만 넣어요. 공고의 최대 지원액은 확정 금액이 아니에요. 기본 비교는 지원금 미반영이고, 넣은 금액은 &lsquo;확인된 지원 반영&rsquo; 결과에만 들어가요.</p>
+      {supports.map((s, i) => (
+        <fieldset key={i} className="space-y-2 rounded-xl ring-1 ring-line p-3">
+          <legend className="sr-only">지원 {i + 1}</legend>
+          <div className="flex gap-2">
+            <input aria-label="지원 이름" placeholder="예: 남구 빈집 철거 지원" value={s.name ?? ""} onChange={(e) => put(i, { name: e.target.value })}
+              className="h-10 flex-1 rounded-lg bg-fill px-3 text-[14px]" />
+            <button type="button" onClick={() => onChange(supports.filter((_, j) => j !== i))} className="rounded-lg bg-fill px-3 text-[13px] font-bold">삭제</button>
+          </div>
+          <Check checked={s.confirmed} onChange={(v) => put(i, { confirmed: v })}>기관에서 이 집의 지원액을 확인받았어요</Check>
+          {s.confirmed && (
+            <>
+              <AmountInput idPrefix={`g-${i}`} ev={{ kind: "consult", value: s.confirmedAmount }} onChange={(e) => put(i, { confirmedAmount: e.value })} />
+              <div className="flex flex-wrap gap-3 text-[13px]">
+                <label>방식 <select value={s.type ?? "cash"} onChange={(e) => put(i, { type: e.target.value })} className="rounded bg-fill px-2 py-1"><option value="cash">현금 보조</option><option value="direct">지자체 직접 철거</option><option value="tax">세제 혜택</option></select></label>
+                <label>지급 <select value={s.payment ?? "post"} onChange={(e) => put(i, { payment: e.target.value })} className="rounded bg-fill px-2 py-1"><option value="post">철거 후 지급</option><option value="pre">철거 전 지급</option></select></label>
+              </div>
+              <Check checked={s.saleCompatible === true} onChange={(v) => put(i, { saleCompatible: v })}>철거 후 바로 팔아도 되는 지원이에요(공공활용 의무 없음)</Check>
+              <Check checked={s.noDuplicationConfirmed} onChange={(v) => put(i, { noDuplicationConfirmed: v })}>다른 지원과 같이 받아도 된다고 확인했어요</Check>
+            </>
+          )}
+        </fieldset>
+      ))}
+      <button type="button" onClick={() => onChange([...supports, { programId: `manual-${Date.now()}`, name: "", type: "cash" }])}
+        className="rounded-lg bg-fill px-4 py-2 text-[14px] font-bold">+ 확인받은 지원 추가</button>
     </div>
   );
 }

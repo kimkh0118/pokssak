@@ -2,7 +2,6 @@
 
 from fastapi.testclient import TestClient
 
-from app import notify
 from app.main import app
 
 ANSWERS = {"ownership": "single", "usage": "vacant", "direction": "recovery", "condition": "old", "access": "narrow", "vacancyMonths": 24}
@@ -96,65 +95,3 @@ def test_회원_자동저장_중복방지_삭제_권한():
         c2.post("/api/auth/signup", json={"email": "u2@example.com", "password": "password123"})
         c2.post("/api/auth/login", json={"email": "u2@example.com", "password": "password123"})
         assert c2.get(f"/api/analyses/{aid}").status_code == 403
-        assert c2.get("/api/admin/candidates").status_code == 403
-
-
-def test_알림_생성_중복방지_수신해제_재시도():
-    with TestClient(app) as c:
-        c.post("/api/auth/signup", json={"email": "u3@example.com", "password": "password123"})
-        c.post("/api/auth/login", json={"email": "u3@example.com", "password": "password123"})
-        lk = lookup(c)
-        c.post("/api/analyses", json={"lookupId": lk["id"], "answers": ANSWERS})
-        from app import analyses
-        assert notify.generate(analyses.profile_for) >= 1
-        assert notify.generate(analyses.profile_for) == 0  # 변화 없으면 다시 알리지 않음
-        notify.dispatch()
-        items = c.get("/api/notifications").json()["items"]
-        assert items and items[0]["title"] == "지원 후보가 있습니다" and "확정이 아닙니다" in items[0]["body"]
-        # 외부 발송은 공급자 미설정이면 신청 불가
-        assert c.put("/api/notifications/settings", json={"in_app": True, "email": True}).status_code == 400
-
-        # 관리자: 변경 공고 승인 → 변경 알림
-        c.post("/api/auth/signup", json={"email": "admin@example.com", "password": "password123"})
-        c.post("/api/auth/login", json={"email": "admin@example.com", "password": "password123"})
-        pending = c.get("/api/admin/candidates").json()["candidates"]
-        assert pending and pending[0]["important_changes"]
-        assert c.post(f"/api/admin/candidates/{pending[0]['id']}", json={"action": "approve"}).status_code == 200
-        c.post("/api/auth/login", json={"email": "u3@example.com", "password": "password123"})
-        titles = [n["title"] for n in c.get("/api/notifications").json()["items"]]
-        assert "지원사업 조건 확인이 필요합니다" in titles
-
-
-def test_외부발송_실패를_성공으로_기록하지_않음(monkeypatch):
-    from app import db as dbm
-    from app.settings import settings
-    with TestClient(app) as c:
-        c.post("/api/auth/signup", json={"email": "u4@example.com", "password": "password123"})
-        c.post("/api/auth/login", json={"email": "u4@example.com", "password": "password123"})
-        monkeypatch.setattr(settings, "email_provider_url", "http://127.0.0.1:9/fail")
-        assert c.put("/api/notifications/settings", json={"in_app": True, "email": True}).status_code == 200
-        lk = lookup(c)
-        c.post("/api/analyses", json={"lookupId": lk["id"], "answers": ANSWERS})
-        from app import analyses
-        notify.generate(analyses.profile_for)
-        stats = notify.dispatch()
-        assert stats["retry"] >= 1
-        with dbm.connect() as db:
-            assert db.execute("SELECT status FROM outbox WHERE channel = 'email'").fetchone()[0] == "pending"
-
-
-def test_예정에서_접수중으로_바뀌면_접수시작_알림():
-    from datetime import datetime
-    from app import analyses, clock
-    with TestClient(app) as c:
-        c.post("/api/auth/signup", json={"email": "u5@example.com", "password": "password123"})
-        c.post("/api/auth/login", json={"email": "u5@example.com", "password": "password123"})
-        lk = lookup(c)
-        c.post("/api/analyses", json={"lookupId": lk["id"], "answers": ANSWERS})
-        notify.generate(analyses.profile_for)
-        clock.set_now(datetime(2026, 12, 2, 9, 0, tzinfo=clock.KST))  # 예시 공고 2 접수 시작 이후
-        notify.generate(analyses.profile_for)
-        notify.dispatch()
-        c.post("/api/auth/login", json={"email": "u5@example.com", "password": "password123"})  # 30일 세션 만료 후 재로그인
-        titles = [n["title"] for n in c.get("/api/notifications").json()["items"]]
-        assert "지원사업 접수가 시작되었습니다" in titles

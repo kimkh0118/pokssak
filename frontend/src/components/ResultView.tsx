@@ -5,11 +5,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api, type Analysis, type Compare, type Reference, type User } from "@/lib/api";
 import { formatWon } from "@/lib/format";
-import { KIND_LABEL, MATCH_LABEL, OPTION_LABEL } from "@/lib/labels";
+import { KIND_LABEL, OPTION_LABEL } from "@/lib/labels";
 import { AnswersEditor } from "./AnswersEditor";
 import { InputsPanel } from "./InputsPanel";
 import { LEGAL_KEYS, Verdict } from "./Verdict";
-import { BUSAN_GU_SITES } from "@/lib/site";
 import { AddressPlate, plateTitle } from "./AddressSign";
 import { PublicInfo } from "./PublicInfo";
 import { Button, Card, Notice, Pill, ProvenanceBadge, SampleBanner } from "./ui";
@@ -96,7 +95,7 @@ export function ResultView({ id }: { id: string }) {
         </Card>
       </section>
 
-      <Programs data={data} />
+      <Programs />
       <Plan data={data} />
 
       <details className="rounded-2xl ring-1 ring-line p-5">
@@ -117,7 +116,7 @@ export function ResultView({ id }: { id: string }) {
 
 function SaveBanner({ state, user, analysisId, onChange }: { state: string | null; user: User | null; analysisId: string; onChange: (s: string | null) => void }) {
   const [msg, setMsg] = useState<string | null>(null);
-  if (!user) return <Notice>지금 결과는 이 브라우저 세션에서만 볼 수 있어요. <Link href={`/login?next=/analyses/${analysisId}`} className="font-bold text-brand-strong">로그인</Link>하면 관심자산으로 저장하고 지원사업 알림을 받을 수 있어요.</Notice>;
+  if (!user) return <Notice>지금 결과는 이 브라우저 세션에서만 볼 수 있어요. <Link href={`/login?next=/analyses/${analysisId}`} className="font-bold text-brand-strong">로그인</Link>하면 관심자산으로 저장해 두고 다시 볼 수 있어요.</Notice>;
   if (!state) return null;
   return (
     <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#e8f8f0] p-4 text-[14px] text-good">
@@ -143,7 +142,7 @@ function SaveBanner({ state, user, analysisId, onChange }: { state: string | nul
 function SectionNav({ data, blocked, withSupport, setWithSupport }: { data: Analysis; blocked: boolean; withSupport: boolean; setWithSupport: (v: boolean) => void }) {
   const items = [
     ["status", "결과"], ...(blocked ? [] : [["cmp", "두 방법 비교"]]), ["answers", "질문 답"], ["inputs", "가격·견적"],
-    ["ref", "실거래가"], ["prog", "지원사업"], ["plan", "철거 플랜"],
+    ["ref", "집값 추정"], ["prog", "철거 지원"], ["plan", "철거 플랜"],
   ] as [string, string][];
   const [active, setActive] = useState("status");
   useEffect(() => {
@@ -357,36 +356,13 @@ function HoldDetail({ data }: { data: Analysis }) {
   );
 }
 
-function Programs({ data }: { data: Analysis }) {
+// 철거 지원은 국가 빈집 누리집(빈집애)에서 신청 — 이 서비스는 연결만 한다
+function Programs() {
   return (
     <section aria-labelledby="prog" className="panel">
-      <h2 id="prog" className="text-[20px] font-extrabold">지원사업 후보</h2>
-      <p className="mt-1 text-[13px] text-subtle">공식 공고를 주 1회 정리한 자료예요(실시간 아님). 후보는 지원 확정이 아니며, 확인된 금액만 &lsquo;확인된 지원 반영&rsquo;에 들어가요.</p>
+      <h2 id="prog" className="text-[20px] font-extrabold">철거 지원 신청</h2>
+      <p className="mt-1 text-[13px] text-subtle">빈집 철거비 지원은 구·군마다 금액과 조건이 달라요. 빈집애에서 신청하거나 구청 담당 부서에 올해 지원 여부를 물어보세요. 확인받은 금액은 &lsquo;가격·견적 → 지원금&rsquo;에 넣으면 &lsquo;확인된 지원 반영&rsquo; 결과를 볼 수 있어요.</p>
       <BinzibeLink />
-      {data.programs.length === 0 && <NoPrograms sgg={data.address.sggNm} />}
-      <div className="mt-3 space-y-3">
-        {data.programs.map((p) => (
-          <Card key={p.programId}>
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="font-extrabold">{p.title}{p.isSample && <span className="ml-1 rounded bg-sample-soft px-1.5 text-[11px] text-sample">예시</span>}</p>
-                <p className="text-[13px] text-subtle">{p.agency} · 신청 {p.status}{p.reviewState === "changing" && " · 변경 확인 중"}</p>
-              </div>
-              <Pill tone={p.result === "partial_match" ? "blue" : p.result === "needs_check" ? "orange" : "gray"}>{MATCH_LABEL[p.result]}</Pill>
-            </div>
-            <ul className="mt-2 space-y-1 text-[13px]">
-              {p.items.map((i) => <li key={i.label} className={i.status === "fail" ? "text-bad" : i.status === "pass" ? "text-good" : "text-muted"}>· {i.label}: {i.detail}</li>)}
-            </ul>
-            <p className="mt-2 text-[13px] text-muted">
-              {p.benefitType === "cash" ? "현금 보조" : p.benefitType === "direct" ? "지자체 직접 수행" : p.benefitType === "tax" ? "세제 혜택" : "지원 방식 미확인"}
-              {p.benefitCap != null && ` · 공고상 최대 ${formatWon(p.benefitCap)}(개인 확정액 아님)`}
-              {p.paymentTiming === "post" && " · 사후 지급"}{p.saleCompatible === false && " · 즉시 매각과 양립 안 됨"}
-            </p>
-            <p className="mt-1 text-[12px] text-subtle">마지막 정상 수집 {p.lastSuccessFetchAt ? new Date(p.lastSuccessFetchAt).toLocaleDateString("ko-KR") : "미상"}{p.contact && ` · 문의 ${p.contact}`}</p>
-            {!p.isSample && <a href={p.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-[13px] font-bold text-brand-strong">공고 원문 보기 ↗</a>}
-          </Card>
-        ))}
-      </div>
     </section>
   );
 }
@@ -428,29 +404,6 @@ function Plan({ data }: { data: Analysis }) {
   );
 }
 
-function NoPrograms({ sgg }: { sgg?: string | null }) {
-  const site = sgg ? BUSAN_GU_SITES[sgg] : undefined;
-  return (
-    <div className="rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line">
-      <p className="text-[16px] font-extrabold">아직 확인된 지원사업 공고가 없어요</p>
-      <p className="mt-1 text-[14px] text-muted">
-        부산시·정부24는 매주 자동으로 확인하고 있어요. 빈집 철거·정비 지원은 보통 <b>구·군청</b>이 해마다 따로 공고해서, 직접 확인하는 게 가장 빨라요.
-      </p>
-      <ol className="mt-3 space-y-1.5 text-[14px]">
-        <li>1. {sgg ?? "해당 구·군"}청 홈페이지 &lsquo;고시공고&rsquo;나 &lsquo;새소식&rsquo;에서 <b>빈집</b>으로 검색</li>
-        <li>2. 없으면 구청 <b>건축과(빈집 담당)</b>에 올해 빈집 정비 지원 계획을 문의</li>
-        <li>3. 번호를 모르면 부산시 120 바로콜센터(051-120)로 담당 부서 연결 요청</li>
-      </ol>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {site && <a href={site} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white">{sgg}청 홈페이지 열기</a>}
-        <a href="tel:051120" className="rounded-lg bg-fill px-4 py-2 text-[14px] font-bold">051-120 전화</a>
-      </div>
-      <p className="mt-3 text-[12px] text-subtle">공고를 찾으면 &lsquo;지원금&rsquo; 칸에 확인된 금액을 넣어 &lsquo;확인된 지원 반영&rsquo; 결과를 볼 수 있어요.</p>
-    </div>
-  );
-}
-
-// 국가 빈집 누리집(한국부동산원 운영)으로 연결만 한다(내용을 가져오지 않음)
 function BinzibeLink() {
   return (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">

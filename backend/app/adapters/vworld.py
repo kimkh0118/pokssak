@@ -12,6 +12,7 @@ from ..settings import settings
 from .common import fail, get, ok, retry_transient
 
 CHAR = {"source": "국토교통부 브이월드 토지특성정보", "url": "https://api.vworld.kr/ned/data/getLandCharacteristics", "node": "landCharacteristicss"}
+HOUSE = {"source": "국토교통부 브이월드 개별주택가격", "url": "https://api.vworld.kr/ned/data/getIndvdHousingPriceAttr", "node": "indvdHousingPrices"}
 USE = {"source": "국토교통부 브이월드 토지이용계획정보", "url": "https://api.vworld.kr/ned/data/getLandUseAttr", "node": "landUses"}
 ERRORS = {
     "INVALID_KEY": "auth", "INCORRECT_KEY": "auth", "UNAVAILABLE_KEY": "auth", "OVER_REQUEST_LIMIT": "rate_limit",
@@ -92,3 +93,27 @@ async def land_use(pnu: str) -> dict:
         return fail("not_configured", USE["source"], "VWORLD_API_KEY가 설정되지 않았습니다.")
     status, body = await _call(USE, pnu)
     return body if status is None else parse_land_use(body)
+
+
+def parse_house_price(body: str) -> dict:
+    """개별주택가격(단독·다가구, 토지+건물 공시가격) 중 최신 연도 1건. 공동주택·근린생활시설은 없음."""
+    import json
+    try:
+        data = json.loads(body)
+    except ValueError:
+        return fail("parse_error", HOUSE["source"], "응답을 해석하지 못했습니다.")
+    rows = (data.get(HOUSE["node"]) or {}).get("field") or []
+    if not rows:
+        return fail("no_result", HOUSE["source"], "개별주택가격이 없습니다(단독·다가구 주택만 공시).")
+    latest = max(rows, key=lambda x: (str(x.get("stdrYear") or "").zfill(4), str(x.get("stdrMt") or "").zfill(2)))
+    item = {"stdrYear": text(latest.get("stdrYear")), "housePc": num(latest.get("housePc")),
+            "landArea": num(latest.get("ladRegstrAr")) or num(latest.get("calcPlotAr")), "buildingArea": num(latest.get("buldAllTotAr"))}
+    return ok(item, HOUSE["source"], asOf=text(latest.get("lastUpdtDt")), unit="원")
+
+
+@retry_transient
+async def house_price(pnu: str) -> dict:
+    if not settings.vworld_key:
+        return fail("not_configured", HOUSE["source"], "VWORLD_API_KEY가 설정되지 않았습니다.")
+    status, body = await _call(HOUSE, pnu)
+    return body if status is None else parse_house_price(body)

@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import uuid
 
-from . import comps, db as dbm, eligibility, engine, explain, plan, programs
+from . import valuation, comps, db as dbm, eligibility, engine, explain, plan, programs
 from .auth import token_hash
-from .clock import now_iso
+from .clock import now_iso, today_kst
 from .property import get_lookup, is_main
 
 
@@ -131,6 +131,13 @@ def compute(row) -> dict:
         "house": comps.reference_price("house", lk["houseTrades"], subject, lk["months"]["base"], lk["months"]["extended"]),
         "land": comps.reference_price("land", lk["landTrades"], subject, lk["months"]["base"], lk["months"]["extended"]),
     }
+    # 중개사 방식 추정(거래 비교 + 원가법 + 공시가격 비율). 값이 나오면 비교 기준값으로 쓴다(상담 가격 입력 시 그 값이 우선)
+    val = valuation.estimate(subject, land, building, reference["house"], lk["landTrades"], lk.get("housePrice"), lk["months"], today_kst())
+    for k in ("house", "land"):
+        est = val[k]
+        reference[k]["valuation"] = est
+        if est["value"]:
+            reference[k].update(value=est["value"], range=est["range"], estimated=True)
     elig = eligibility.evaluate(answers, lk["checks"], scope)
     result = engine.evaluate(inputs, {"eligibility": elig, "reference": reference,
                                       "floorArea": (building or {}).get("totArea"), "access": answers.get("access")})

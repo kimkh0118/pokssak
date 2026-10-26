@@ -77,6 +77,14 @@ export interface Reference {
   sampleSize: number; notes: string[]; rule: { areaRatio: Pair; buildYearGap: number };
   decisions: { trade: { dealDate: string; umdNm: string; jibunMasked: string; landArea: number; floorArea?: number; buildYear?: number; amountWon: number; jimok?: string }; included: boolean; reason: string }[];
   extended: { sampleSize: number; value: number; range: { min: number; max: number }; note: string } | null;
+  estimated?: boolean;
+  valuation?: Valuation;
+}
+export interface Valuation {
+  value: number | null; range: { min: number; max: number } | null; agreement: "good" | "check" | "single" | null;
+  methods: { key: string; name: string; value: number | null; weight: number; share?: number; detail: string }[];
+  factors: { label: string; factor: number }[];
+  officialPrice?: { stdrYear: string; housePc: number } | null;
 }
 export interface ProgramMatch {
   programId: string; versionId: string; title: string | null; agency: string | null; status: string; reviewState: string; isSample: boolean;

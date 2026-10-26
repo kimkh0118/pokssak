@@ -73,8 +73,8 @@ export function ResultView({ id }: { id: string }) {
       <InputsPanel data={data} onSaved={setData} />
 
       <section aria-labelledby="ref" className="panel">
-        <h2 id="ref" className="text-[20px] font-extrabold">공공 실거래 참고가격</h2>
-        <p className="mt-1 text-[13px] text-subtle">같은 법정동 최근 12개월 거래 중 면적 70~130%, 건축연도 10년 이내 사례(개발 설정이며 감정평가 기준 아님). 추천에는 상담 가격이 필요해요.</p>
+        <h2 id="ref" className="text-[20px] font-extrabold">집값·땅값 추정</h2>
+        <p className="mt-1 text-[13px] text-subtle">공인중개사가 쓰는 세 가지 방법(비슷한 거래 비교 · 땅값+남은 건물값 · 공시가격 비율)을 함께 계산한 추정이에요. 감정평가가 아니며, 확정 추천에는 상담 가격이 필요해요.</p>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <RefCard r={data.reference.house} />
           <RefCard r={data.reference.land} />
@@ -269,17 +269,43 @@ function Sensitivity({ cmp, pct }: { cmp: Compare; pct: number }) {
   );
 }
 
+const AGREE = { good: "세 방법이 비슷해요", check: "방법별 차이가 커요 — 중개사 확인 필요", single: "한 가지 방법으로만 계산했어요" } as const;
+
 function RefCard({ r }: { r: Reference }) {
+  const v = r.valuation;
+  const est = r.estimated && v?.value != null;
   return (
     <Card>
-      <p className="text-[13px] font-bold text-subtle">{r.label} 참고가격</p>
+      <p className="text-[13px] font-bold text-subtle">{r.label} {est ? "추정가(중개사 방식)" : "참고가격"}</p>
       <p className="tabular mt-1 text-[22px] font-extrabold">{r.value == null ? "산정 보류" : formatWon(r.value)}</p>
-      <p className="text-[12px] text-subtle">{r.status === "median" ? `${r.sampleSize}건 단가 중앙값` : r.status === "single" ? "단일 사례 환산값" : "자료 부족"}
-        {r.range && ` · 관측 범위 ${formatWon(r.range.min)} ~ ${formatWon(r.range.max)}`}</p>
+      {est && v?.range ? (
+        <p className="text-[12px] text-subtle">추정 범위 {formatWon(v.range.min)} ~ {formatWon(v.range.max)}
+          {v.agreement && <span className={v.agreement === "check" ? " font-bold text-warn" : ""}> · {AGREE[v.agreement]}</span>}</p>
+      ) : (
+        <p className="text-[12px] text-subtle">{r.status === "median" ? `${r.sampleSize}건 단가 중앙값` : r.status === "single" ? "단일 사례 환산값" : "자료 부족"}
+          {r.range && ` · 관측 범위 ${formatWon(r.range.min)} ~ ${formatWon(r.range.max)}`}</p>
+      )}
+      {est && v && (
+        <div className="mt-3 space-y-2">
+          <ul className="space-y-1.5 text-[13px]">
+            {v.methods.filter((m) => m.value).map((m) => (
+              <li key={m.key} className="rounded-lg bg-fill px-3 py-2">
+                <span className="flex items-baseline justify-between gap-2">
+                  <b>{m.name}</b>
+                  <span className="tabular font-bold">{formatWon(m.value!)}{m.share != null && <span className="ml-1 text-[11px] font-normal text-subtle">반영 {Math.round(m.share * 100)}%</span>}</span>
+                </span>
+                <span className="block text-[12px] text-muted">{m.detail}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[12px] text-muted">이 땅의 보정: {v.factors.map((f) => `${f.label} ${f.factor === 1 ? "±0%" : `${f.factor > 1 ? "+" : ""}${Math.round((f.factor - 1) * 100)}%`}`).join(", ")}</p>
+          <p className="text-[12px] text-subtle">집 내부 상태·수요는 반영하지 못해요. 공인중개사 상담 가격을 &lsquo;가격·견적&rsquo;에 넣으면 그 값으로 계산해요.</p>
+        </div>
+      )}
       {r.notes.map((n) => <p key={n} className="mt-1 text-[12px] text-warn">{n}</p>)}
       {r.extended && <p className="mt-1 text-[12px] text-muted">{r.extended.note}: {r.extended.sampleSize}건 · {formatWon(r.extended.value)}</p>}
       {r.decisions.length > 0 && (
-        <Explain title={`사례 ${r.decisions.length}건 선정·제외 사유`}>
+        <Explain title={`실거래 사례 ${r.decisions.length}건 선정·제외 사유`}>
           <ul className="space-y-1">{r.decisions.map((d, i) => (
             <li key={i} className={d.included ? "text-ink" : ""}>{d.trade.dealDate} {d.trade.umdNm} {d.trade.jibunMasked} · {d.trade.landArea}㎡ · {formatWon(d.trade.amountWon)} — {d.included ? "사용" : `제외: ${d.reason}`}</li>
           ))}</ul>

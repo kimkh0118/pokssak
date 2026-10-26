@@ -107,7 +107,7 @@ export function Verdict({ data }: { data: Analysis }) {
 }
 
 function basis(k?: string | null) {
-  return k === "consult" ? "상담 가격" : k === "assumption" ? "내 가정" : k === "public" ? "주변 실거래 참고가" : "미확인";
+  return k === "consult" ? "상담 가격" : k === "assumption" ? "내 가정" : k === "public" ? "중개사 방식 추정가(실거래·공시가격)" : "미확인";
 }
 
 function Numbers({ b, demolitionKnown }: { b: NonNullable<Analysis["result"]["calc"]>["withoutSupport"]["base"]; demolitionKnown: boolean }) {

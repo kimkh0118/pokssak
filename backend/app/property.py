@@ -83,15 +83,18 @@ async def lookup(mode: str, address: dict) -> dict:
 
     if mode == "sample":
         results = (sample.buildings(pnu), sample.characteristics(pnu), sample.land_use(pnu),
-                   sample.trades("house", ext_months), sample.trades("land", ext_months))
+                   sample.trades("house", ext_months), sample.trades("land", ext_months),
+                   {"ok": False, "data": None, "error": {"kind": "no_result", "message": "예시 모드"}})
     else:
         results = await asyncio.gather(building.titles(pnu), vworld.characteristics(pnu), vworld.land_use(pnu),
-                                       trades.collect("house", sgg, ext_months), trades.collect("land", sgg, ext_months))
-    bld, land, use, house_trades, land_trades = results
+                                       trades.collect("house", sgg, ext_months), trades.collect("land", sgg, ext_months),
+                                       vworld.house_price(pnu))
+    bld, land, use, house_trades, land_trades, house_price = results
 
     out = {
         "id": str(uuid.uuid4()), "mode": mode, "createdAt": now_iso(), "address": address, "pnu": pnu,
         "buildings": bld, "land": land, "landUse": use, "houseTrades": house_trades, "landTrades": land_trades,
+        "housePrice": house_price,  # 개별주택가격(공시) — 시세 추정 보조 근거
         "months": {"base": base_months, "extended": ext_months},
         "mainBuildings": [b for b in bld["data"] if is_main(b)] if bld["ok"] else [],
         "checks": public_checks(address, bld, land),

@@ -1,0 +1,10 @@
+# Railway 서비스 설정(서비스의 Root Directory 를 backend 로 지정)
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/status"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+numReplicas = 1

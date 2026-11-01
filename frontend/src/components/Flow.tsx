@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, type Address, type Answers, type Fetched, type Lookup } from "@/lib/api";
@@ -27,6 +28,7 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
   const [buildingKey, setBuildingKey] = useState<string | null>(null);
   const [costsSeparable, setCostsSeparable] = useState(false);
   const [a, setA] = useState<Partial<Answers>>({ corporate: false, ownerMismatch: false });
+  const [watch, setWatch] = useState<"idle" | "saving" | "new" | "existing">("idle");
 
   // 첫 화면에서 주소를 넣고 넘어오면 바로 검색(예전에는 한 번 더 눌러야 했음)
   const autoRan = useRef(false);
@@ -61,11 +63,28 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
       setLookup(lk);
       setBuildingKey(lk.mainBuildings.length === 1 ? lk.mainBuildings[0].mgmBldrgstPk : null);
       setCostsSeparable(lk.mainBuildings.length <= 1 && !lk.mainBuildings.some((b) => (b.bylotCnt ?? 0) > 0));
+      setWatch("idle");
       setStep("target");
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  // 정보 확인 단계에서 바로 관심 집으로 저장(질문은 나중에 결과 화면에서 답할 수 있음)
+  async function saveWatch() {
+    if (!lookup) return;
+    setWatch("saving");
+    setError(null);
+    try {
+      const out = await api<{ saved: { created: boolean } }>(`/api/lookups/${lookup.id}/watch`, {
+        method: "POST", body: { buildingKey, costsSeparable },
+      });
+      setWatch(out.saved.created ? "new" : "existing");
+    } catch (e) {
+      setError((e as Error).message);
+      setWatch("idle");
     }
   }
 
@@ -155,6 +174,17 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
                 선택한 건물·필지의 가격과 철거 비용을 다른 건물과 구분해 상담받을 수 있어요(구분할 수 없으면 금액 추천을 보류합니다)
               </label>
             </fieldset>
+          )}
+          {watch === "new" || watch === "existing" ? (
+            <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
+              <p className="text-[15px] font-bold">♥ {watch === "new" ? "관심 집에 저장했어요" : "이미 관심 집에 있어요"}</p>
+              <Link href="/my" className="shrink-0 text-[14px] font-bold text-brand-strong">관심 집 보기 ›</Link>
+            </div>
+          ) : (
+            <button type="button" onClick={() => void saveWatch()} disabled={watch === "saving" || (multi && !buildingKey)}
+              className="press flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-surface text-[15px] font-bold shadow-sm ring-1 ring-line disabled:opacity-50">
+              <span aria-hidden className="text-brand">♡</span>{watch === "saving" ? "저장하는 중…" : "관심 집에 저장하기"}
+            </button>
           )}
           {typeFail && <Notice tone="bad">이 물건은 맞춤 분석 대상(부산 단독·다가구주택)이 아니어서 금액 추천은 보류되지만, 공개 기본정보와 확인 경로는 계속 볼 수 있어요.</Notice>}
           <BottomBar>

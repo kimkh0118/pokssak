@@ -119,6 +119,7 @@ def delete_account(user_id: str):
             "DELETE FROM analyses WHERE owner_user_id = ?",
             "DELETE FROM notification_settings WHERE user_id = ?",
             "DELETE FROM user_consents WHERE user_id = ?",
+            "DELETE FROM inquiries WHERE user_id = ?",
             "DELETE FROM sessions WHERE user_id = ?",
             "DELETE FROM users WHERE id = ?",
         ):

@@ -12,5 +12,5 @@ export const TABS = [
   { href: "/analyze", label: "조회", icon: "search", match: (p: string) => p.startsWith("/analyze") || p.startsWith("/analyses") },
   { href: "/my", label: "관심 집", icon: "heart", match: (p: string) => p.startsWith("/my") },
   { href: "/notifications", label: "알림", icon: "bell", match: (p: string) => p.startsWith("/notifications") },
-  { href: "/more", label: "더보기", icon: "more", match: (p: string) => ["/more", "/about", "/faq", "/terms", "/privacy", "/login"].some((x) => p.startsWith(x)) },
+  { href: "/more", label: "더보기", icon: "more", match: (p: string) => ["/more", "/about", "/faq", "/terms", "/privacy", "/login", "/inquiry", "/admin"].some((x) => p.startsWith(x)) },
 ] as const;

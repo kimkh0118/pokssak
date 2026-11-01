@@ -17,7 +17,7 @@ function Art({ kind }: { kind: (typeof SLIDES)[number]["art"] }) {
     return (
       <div className="road-sign bg-sign p-[5px] pr-[26px] drop-shadow-[0_10px_24px_rgba(44,47,128,.35)]">
         <div className="road-sign rounded-l-[6px] border-[2.5px] border-r-0 border-white px-4 py-3 pr-8">
-          <p className="text-[30px] font-bold leading-none tracking-tight text-white">반송동 250</p>
+          <p className="text-[30px] font-bold leading-none tracking-tight text-white">중앙대로</p>
           <p className="mt-1.5 text-[11px] font-medium text-white/75">Enter the address</p>
         </div>
       </div>

@@ -74,6 +74,8 @@ export function More() {
       )}
 
       <section className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-sm ring-1 ring-line">
+        <Row href="/inquiry" label="문의하기" />
+        {user?.isAdmin && <Row href="/admin/inquiries" label="문의 관리 (관리자)" />}
         <Row href="/about" label="계산 방법" />
         <Row href="/faq" label="자주 묻는 질문" />
         <Row href="/terms" label="이용약관" />

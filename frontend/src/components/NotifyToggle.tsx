@@ -23,7 +23,7 @@ export function NotifyToggle({ compact }: { compact?: boolean }) {
     if (state === "on") { await disablePush(); setState("off"); }
     else {
       const r = await enablePush();
-      if (r === "on") { setState("on"); await fetch("/api/push/test", { method: "POST" }); setNote("시험 알림을 보냈어요."); }
+      if (r === "on") { setState("on"); await fetch("/api/push/test", { method: "POST" }); }
       else if (r === "denied") setState("denied");
       else if (r === "unsupported") setState("unsupported");
       else setNote("알림을 켜지 못했어요. 잠시 후 다시 시도해 주세요.");
@@ -46,14 +46,16 @@ export function NotifyToggle({ compact }: { compact?: boolean }) {
     </div>
   );
   return (
-    <div className={compact ? "" : "flex items-center justify-between gap-3"}>
-      {!compact && <span className="text-[15px] font-bold">이 기기로 알림 받기</span>}
-      <button type="button" role="switch" aria-checked={state === "on"} disabled={busy || state === "loading"} onClick={() => void toggle()}
-        className={`relative h-8 w-14 shrink-0 rounded-full transition-colors ${state === "on" ? "bg-brand" : "bg-fill-strong"} disabled:opacity-60`}>
-        <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${state === "on" ? "left-7" : "left-1"}`} />
-        <span className="sr-only">알림 {state === "on" ? "끄기" : "켜기"}</span>
-      </button>
-      {note && <p className="mt-2 text-[12px] text-subtle">{note}</p>}
+    <div>
+      <div className={compact ? "" : "flex items-center justify-between gap-3"}>
+        {!compact && <span className="text-[15px] font-bold">이 기기로 알림 받기</span>}
+        <button type="button" role="switch" aria-checked={state === "on"} disabled={busy || state === "loading"} onClick={() => void toggle()}
+          className={`relative h-8 w-14 shrink-0 rounded-full transition-colors ${state === "on" ? "bg-brand" : "bg-fill-strong"} disabled:opacity-60`}>
+          <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${state === "on" ? "left-7" : "left-1"}`} />
+          <span className="sr-only">알림 {state === "on" ? "끄기" : "켜기"}</span>
+        </button>
+      </div>
+      {note && <p role="alert" className="mt-2 text-[12px] text-bad">{note}</p>}
     </div>
   );
 }

@@ -6,9 +6,9 @@ import { api, type User } from "@/lib/api";
 import { Notice } from "./ui";
 import { NotifyToggle } from "./NotifyToggle";
 
-type Item = { id: string; title: string; body: string; created_at: string; read_at: string | null };
+type Item = { id: string; event?: string; title: string; body: string; created_at: string; read_at: string | null };
 
-// 관심 집의 예상 가격 변동 알림. 열면 모두 읽음으로 바꾼다.
+// 관심 집의 예상 가격 변동 알림과 문의 답장 알림. 열면 모두 읽음으로 바꾼다.
 export function Inbox() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [items, setItems] = useState<Item[] | null>(null);
@@ -51,6 +51,7 @@ export function Inbox() {
               <span className="shrink-0 text-[12px] text-subtle">{new Date(n.created_at).toLocaleDateString("ko-KR")}</span>
             </p>
             <p className="mt-1 text-[14px] text-muted">{n.body}</p>
+            {n.event === "inquiry_reply" && <Link href="/inquiry" className="mt-2 inline-block text-[13px] font-bold text-brand-strong">답장 보기 ›</Link>}
           </li>
         ))}
       </ul>

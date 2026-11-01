@@ -3,22 +3,31 @@
 import type { Check, Fetched, Lookup } from "@/lib/api";
 import { Pill, ProvenanceBadge, ProviderErrorBox } from "./ui";
 
-const CHECK_TONE = { pass: "green", fail: "red", unknown: "orange" } as const;
-const CHECK_TEXT = { pass: "충족", fail: "해당 안 됨", unknown: "확인 필요" } as const;
-
 type Info = Pick<Lookup, "address" | "pnu" | "buildings" | "land" | "landUse" | "mainBuildings" | "checks"> & {
   houseTrades?: Fetched<unknown[]> | { ok: boolean; failedMonths?: string[] };
   landTrades?: Fetched<unknown[]> | { ok: boolean; failedMonths?: string[] };
   mode: string;
 };
 
+const ISSUE_TITLE: Record<string, { fail?: string; unknown?: string }> = {
+  busan: { fail: "부산 주소가 아니에요" },
+  type: { fail: "단독·다가구주택이 아니에요", unknown: "주택 종류를 확인하지 못했어요" },
+  scope: { fail: "분석할 건물 범위가 맞지 않아요", unknown: "분석할 건물 범위를 확인해야 해요" },
+  consistency: { fail: "건축물대장과 토지 정보가 맞지 않아요", unknown: "건축물대장과 토지 정보를 비교하지 못했어요" },
+};
+
+/** 조건 확인: 충족한 항목은 보여주지 않고, 못 맞추거나 확인이 필요한 항목만 이유와 함께 */
 export function Checks({ checks }: { checks: Check[] }) {
+  const issues = checks.filter((c) => c.status !== "pass");
+  if (!issues.length) return null;
   return (
-    <ul className="grid gap-2 sm:grid-cols-2">
-      {checks.map((c) => (
-        <li key={c.key} className="rounded-xl bg-fill p-3">
-          <div className="flex items-center justify-between gap-2 text-[14px] font-bold">{c.label}<Pill tone={CHECK_TONE[c.status]}>{CHECK_TEXT[c.status]}</Pill></div>
-          <p className="mt-1 text-[12px] text-subtle">{c.detail}</p>
+    <ul className="space-y-2">
+      {issues.map((c) => (
+        <li key={c.key} className={`rounded-xl p-3 ${c.status === "fail" ? "bg-bad-soft" : "bg-warn-soft"}`}>
+          <p className={`text-[14px] font-bold ${c.status === "fail" ? "text-bad" : "text-warn"}`}>
+            {ISSUE_TITLE[c.key]?.[c.status as "fail" | "unknown"] ?? `${c.label}: ${c.status === "fail" ? "해당하지 않아요" : "확인이 필요해요"}`}
+          </p>
+          {c.detail && <p className="mt-1 text-[13px] text-muted">{c.detail}</p>}
         </li>
       ))}
     </ul>

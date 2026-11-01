@@ -61,7 +61,10 @@ export function ResultView({ id }: { id: string }) {
             {cmp ? <CompareTable data={data} cmp={cmp} /> : <Notice>주변 거래 자료가 없어 비교할 수 없어요.</Notice>}
           </section>}
           {!blocked && cmp && <Breakeven cmp={cmp} known={!!r.calc?.demolitionKnown} costsComplete={!!r.calc?.costsComplete} />}
-          <details className="panel group">
+          {(data.answers as { draft?: boolean }).draft && (
+            <Notice tone="warn">아직 질문 4개에 답하지 않아 모르는 값으로 계산했어요. 아래에서 답하면 결과가 더 정확해져요.</Notice>
+          )}
+          <details className="panel group" open={(data.answers as { draft?: boolean }).draft || undefined}>
             <summary className="flex cursor-pointer list-none items-center justify-between text-[16px] font-extrabold">
               질문 답 바꾸기<span aria-hidden className="text-subtle transition group-open:rotate-90">›</span>
             </summary>

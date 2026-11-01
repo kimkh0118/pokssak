@@ -33,11 +33,15 @@ export function Button({
 }
 
 /** 화면 하단 고정 버튼 영역(모바일 앱처럼) */
+/** 화면 아래 고정 버튼 줄. 휴대폰에서는 하단 탭 바로 위에 붙고, 내용이 버튼에 가리지 않게 빈 공간을 둔다 */
 export function BottomBar({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 backdrop-blur">
-      <div className="mx-auto flex max-w-md gap-2">{children}</div>
-    </div>
+    <>
+      <div aria-hidden className="h-20" />
+      <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 border-t border-line bg-surface/95 px-4 pb-3 pt-3 backdrop-blur md:bottom-0 md:pb-[max(env(safe-area-inset-bottom),12px)]">
+        <div className="mx-auto flex max-w-md gap-2">{children}</div>
+      </div>
+    </>
   );
 }
 

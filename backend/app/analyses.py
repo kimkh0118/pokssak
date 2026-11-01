@@ -44,6 +44,18 @@ def create(lookup_id: str, answers: dict, scope: dict, user: dict | None, guest_
     return {"id": aid, "saved": saved}
 
 
+# 질문에 답하기 전(정보 확인 단계)에 관심 집으로 저장할 때 쓰는 임시 답변.
+# 모르는 값은 'unknown', 소유 형태는 가장 흔한 단독 소유로 두고 draft 표시 → 결과 화면에서 답하라고 안내한다.
+DRAFT_ANSWERS = {"ownership": "single", "corporate": False, "ownerMismatch": False, "usage": "unknown",
+                 "direction": "undecided", "condition": "unknown", "access": "unknown", "vacancyMonths": None, "draft": True}
+
+
+def watch_from_lookup(lookup_id: str, scope: dict, user: dict) -> dict:
+    """정보 확인 단계에서 바로 관심 집으로 저장(질문은 나중에)."""
+    out = create(lookup_id, DRAFT_ANSWERS, scope, user, None)
+    return {"analysisId": out["id"], "saved": out["saved"]}
+
+
 def save_asset(user: dict, analysis_id: str) -> dict:
     """로그인 사용자의 조회 완료 시 관심자산으로 자동 저장(같은 범위는 중복 저장하지 않음)."""
     with dbm.connect() as c:
@@ -96,7 +108,9 @@ def update(analysis_id: str, user, guest, inputs: dict | None, answers: dict | N
                           (analysis_id, field, dbm.dumps(payload), now_iso()))
         if answers:
             old = dbm.loads(row["answers"])
-            c.execute("UPDATE analyses SET answers = ?, updated_at = ? WHERE id = ?", (dbm.dumps({**old, **answers}), now_iso(), analysis_id))
+            merged = {**old, **answers}
+            merged.pop("draft", None)  # 질문에 답했으면 임시 답변 표시를 지운다
+            c.execute("UPDATE analyses SET answers = ?, updated_at = ? WHERE id = ?", (dbm.dumps(merged), now_iso(), analysis_id))
         else:
             c.execute("UPDATE analyses SET updated_at = ? WHERE id = ?", (now_iso(), analysis_id))
     return get(analysis_id, user, guest)

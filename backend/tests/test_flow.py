@@ -95,3 +95,25 @@ def test_회원_자동저장_중복방지_삭제_권한():
         c2.post("/api/auth/signup", json={"email": "u2@example.com", "password": "password123"})
         c2.post("/api/auth/login", json={"email": "u2@example.com", "password": "password123"})
         assert c2.get(f"/api/analyses/{aid}").status_code == 403
+
+
+def test_정보확인_단계에서_관심집_저장하고_나중에_답하면_draft_해제():
+    with TestClient(app) as c:
+        c.post("/api/auth/signup", json={"email": "w@example.com", "password": "password1"})
+        c.post("/api/auth/login", json={"email": "w@example.com", "password": "password1"})
+        lk = lookup(c)
+        r = c.post(f"/api/lookups/{lk['id']}/watch", json={"buildingKey": None, "costsSeparable": False})
+        assert r.status_code == 200 and r.json()["saved"]["created"] is True
+        aid = r.json()["analysisId"]
+        assert len(c.get("/api/assets").json()["assets"]) == 1
+        again = c.post(f"/api/lookups/{lk['id']}/watch", json={"buildingKey": None, "costsSeparable": False}).json()
+        assert again["saved"]["created"] is False  # 같은 집은 한 번만
+        assert c.get(f"/api/analyses/{aid}").json()["answers"]["draft"] is True
+        c.put(f"/api/analyses/{aid}", json={"answers": ANSWERS})
+        assert "draft" not in c.get(f"/api/analyses/{aid}").json()["answers"]
+
+
+def test_정보확인_단계_저장은_로그인_필요():
+    with TestClient(app) as c:
+        lk = lookup(c)
+        assert c.post(f"/api/lookups/{lk['id']}/watch", json={}).status_code == 401

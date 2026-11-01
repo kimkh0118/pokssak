@@ -14,10 +14,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import ValidationError
 
-from . import analyses, auth, consents, db as dbm, google_oauth, keepalive, pricewatch, property as prop, push
+from . import analyses, auth, consents, db as dbm, inquiries, google_oauth, keepalive, pricewatch, property as prop, push
 from .clock import now_iso
 from .schemas import (
-    Answers, CreateAnalysis, Credentials, Evidence, LookupRequest, UpdateAnalysis,
+    Answers, CreateAnalysis, Credentials, Evidence, LookupRequest, Scope, UpdateAnalysis,
 )
 from .settings import settings
 
@@ -78,6 +78,13 @@ def require_user(request: Request) -> dict:
     u = user_of(request)
     if not u:
         raise HTTPException(401, "로그인이 필요합니다.")
+    return u
+
+
+def require_admin(request: Request) -> dict:
+    u = require_user(request)
+    if not u.get("isAdmin"):
+        raise HTTPException(403, "관리자만 볼 수 있어요.")
     return u
 
 
@@ -359,6 +366,11 @@ def update_analysis(analysis_id: str, body: UpdateAnalysis, request: Request):
 
 
 # ---------------------------------------------------------------- 관심자산
+@app.post("/api/lookups/{lookup_id}/watch")
+def watch_lookup(lookup_id: str, body: Scope, request: Request):
+    return _wrap(lambda: analyses.watch_from_lookup(lookup_id, body.model_dump(), require_user(request)))
+
+
 @app.post("/api/analyses/{analysis_id}/save")
 def save(analysis_id: str, request: Request):
     return _wrap(lambda: analyses.save_asset(require_user(request), analysis_id))
@@ -397,7 +409,7 @@ def my_notifications(request: Request):
     u = require_user(request)
     with dbm.connect() as c:
         rows = c.execute("SELECT id, event, title, body, asset_id, created_at, read_at FROM notifications WHERE user_id = ? "
-                         "AND event = 'price_change' ORDER BY created_at DESC LIMIT 100", (u["id"],)).fetchall()
+                         "AND event IN ('price_change', 'inquiry_reply') ORDER BY created_at DESC LIMIT 100", (u["id"],)).fetchall()
     return {"items": [dict(r) for r in rows]}
 
 
@@ -407,7 +419,7 @@ def unread_count(request: Request):
     if not u:
         return {"count": 0}
     with dbm.connect() as c:
-        n = c.execute("SELECT count(*) FROM notifications WHERE user_id = ? AND event = 'price_change' AND read_at IS NULL",
+        n = c.execute("SELECT count(*) FROM notifications WHERE user_id = ? AND event IN ('price_change', 'inquiry_reply') AND read_at IS NULL",
                       (u["id"],)).fetchone()[0]
     return {"count": n}
 
@@ -449,3 +461,35 @@ def push_test(request: Request):
     u = require_user(request)
     n = push.send(u["id"], "알림이 켜졌어요", "관심 집의 예상 가격이 바뀌면 이렇게 알려드려요.", url="/notifications")
     return {"sent": n}
+
+
+# ---------------------------------------------------------------- 문의하기
+@app.get("/api/inquiries")
+def my_inquiries(request: Request):
+    return {"inquiries": inquiries.mine(require_user(request)), "categories": inquiries.CATEGORIES}
+
+
+@app.post("/api/inquiries")
+def new_inquiry(body: dict, request: Request):
+    try:
+        return inquiries.create(require_user(request), str(body.get("category", "")), str(body.get("body", "")))
+    except inquiries.InquiryError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/admin/inquiries")
+def admin_inquiries(request: Request, status: str = "all"):
+    require_admin(request)
+    items = inquiries.all_for_admin(status)
+    return {"inquiries": items, "open": sum(1 for i in inquiries.all_for_admin("open"))}
+
+
+@app.post("/api/admin/inquiries/{inquiry_id}/reply")
+def admin_reply(inquiry_id: str, body: dict, request: Request):
+    admin = require_admin(request)
+    try:
+        return inquiries.reply(admin, inquiry_id, str(body.get("reply", "")))
+    except inquiries.InquiryError as e:
+        raise HTTPException(400, str(e))
+    except LookupError as e:
+        raise HTTPException(404, str(e))

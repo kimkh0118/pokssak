@@ -14,7 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import ValidationError
 
-from . import analyses, auth, db as dbm, google_oauth, property as prop
+from . import analyses, auth, db as dbm, google_oauth, pricewatch, property as prop, push
 from .clock import now_iso
 from .schemas import (
     Answers, CreateAnalysis, Credentials, Evidence, LookupRequest, UpdateAnalysis,
@@ -29,6 +29,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     dbm.connect().close()  # 마이그레이션
+    pricewatch.start_scheduler()  # 관심자산 예상 가격 매주 확인
     yield
 
 
@@ -186,6 +187,78 @@ def get_analysis(analysis_id: str, request: Request):
     return _wrap(lambda: analyses.get(analysis_id, user_of(request), guest_of(request)))
 
 
+_OFFICE_CACHE: dict[str, tuple[float, dict]] = {}
+
+
+@app.get("/api/analyses/{analysis_id}/brokers")
+async def nearby_brokers(analysis_id: str, request: Request):
+    """매물을 내놓을 동네 공인중개사무소(국토부 등록 정보). 로그인 + 이 집을 관심자산에 등록한 경우만."""
+    import time
+    from .adapters import vworld
+    u = require_user(request)
+    with dbm.connect() as c:
+        row = c.execute("SELECT a.lookup_id FROM analyses a JOIN watched_assets w ON w.asset_id = a.asset_id "
+                        "WHERE a.id = ? AND w.user_id = ? AND w.deleted_at IS NULL", (analysis_id, u["id"])).fetchone()
+    if not row:
+        raise HTTPException(403, "관심자산에 등록한 집에서만 공인중개사를 연결할 수 있어요.")
+    lk = prop.get_lookup(row["lookup_id"])
+    sgg, dong = lk["pnu"][:5], lk["address"].get("emdNm") or ""
+    hit = _OFFICE_CACHE.get(sgg)
+    if not hit or time.time() - hit[0] > 86400:  # 하루 캐시
+        hit = (time.time(), await vworld.offices(sgg))
+        _OFFICE_CACHE[sgg] = hit
+    res = hit[1]
+    if not res["ok"]:
+        raise HTTPException(502, res["error"]["message"])
+    same = [o for o in res["data"] if dong and f" {dong} " in f" {o['jibunAddr'] or ''} "]
+    others = [o for o in res["data"] if o not in same]
+    same, others, local_note = await _enrich_offices(same[:20], others[:30], lk)
+    return {"dong": dong, "sgg": lk["address"].get("sggNm"), "sameDong": same[:12], "nearby": others[:8],
+            "total": len(res["data"]), "source": res["meta"]["source"], "asOf": res["meta"].get("fetchedAt"),
+            "sortedBy": "distance" if any(o.get("distanceM") is not None for o in same + others) else "registry",
+            "localNote": local_note}
+
+
+_LOCAL_CACHE: dict[str, tuple[float, dict | None]] = {}
+
+
+async def _enrich_offices(same: list[dict], others: list[dict], lk: dict) -> tuple[list[dict], list[dict], str | None]:
+    """카카오 로컬로 전화번호·위치를 붙이고 집에서 가까운 순으로 정렬. 키가 없거나 꺼져 있으면 그대로 돌려준다."""
+    import asyncio
+    import time
+    import httpx
+    from .adapters import kakao_local as kl
+    if not kl.configured():
+        return same, others, "카카오 로컬 API 키가 없어 전화번호·거리를 표시하지 못했어요."
+    sgg = lk["address"].get("sggNm") or ""
+    try:
+        async with httpx.AsyncClient() as client:
+            home = await kl.geocode(client, lk["address"].get("roadAddr") or lk["address"].get("jibunAddr"))
+
+            async def one(o):
+                key = o["regNo"] + o["name"]
+                hit = _LOCAL_CACHE.get(key)
+                if not hit or time.time() - hit[0] > 7 * 86400:  # 1주 캐시
+                    hit = (time.time(), await kl.find_office(client, o["name"], sgg, o.get("roadAddr"), o.get("jibunAddr")))
+                    _LOCAL_CACHE[key] = hit
+                info = hit[1] or {}
+                d = kl.distance_m(home, (info["x"], info["y"])) if home and info.get("x") else None
+                return o | {"phone": info.get("phone"), "placeUrl": info.get("placeUrl"), "distanceM": round(d) if d is not None else None}
+            sem = asyncio.Semaphore(6)
+
+            async def guarded(o):
+                async with sem:
+                    return await one(o)
+            same = list(await asyncio.gather(*(guarded(o) for o in same)))
+            others = list(await asyncio.gather(*(guarded(o) for o in others)))
+    except kl.KakaoLocalError as e:
+        return same, others, str(e)
+    except httpx.HTTPError:
+        return same, others, "카카오 로컬 API에 연결하지 못했어요."
+    key = lambda o: (o.get("distanceM") is None, o.get("distanceM") or 0)  # 거리를 모르는 곳은 뒤로
+    return sorted(same, key=key), sorted(others, key=key), None
+
+
 EVIDENCE_FIELDS = ("H", "L", "M_H", "M_L", "period_H", "period_L")
 COST_FIELDS = ("tax", "holding", "finance", "cleanup", "other")
 
@@ -258,7 +331,13 @@ def my_assets(request: Request):
         rows = c.execute("SELECT w.id, w.analysis_id, w.created_at, a.road_addr, a.jibun_addr, a.pnu FROM watched_assets w "
                          "JOIN assets a ON a.id = w.asset_id WHERE w.user_id = ? AND w.deleted_at IS NULL ORDER BY w.created_at DESC",
                          (u["id"],)).fetchall()
-    return {"assets": [dict(r) for r in rows]}
+        out = []
+        for r in rows:
+            snaps = c.execute("SELECT house_value, land_value, checked_at FROM price_snapshots WHERE watch_id = ? ORDER BY id DESC LIMIT 2",
+                              (r["id"],)).fetchall()
+            latest, prev = (dict(snaps[0]) if snaps else None), (dict(snaps[1]) if len(snaps) > 1 else None)
+            out.append(dict(r) | {"price": latest, "previous": prev})
+    return {"assets": out, "alertPct": settings.price_alert_pct}
 
 
 @app.delete("/api/assets/{watch_id}")
@@ -270,3 +349,63 @@ def delete_asset(watch_id: str, request: Request):
     if not n:
         raise HTTPException(404, "관심자산을 찾을 수 없습니다.")
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- 알림(관심자산 예상 가격 변동)
+@app.get("/api/notifications")
+def my_notifications(request: Request):
+    u = require_user(request)
+    with dbm.connect() as c:
+        rows = c.execute("SELECT id, event, title, body, asset_id, created_at, read_at FROM notifications WHERE user_id = ? "
+                         "AND event = 'price_change' ORDER BY created_at DESC LIMIT 100", (u["id"],)).fetchall()
+    return {"items": [dict(r) for r in rows]}
+
+
+@app.get("/api/notifications/unread")
+def unread_count(request: Request):
+    u = user_of(request)
+    if not u:
+        return {"count": 0}
+    with dbm.connect() as c:
+        n = c.execute("SELECT count(*) FROM notifications WHERE user_id = ? AND event = 'price_change' AND read_at IS NULL",
+                      (u["id"],)).fetchone()[0]
+    return {"count": n}
+
+
+@app.post("/api/notifications/read")
+def read_all(request: Request):
+    u = require_user(request)
+    with dbm.connect() as c:
+        c.execute("UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL", (now_iso(), u["id"]))
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- 웹 푸시(휴대폰·브라우저 알림)
+@app.get("/api/push/key")
+def push_key():
+    return {"publicKey": settings.vapid_public_key, "enabled": push.configured()}
+
+
+@app.post("/api/push/subscribe")
+async def push_subscribe(request: Request):
+    u = require_user(request)
+    try:
+        push.subscribe(u["id"], await request.json(), request.headers.get("user-agent"))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
+
+
+@app.post("/api/push/unsubscribe")
+async def push_unsubscribe(request: Request):
+    u = require_user(request)
+    body = await request.json()
+    push.unsubscribe(u["id"], body.get("endpoint") or "")
+    return {"ok": True}
+
+
+@app.post("/api/push/test")
+def push_test(request: Request):
+    u = require_user(request)
+    n = push.send(u["id"], "알림이 켜졌어요", "관심 집의 예상 가격이 바뀌면 이렇게 알려드려요.", url="/notifications")
+    return {"sent": n}

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api, type Analysis, type Answers } from "@/lib/api";
 import { QUESTIONS } from "@/lib/labels";
-import { Button, Card, Notice } from "./ui";
+import { Button, Notice } from "./ui";
 
 // 결과 화면에서 네 질문 답을 고치고 다시 계산
 export function AnswersEditor({ data, onSaved }: { data: Analysis; onSaved: (a: Analysis) => void }) {
@@ -36,12 +36,9 @@ export function AnswersEditor({ data, onSaved }: { data: Analysis; onSaved: (a: 
   );
 
   return (
-    <Card className="space-y-4">
-      <div id="answers">
-        <h2 className="text-[20px] font-extrabold">질문 답 수정</h2>
-        <p className="mt-1 text-[13px] text-subtle">응답은 공적 인증이 아니에요. 바꾸면 분석 경로와 결과를 다시 계산해요.</p>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+    <div id="answers" className="space-y-4">
+      <p className="text-[13px] text-subtle">바꾸면 결과를 다시 계산해요. 응답은 공적 인증이 아니에요.</p>
+      <div className="grid gap-3">
         {select("ownership", "1. 소유 형태(건물·매각 토지 모두)")}
         {select("usage", "2. 사용 상태")}
         {select("direction", "2. 우선하는 방향")}
@@ -72,7 +69,7 @@ export function AnswersEditor({ data, onSaved }: { data: Analysis; onSaved: (a: 
         </div>
       )}
       {error && <Notice tone="bad">{error}</Notice>}
-      <div className="flex justify-end"><Button onClick={save} disabled={busy}>{busy ? "다시 계산하는 중…" : "답 저장하고 다시 계산"}</Button></div>
-    </Card>
+      <Button className="w-full" onClick={save} disabled={busy}>{busy ? "다시 계산하는 중…" : "답 저장하고 다시 계산"}</Button>
+    </div>
   );
 }

@@ -94,17 +94,14 @@ body {
   background-color: #f1eeea;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='40'%3E%3Cg fill='none' stroke='%23e2ddd5' stroke-width='2'%3E%3Cpath d='M0 1h72M0 21h72M1 1v20M37 21v20'/%3E%3C/g%3E%3C/svg%3E");
 }
-/* 담장 윗단: 붉은 벽돌 띠 */
+/* 상단 바 아래 얇은 벽돌 띠(브랜드 포인트) */
 .brick-strip {
-  height: 22px;
+  height: 8px;
   background-color: #ffffff;
-  background-image:
-    linear-gradient(90deg, var(--brick) 0 44px, transparent 44px 48px),
-    linear-gradient(90deg, transparent 0 22px, #8c3a30 22px 66px, transparent 66px 70px);
-  background-size: 48px 9px, 70px 9px;
-  background-position: 0 2px, 0 12px;
+  background-image: linear-gradient(90deg, var(--brick) 0 30px, transparent 30px 33px);
+  background-size: 33px 6px;
+  background-position: 0 1px;
   background-repeat: repeat-x;
-  box-shadow: inset 0 -1px 0 #e4dfd8;
 }
 /* 도로명 표지판: 오른쪽 화살촉 모양 */
 .road-sign {
@@ -124,3 +121,8 @@ body {
 }
 /* 위에 붙는 탭(헤더 56px + 벽돌 띠 22px) 아래로 구역 제목이 보이게 */
 [id] { scroll-margin-top: 140px; }
+
+/* 앱 배경: 따뜻한 회색 단색(벽돌 무늬는 상단 띠에만) */
+.app-bg { background-color: #f4f1ec; }
+/* 터치 기기: 탭 강조 제거, 스크롤 튕김 방지 */
+html { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }

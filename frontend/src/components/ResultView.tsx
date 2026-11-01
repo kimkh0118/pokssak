@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api, type Analysis, type Compare, type Reference, type User } from "@/lib/api";
 import { formatWon } from "@/lib/format";
-import { KIND_LABEL, OPTION_LABEL } from "@/lib/labels";
 import { AnswersEditor } from "./AnswersEditor";
-import { InputsPanel } from "./InputsPanel";
 import { LEGAL_KEYS, Verdict } from "./Verdict";
+import { LineChart } from "./LineChart";
+import { NotifyToggle } from "./NotifyToggle";
 import { AddressPlate, plateTitle } from "./AddressSign";
 import { PublicInfo } from "./PublicInfo";
-import { Button, Card, Notice, Pill, ProvenanceBadge, SampleBanner } from "./ui";
+import { Button, Card, Notice, Pill, SampleBanner } from "./ui";
 
 const w = (v: number | null | undefined) => (v == null ? "미확인" : formatWon(v));
 const pair = (p: [number, number] | null | undefined) => (!p ? "미확인" : p[0] === p[1] ? w(p[0]) : `${w(p[0])} ~ ${w(p[1])}`);
@@ -21,9 +21,8 @@ export function ResultView({ id }: { id: string }) {
   const [data, setData] = useState<Analysis | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [withSupport, setWithSupport] = useState(false);
-  const [detail, setDetail] = useState<"sell" | "demolish" | "hold">("sell");
   const [saveState, setSaveState] = useState<string | null>(params.get("saved"));
+  const [tab, setTab] = useState<Tab>("summary");
 
   useEffect(() => {
     api<Analysis>(`/api/analyses/${id}`).then(setData).catch((e) => setError(e.message));
@@ -34,151 +33,133 @@ export function ResultView({ id }: { id: string }) {
   if (!data) return <div className="mx-auto max-w-3xl space-y-3" aria-busy="true"><span className="sr-only">불러오는 중</span>{[0, 1, 2].map((i) => <div key={i} className="h-40 animate-pulse rounded-2xl bg-fill" />)}</div>;
 
   const r = data.result;
-  const cmp: Compare | null = r.calc ? (withSupport && r.calc.withSupport ? r.calc.withSupport : r.calc.withoutSupport) : null;
+  const cmp: Compare | null = r.calc ? r.calc.withoutSupport : null;
   const blocked = data.eligibility.holdReasons.some((h) => LEGAL_KEYS.some((k) => h.includes(k)));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 pb-10">
+    <div className="mx-auto max-w-xl space-y-4 pb-6">
       {data.mode === "sample" && <SampleBanner />}
-      <SaveBanner state={saveState} user={user} analysisId={data.id} onChange={setSaveState} />
 
-      <header>
-        <p className="text-[13px] text-subtle">규칙 {r.ruleVersion} · {new Date(data.updatedAt).toLocaleString("ko-KR")}</p>
+      <header className="space-y-2">
         <h1 className="sr-only">{data.address.roadAddr}</h1>
-        <div className="mt-2"><AddressPlate title={plateTitle(data.address.jibunAddr, data.address.roadAddr)} sub={data.address.roadAddr} /></div>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {Object.values(data.eligibility.labels).filter(Boolean).map((t) => <Pill key={t}>{t}</Pill>)}
+        <AddressPlate title={plateTitle(data.address.jibunAddr, data.address.roadAddr)} sub={data.address.roadAddr} />
+        <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+          {Object.values(data.eligibility.labels).filter(Boolean).map((t) => <span key={t} className="shrink-0"><Pill>{t}</Pill></span>)}
         </div>
       </header>
 
       <Verdict data={data} />
+      <WatchCta data={data} user={user} saved={saveState} onSaved={() => setSaveState("new")} />
 
-      <SectionNav data={data} blocked={blocked} withSupport={withSupport} setWithSupport={setWithSupport} />
+      <ResultTabs tab={tab} setTab={setTab} blocked={blocked} />
 
-
-      {!blocked && <section aria-labelledby="cmp" className="panel">
-        <div className="flex items-end justify-between gap-2">
-          <h2 id="cmp" className="text-[20px] font-extrabold">두 판매 방식 비교</h2>
-          <span className="text-[12px] text-subtle">{withSupport ? "확인된 지원 반영" : "지원금 미반영(기본)"}</span>
+      {tab === "summary" && (
+        <div className="space-y-4">
+          {!blocked && <section aria-labelledby="cmp" className="panel">
+            <h2 id="cmp" className="text-[18px] font-extrabold">두 판매 방식 비교</h2>
+            <p className="mt-1 text-[13px] text-subtle">예상값으로 계산했어요. 세금·관리비 등은 빠져 있어요.</p>
+            {cmp ? <CompareTable data={data} cmp={cmp} /> : <Notice>주변 거래 자료가 없어 비교할 수 없어요.</Notice>}
+          </section>}
+          {!blocked && cmp && <Breakeven cmp={cmp} known={!!r.calc?.demolitionKnown} costsComplete={!!r.calc?.costsComplete} />}
+          <details className="panel group">
+            <summary className="flex cursor-pointer list-none items-center justify-between text-[16px] font-extrabold">
+              질문 답 바꾸기<span aria-hidden className="text-subtle transition group-open:rotate-90">›</span>
+            </summary>
+            <div className="mt-3"><AnswersEditor key={`a-${data.updatedAt}`} data={data} onSaved={setData} /></div>
+          </details>
         </div>
-        <p className="mt-1 text-[13px] text-subtle">{r.label}. 세금·비용 미확인 항목이 있으면 반영 범위를 밝힌 참고금액이에요.</p>
-        {cmp ? <CompareTable data={data} cmp={cmp} /> : <Notice>비교할 가격 자료가 없어요. 아래에서 상담 가격을 입력하면 계산해요.</Notice>}
-      </section>}
+      )}
 
-      {!blocked && cmp && <Breakeven cmp={cmp} known={!!r.calc?.demolitionKnown} costsComplete={!!r.calc?.costsComplete} />}
-      {!blocked && cmp && r.calc?.demolitionKnown && <Sensitivity cmp={cmp} pct={r.sensitivityAssumption} />}
-
-      <AnswersEditor key={`a-${data.updatedAt}`} data={data} onSaved={setData} />
-      <InputsPanel data={data} onSaved={setData} />
-
-      <section aria-labelledby="ref" className="panel">
-        <h2 id="ref" className="text-[20px] font-extrabold">집값·땅값 추정</h2>
-        <p className="mt-1 text-[13px] text-subtle">공인중개사가 쓰는 세 가지 방법(비슷한 거래 비교 · 땅값+남은 건물값 · 공시가격 비율)을 함께 계산한 추정이에요. 감정평가가 아니며, 확정 추천에는 상담 가격이 필요해요.</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <RefCard r={data.reference.house} />
-          <RefCard r={data.reference.land} />
+      {tab === "price" && (
+        <div className="space-y-4">
+          <section aria-labelledby="ref" className="panel">
+            <h2 id="ref" className="text-[18px] font-extrabold">예상 집값·땅값</h2>
+            <p className="mt-1 text-[13px] text-subtle">공인중개사가 쓰는 세 가지 방법(비슷한 거래 비교 · 땅값+남은 건물값 · 공시가격 비율)을 함께 계산했어요. 감정평가가 아니에요.</p>
+            <div className="mt-3 space-y-3">
+              <RefCard r={data.reference.house} />
+              <RefCard r={data.reference.land} />
+            </div>
+          </section>
+          <PriceTrend data={data} />
         </div>
-      </section>
+      )}
 
-      <section aria-labelledby="detail" className="panel">
-        <h2 id="detail" className="text-[20px] font-extrabold">방식별 상세</h2>
-        <div className="mt-3 flex gap-1.5" role="tablist">
-          {([["sell", "현 상태 판매"], ["demolish", "철거 후 판매"], ["hold", "보유·리모델링"]] as const).map(([k, t]) => (
-            <button key={k} role="tab" aria-selected={detail === k} onClick={() => setDetail(k)}
-              className={`rounded-full px-4 py-2 text-[14px] font-bold ${detail === k ? "bg-ink text-white" : "bg-fill text-muted"}`}>{t}</button>
-          ))}
+      {tab === "demolish" && (
+        <div className="space-y-4">
+          {blocked ? <Notice>권리·대상 문제를 먼저 정리해야 해서 철거비를 계산하지 않았어요.</Notice> : <DemolitionEstimate data={data} />}
+          <Programs />
         </div>
-        <Card className="mt-3">
-          {detail === "sell" && <SellDetail data={data} />}
-          {detail === "demolish" && <DemolishDetail data={data} />}
-          {detail === "hold" && <HoldDetail data={data} />}
-        </Card>
-      </section>
+      )}
 
-      <Programs />
-      <Plan data={data} />
+      {tab === "broker" && <BrokerConnect data={data} user={user} />}
 
-      <details className="rounded-2xl ring-1 ring-line p-5">
-        <summary className="cursor-pointer font-bold">공공 기본정보·대상 점검·확인할 사항</summary>
-        <div className="mt-4 space-y-5">
+      {tab === "info" && (
+        <section className="panel space-y-5">
           <PublicInfo lookup={{ ...data.public, address: data.address, pnu: data.pnu, checks: data.checks, mode: data.mode,
             houseTrades: data.tradeStatus.houseTrades, landTrades: data.tradeStatus.landTrades } as never} />
           <div>
             <h3 className="font-bold">추가 확인사항</h3>
             <ul className="mt-1 list-disc pl-5 text-[14px] text-muted">{data.eligibility.confirmations.map((c) => <li key={c}>{c}</li>)}</ul>
-            <p className="mt-2 text-[12px] text-subtle">{data.eligibility.notice}</p>
+            <p className="mt-2 text-[12px] text-subtle">{data.eligibility.notice} · 규칙 {r.ruleVersion} · {new Date(data.updatedAt).toLocaleString("ko-KR")}</p>
           </div>
-        </div>
-      </details>
-    </div>
-  );
-}
-
-function SaveBanner({ state, user, analysisId, onChange }: { state: string | null; user: User | null; analysisId: string; onChange: (s: string | null) => void }) {
-  const [msg, setMsg] = useState<string | null>(null);
-  if (!user) return <Notice>지금 결과는 이 브라우저 세션에서만 볼 수 있어요. <Link href={`/login?next=/analyses/${analysisId}`} className="font-bold text-brand-strong">로그인</Link>하면 관심자산으로 저장해 두고 다시 볼 수 있어요.</Notice>;
-  if (!state) return null;
-  return (
-    <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#e8f8f0] p-4 text-[14px] text-good">
-      <span>{msg ?? (state === "new" ? "관심자산에 자동 저장했어요." : "이미 저장된 관심자산이에요(중복 저장하지 않았어요).")}</span>
-      {!msg && (
-        <span className="flex gap-3">
-          <button className="font-bold underline" onClick={async () => {
-            try {
-              const list = await api<{ assets: { id: string; analysis_id: string }[] }>("/api/assets");
-              const it = list.assets.find((x) => x.analysis_id === analysisId);
-              if (it) await api(`/api/assets/${it.id}`, { method: "DELETE" });
-              setMsg("저장을 취소했어요.");
-            } catch (e) { setMsg(`저장 취소 실패: ${(e as Error).message}`); }
-          }}>저장 취소</button>
-          <button className="font-bold underline" onClick={() => onChange(null)}>닫기</button>
-        </span>
+        </section>
       )}
     </div>
   );
 }
 
-// 위에 붙어 따라오는 구역 이동 탭. 지금 보이는 구역을 표시한다.
-function SectionNav({ data, blocked, withSupport, setWithSupport }: { data: Analysis; blocked: boolean; withSupport: boolean; setWithSupport: (v: boolean) => void }) {
-  const items = [
-    ["status", "결과"], ...(blocked ? [] : [["cmp", "두 방법 비교"]]), ["answers", "질문 답"], ["inputs", "가격·견적"],
-    ["ref", "집값 추정"], ["prog", "철거 지원"], ["plan", "철거 플랜"],
-  ] as [string, string][];
-  const [active, setActive] = useState("status");
-  useEffect(() => {
-    // 화면 위쪽(탭 아래)을 지난 마지막 구역을 현재 위치로
-    const onScroll = () => {
-      let cur = items[0][0];
-      for (const [id] of items) {
-        const el = document.getElementById(id);
-        if (el && el.getBoundingClientRect().top < 170) cur = id;
-      }
-      setActive(cur);
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [blocked]); // eslint-disable-line react-hooks/exhaustive-deps
+const TAB_LIST = [["summary", "요약"], ["price", "가격"], ["demolish", "철거"], ["broker", "중개사"], ["info", "정보"]] as const;
+type Tab = (typeof TAB_LIST)[number][0];
+
+// 결과 화면 탭(위에 붙어 따라옴). 한 번에 한 구역만 보여 화면을 가볍게.
+function ResultTabs({ tab, setTab, blocked }: { tab: Tab; setTab: (t: Tab) => void; blocked: boolean }) {
+  const list = blocked ? TAB_LIST.filter(([k]) => k !== "price") : TAB_LIST;
   return (
-    <nav aria-label="결과 화면 구역" className="sticky top-[78px] z-20 -mx-4 bg-[#f1eeea]/95 px-4 py-2 backdrop-blur">
-      <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none]">
-        {items.map(([id, label]) => (
-          <a key={id} href={`#${id}`} aria-current={active === id ? "true" : undefined}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-[14px] font-bold transition-colors ${active === id ? "bg-sign text-white" : "bg-surface text-muted ring-1 ring-line hover:text-ink"}`}>
-            {label}
-          </a>
+    <div role="tablist" aria-label="결과 보기" className="sticky top-[calc(64px+env(safe-area-inset-top))] z-20 -mx-4 bg-[#f4f1ec]/95 px-4 py-2 backdrop-blur">
+      <div className="grid rounded-xl bg-fill-strong p-1" style={{ gridTemplateColumns: `repeat(${list.length}, minmax(0, 1fr))` }}>
+        {list.map(([k, label]) => (
+          <button key={k} role="tab" aria-selected={tab === k} onClick={() => { setTab(k); window.scrollTo({ top: Math.min(window.scrollY, 380), behavior: "smooth" }); }}
+            className={`h-9 rounded-lg text-[14px] font-bold transition ${tab === k ? "bg-surface text-ink shadow-sm" : "text-muted"}`}>{label}</button>
         ))}
-        {data.result.calc?.withSupport && (
-          <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-2 rounded-full bg-surface px-3 py-1.5 text-[13px] font-bold ring-1 ring-line">
-            <input type="checkbox" className="h-4 w-4 accent-[var(--brand)]" checked={withSupport} onChange={(e) => setWithSupport(e.target.checked)} />
-            확인된 지원금 반영
-          </label>
-        )}
       </div>
-    </nav>
+    </div>
   );
 }
 
+// 관심 집 저장 + 이 기기 알림. 로그인 전에는 로그인 유도.
+function WatchCta({ data, user, saved, onSaved }: { data: Analysis; user: User | null; saved: string | null; onSaved: () => void }) {
+  const [isSaved, setIsSaved] = useState<boolean | null>(saved ? true : null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!user || saved) return;
+    fetch("/api/assets").then((r) => (r.ok ? r.json() : null)).then((d) => setIsSaved(!!d?.assets?.some((a: { pnu: string }) => a.pnu === data.pnu))).catch(() => {});
+  }, [user, saved, data.pnu]);
+  if (!user) {
+    return (
+      <Link href={`/login?next=/analyses/${data.id}`} className="flex items-center justify-between rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
+        <span><b className="block text-[15px]">가격이 바뀌면 알려드릴까요?</b><span className="text-[13px] text-subtle">로그인하면 관심 집으로 저장하고 알림을 받아요</span></span>
+        <span className="shrink-0 rounded-lg bg-brand px-3 py-2 text-[14px] font-bold text-white">로그인</span>
+      </Link>
+    );
+  }
+  if (isSaved === false) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
+        <span><b className="block text-[15px]">관심 집으로 저장할까요?</b><span className="text-[13px] text-subtle">저장하면 예상 가격이 바뀔 때 알려드려요</span></span>
+        <Button disabled={busy} onClick={async () => { setBusy(true); try { await api(`/api/analyses/${data.id}/save`, { method: "POST" }); setIsSaved(true); onSaved(); } finally { setBusy(false); } }}>저장</Button>
+      </div>
+    );
+  }
+  if (!isSaved) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
+      <span className="min-w-0"><b className="block text-[15px]">♥ 관심 집으로 저장됐어요</b><span className="text-[13px] text-subtle">예상 가격이 3% 넘게 바뀌면 알림</span></span>
+      <NotifyToggle compact />
+    </div>
+  );
+}
+
+// 위에 붙어 따라오는 구역 이동 탭. 지금 보이는 구역을 표시한다.
 function Explain({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <details className="group mt-2 text-[13px]">
@@ -190,81 +171,77 @@ function Explain({ title, children }: { title: string; children: React.ReactNode
 
 function CompareTable({ data, cmp }: { data: Analysis; cmp: Compare }) {
   const b = cmp.base, r = data.result;
-  const rows: [string, React.ReactNode, React.ReactNode][] = [
-    ["판매가격", <>{w(b.H)} <ProvenanceBadge p={r.calc!.priceBasis.H ?? "unknown"} /></>, <>{w(b.L)} <ProvenanceBadge p={r.calc!.priceBasis.L ?? "unknown"} /></>],
-    ["철거비", "—", r.calc!.demolitionKnown ? <>{w(b.D)} <ProvenanceBadge p={r.demolition.basis === "quote" ? "consult" : "assumption"} /></> : <span className="text-bad">미확인</span>],
-    ["중개보수", w(b.M_H), w(b.M_L)],
-    ["기타 처리비용", <>{r.costs.C_H.missing.length === 5 ? <span className="text-bad">미확인</span> : w(b.C_H)}{r.costs.C_H.missing.length > 0 && <span className="block text-[11px] text-warn">미반영: {r.costs.C_H.missing.join(", ")}</span>}</>,
-      <>{r.costs.C_L.missing.length === 5 ? <span className="text-bad">미확인</span> : w(b.C_L)}{r.costs.C_L.missing.length > 0 && <span className="block text-[11px] text-warn">미반영: {r.costs.C_L.missing.join(", ")}</span>}</>],
-    ["확인된 지원", "—", b.G ? w(b.G) : "0원(미반영)"],
+  const known = !!r.calc?.demolitionKnown;
+  const rows: [string, string, string][] = [
+    ["예상 판매가", w(b.H), w(b.L)],
+    ["철거비", "—", known ? `− ${w(b.D)}` : "미확인"],
+    ["중개보수", `− ${w(b.M_H)}`, `− ${w(b.M_L)}`],
   ];
+  const better = known ? (b.delta > 0 ? "L" : b.delta < 0 ? "H" : null) : null;
   return (
-    <div className="mt-3 overflow-x-auto rounded-2xl ring-1 ring-line">
-      <table className="tabular w-full min-w-[520px] text-[14px]">
-        <caption className="sr-only">현 상태 판매와 철거 후 토지 판매 비교</caption>
-        <thead><tr className="bg-fill text-left text-[13px]"><th className="p-3">항목</th><th className="p-3">현 상태 판매</th><th className="p-3">철거 후 토지 판매</th></tr></thead>
-        <tbody>
-          {rows.map(([k, a, c]) => <tr key={k} className="border-t border-line"><th scope="row" className="p-3 text-left font-semibold">{k}</th><td className="p-3">{a}</td><td className="p-3">{c}</td></tr>)}
-          <tr className="border-t-2 border-ink/20 bg-brand-soft/50 font-extrabold">
-            <th scope="row" className="p-3 text-left">비용 차감 예상 회수액</th>
-            <td className="p-3">{w(b.N_H)}<span className="block text-[11px] font-normal text-subtle">범위 {pair(cmp.ranges.N_H)}</span></td>
-            <td className="p-3">{r.calc!.demolitionKnown ? <>{w(b.N_L)}<span className="block text-[11px] font-normal text-subtle">범위 {pair(cmp.ranges.N_L)}</span></> : <span className="text-bad">철거비 미확인</span>}</td>
+    <div className="mt-3">
+      <table className="tabular w-full table-fixed text-[13px] sm:text-[14px]">
+        <caption className="sr-only">그대로 팔 때와 철거 후 땅으로 팔 때 비교</caption>
+        <colgroup><col className="w-[30%]" /><col /><col /></colgroup>
+        <thead>
+          <tr className="text-left text-[12px] text-subtle">
+            <th className="pb-2 font-semibold"></th>
+            <th className="pb-2 font-bold">그대로 팔 때</th>
+            <th className="pb-2 font-bold">철거 후 땅</th>
           </tr>
-          {r.calc!.demolitionKnown && <tr className="border-t border-line"><th scope="row" className="p-3 text-left">차이(철거 후 − 현 상태)</th><td colSpan={2} className="p-3 font-bold">{formatWon(b.delta, { signed: true })}{cmp.overlap && <span className="ml-2 text-[12px] font-normal text-warn">두 범위가 겹쳐요</span>}</td></tr>}
+        </thead>
+        <tbody>
+          {rows.map(([k, h, l]) => (
+            <tr key={k} className="border-t border-line">
+              <th scope="row" className="py-2.5 pr-2 text-left font-semibold text-muted">{k}</th>
+              <td className="py-2.5 pr-2">{h}</td>
+              <td className={`py-2.5 ${l === "미확인" ? "text-bad" : ""}`}>{l}</td>
+            </tr>
+          ))}
+          <tr className="border-t-2 border-ink/15 text-[14px] sm:text-[15px]">
+            <th scope="row" className="py-3 pr-2 text-left font-extrabold">남는 돈</th>
+            <td className={`py-3 pr-2 font-extrabold ${better === "H" ? "text-brand-strong" : ""}`}>{w(b.N_H)}</td>
+            <td className={`py-3 font-extrabold ${better === "L" ? "text-brand-strong" : ""}`}>{known ? w(b.N_L) : "—"}</td>
+          </tr>
         </tbody>
       </table>
-      <div className="p-3">
-        <Explain title="계산식·출처·제외 비용">
-          <p>현 상태 회수액 = 판매가격 − 중개보수 − 기타 처리비용</p>
-          <p>철거 후 회수액 = 토지 판매가격 − 철거비 − 중개보수 − 기타 처리비용 + 확인된 지원</p>
-          <p>중개보수: {r.brokerageRule.name}({r.brokerageRule.effective} 시행, 버전 {r.brokerageRule.version}). {r.brokerageRule.note}</p>
-          <p>제외: 과거 취득비용, 대출·보증금 정산, 개인별 세금(입력하지 않은 경우). 대출 정산 후 최종 실수령액이 아니에요.</p>
-          {r.support.excluded.map((x) => <p key={x}>지원 제외: {x}</p>)}
+      {known && (
+        <p className="mt-1 rounded-xl bg-fill px-3 py-2.5 text-[14px]">
+          {better === "H" ? "그대로 팔 때" : better === "L" ? "철거 후 땅으로 팔 때" : "두 방법이"} <b className="tabular">{better ? `${w(Math.abs(b.delta))} 더 남아요` : "비슷해요"}</b>
+          {cmp.overlap && <span className="block text-[12px] text-warn">예상 범위가 겹쳐서 실제로는 반대가 될 수도 있어요.</span>}
+        </p>
+      )}
+      <div className="mt-2">
+        <Explain title="계산식·범위·빠진 비용">
+          <p>그대로 팔 때 = 예상 판매가 − 중개보수 (범위 {pair(cmp.ranges.N_H)})</p>
+          {known && <p>철거 후 = 예상 땅값 − 예상 철거비 − 중개보수 (범위 {pair(cmp.ranges.N_L)})</p>}
+          <p>중개보수: {r.brokerageRule.name}({r.brokerageRule.effective} 시행) 상한요율.</p>
+          <p>빠진 비용: 세금, 보유·관리비, 금융비, 짐 정리비, 과거 취득비용, 대출·보증금 정산. 최종 실수령액이 아니에요.</p>
         </Explain>
       </div>
     </div>
   );
 }
 
-function Breakeven({ cmp, known, costsComplete }: { cmp: Compare; known: boolean; costsComplete: boolean }) {
+// 철거비 손익분기점 하나만: 철거비가 이 금액보다 적으면 철거 후 판매가 유리
+function Breakeven({ cmp, known }: { cmp: Compare; known: boolean; costsComplete?: boolean }) {
   const b = cmp.base;
   return (
-    <section className="grid gap-3 sm:grid-cols-2" aria-label="손익분기점">
-      <Card>
-        <p className="text-[13px] font-bold text-subtle">추가비용 기준</p>
-        <p className="tabular mt-1 text-[24px] font-extrabold">{formatWon(b.K)}</p>
-        <p className="text-[13px] text-muted">토지 가격이 현 상태 가격보다 이만큼 높아요(중개보수 차이 반영). 다른 비용과 지원금을 확인하기 전 기준이며 철거비만의 상한은 아니에요.</p>
-        <Explain title="K 상세"><p>K = L − H − (M_L − M_H)</p><p>= {formatWon(b.L)} − {formatWon(b.H)} − ({formatWon(b.M_L)} − {formatWon(b.M_H)})</p></Explain>
-      </Card>
-      <Card>
-        <p className="text-[13px] font-bold text-subtle">철거비 손익분기점</p>
-        <p className={`tabular mt-1 text-[24px] font-extrabold ${b.D_star < 0 ? "text-bad" : ""}`}>{formatWon(b.D_star)}</p>
-        <p className="text-[13px] text-muted">
-          {b.D_star < 0 ? "음수예요. 이 가정에서는 철거비가 0원이어도 철거 후 판매가 우세하지 않아요."
-            : `철거 총비용이 이 금액보다 적으면 철거 후 판매가 유리해요(다른 입력이 고정된 경우).`}
-          {known && ` 지금 철거비는 ${formatWon(b.D)}이에요.`}
-        </p>
-        {!costsComplete && <p className="mt-1 text-[12px] text-warn">기타 처리비용(세금·보유관리비 등)에 미확인 항목이 있어 그 항목을 빼고 계산한 참고값이에요.</p>}
-        <Explain title="D* 상세"><p>D* = K − (C_L − C_H) + G</p><p>= {formatWon(b.K)} − ({formatWon(b.C_L)} − {formatWon(b.C_H)}) + {formatWon(b.G)}</p><p>검증: 차이 = D* − D</p></Explain>
-      </Card>
+    <section className="panel" aria-labelledby="be">
+      <p id="be" className="text-[13px] font-bold text-subtle">철거비 손익분기점</p>
+      {b.D_star <= 0 ? (
+        <p className="mt-1 text-[15px] font-bold">이 가격대에서는 철거비가 0원이어도 그대로 파는 쪽이 더 남아요.</p>
+      ) : (
+        <>
+          <p className="tabular mt-1 text-[24px] font-extrabold">{formatWon(b.D_star)}</p>
+          <p className="text-[14px] text-muted">철거비가 이보다 적게 나오면 철거 후 땅으로 파는 게 더 남아요.{known && ` 예상 철거비는 ${formatWon(b.D)}이에요.`}</p>
+        </>
+      )}
+      <Explain title="계산식">
+        <p>손익분기점 = 예상 땅값 − 예상 판매가 − (땅 중개보수 − 집 중개보수)</p>
+        <p>= {formatWon(b.L)} − {formatWon(b.H)} − ({formatWon(b.M_L)} − {formatWon(b.M_H)})</p>
+      </Explain>
     </section>
-  );
-}
-
-function Sensitivity({ cmp, pct }: { cmp: Compare; pct: number }) {
-  return (
-    <details className="rounded-2xl ring-1 ring-line p-5">
-      <summary className="cursor-pointer font-bold">±{pct * 100}% 점검 8가지 — {cmp.consistentWinner && cmp.consistentWinner !== "mixed" ? `모두 ${OPTION_LABEL[cmp.consistentWinner]} 우세` : "점검마다 결과가 달라요"}</summary>
-      <p className="mt-2 text-[12px] text-subtle">가격·철거비를 ±{pct * 100}% 바꿔 본 개발 점검 가정이에요. 실제 가격 오차 확률이 아니에요.</p>
-      <div className="mt-2 overflow-x-auto">
-        <table className="tabular w-full min-w-[480px] text-[13px]">
-          <thead><tr className="text-left text-subtle"><th className="py-1">현 상태 가격</th><th>토지 가격</th><th>철거비</th><th>차이 범위</th><th>우세</th></tr></thead>
-          <tbody>{cmp.sensitivity.map((s, i) => (
-            <tr key={i} className="border-t border-line"><td className="py-1">×{s.H}</td><td>×{s.L}</td><td>×{s.D}</td><td>{formatWon(s.deltaMin, { signed: true })} ~ {formatWon(s.deltaMax, { signed: true })}</td><td>{OPTION_LABEL[s.winner] ?? s.winner}</td></tr>
-          ))}</tbody>
-        </table>
-      </div>
-    </details>
   );
 }
 
@@ -298,7 +275,7 @@ function RefCard({ r }: { r: Reference }) {
             ))}
           </ul>
           <p className="text-[12px] text-muted">이 땅의 보정: {v.factors.map((f) => `${f.label} ${f.factor === 1 ? "±0%" : `${f.factor > 1 ? "+" : ""}${Math.round((f.factor - 1) * 100)}%`}`).join(", ")}</p>
-          <p className="text-[12px] text-subtle">집 내부 상태·수요는 반영하지 못해요. 공인중개사 상담 가격을 &lsquo;가격·견적&rsquo;에 넣으면 그 값으로 계산해요.</p>
+          <p className="text-[12px] text-subtle">집 내부 상태·수요는 반영하지 못해요. 실제로 팔기 전에는 공인중개사에게 시세를 확인하세요.</p>
         </div>
       )}
       {r.notes.map((n) => <p key={n} className="mt-1 text-[12px] text-warn">{n}</p>)}
@@ -315,91 +292,13 @@ function RefCard({ r }: { r: Reference }) {
   );
 }
 
-function SellDetail({ data }: { data: Analysis }) {
-  const H = data.inputs.H as { kind?: string; source?: string; checkedOn?: string } | undefined;
-  return (
-    <div className="space-y-2 text-[14px]">
-      <p className="font-bold">현 상태 그대로 건물과 토지를 함께 파는 방법</p>
-      <p>가격 근거: {H?.kind ? `${KIND_LABEL[H.kind]}${H.source ? ` · ${H.source}` : ""}${H.checkedOn ? ` · ${H.checkedOn}` : ""}` : "미입력"}</p>
-      <p className="text-muted">철거 자금 확인이 필요 없어요. 공인중개사에게 현 상태 일괄 매각가격과 예상 기간을 물어보세요.</p>
-      <p className="text-muted">상담: 인근 공인중개사(공개 연락처). 링크를 눌러도 주소·응답·금액은 전송되지 않아요.</p>
-    </div>
-  );
-}
-
-function DemolishDetail({ data }: { data: Analysis }) {
-  const d = data.result.demolition;
-  return (
-    <div className="space-y-2 text-[14px]">
-      <p className="font-bold">철거한 뒤 토지만 파는 방법</p>
-      <p>철거비 근거: {d.basis === "quote" ? "실제 견적" : d.basis === "assumption" ? "사용자 가정 시뮬레이션" : "미확인"} {d.note && `· ${d.note}`}</p>
-      {d.problems.map((p) => <p key={p} className="text-warn">· {p}</p>)}
-      <p className="text-muted">철거비를 먼저 내야 해요. 사후 지급 지원금은 철거 전에 쓸 수 없어요.</p>
-      {data.answers.access === "none" && <Notice tone="warn">차량 진입 불가: 현장 작업 가능 여부와 대안(소형 장비·인력 철거)을 먼저 확인해야 해요.</Notice>}
-    </div>
-  );
-}
-
-function HoldDetail({ data }: { data: Analysis }) {
-  const h = data.holding, rm = data.remodel;
-  return (
-    <div className="space-y-3 text-[14px]">
-      <p className="font-bold">보유하는 경우 비용</p>
-      {h.totals ? (
-        <ul>{Object.entries(h.totals).map(([y, p]) => <li key={y}>{y}년 보유 시 입력 비용 합계: {pair(p)}</li>)}</ul>
-      ) : <p className="text-muted">보유 비용을 입력하면 기간별 합계를 보여줘요.</p>}
-      {h.unreflected.length > 0 && <p className="text-warn">미반영: {h.unreflected.join(", ")}</p>}
-      <p className="text-[12px] text-subtle">{h.note}</p>
-      <p className="pt-2 font-bold">리모델링 후 매각(확장 옵션)</p>
-      {rm.enabled ? <p>비용 차감 예상 회수액 {w(rm.N_R)} (범위 {pair(rm.range)})</p> : <p className="text-muted">계산하려면: {rm.need?.join(", ")}. {rm.note}</p>}
-    </div>
-  );
-}
-
 // 철거 지원은 국가 빈집 누리집(빈집애)에서 신청 — 이 서비스는 연결만 한다
 function Programs() {
   return (
     <section aria-labelledby="prog" className="panel">
-      <h2 id="prog" className="text-[20px] font-extrabold">철거 지원 신청</h2>
-      <p className="mt-1 text-[13px] text-subtle">빈집 철거비 지원은 구·군마다 금액과 조건이 달라요. 빈집애에서 신청하거나 구청 담당 부서에 올해 지원 여부를 물어보세요. 확인받은 금액은 &lsquo;가격·견적 → 지원금&rsquo;에 넣으면 &lsquo;확인된 지원 반영&rsquo; 결과를 볼 수 있어요.</p>
+      <h2 id="prog" className="text-[18px] font-extrabold">철거 지원 신청</h2>
+      <p className="mt-1 text-[13px] text-subtle">빈집 철거비 지원은 구·군마다 금액과 조건이 달라요. 빈집애에서 신청하거나 구청 담당 부서에 올해 지원 여부를 물어보세요.</p>
       <BinzibeLink />
-    </section>
-  );
-}
-
-function Plan({ data }: { data: Analysis }) {
-  const tone = { done: "bg-good text-white", todo: "bg-fill text-muted", blocked: "bg-bad text-white" };
-  return (
-    <section id="plan" aria-labelledby="plan-h" className="panel">
-      <h2 className="text-[24px] font-extrabold leading-tight">어떤 업체가<br />필요하세요?</h2>
-      <ul className="mt-3 grid gap-2 sm:grid-cols-3">
-        {[
-          ["중개 업체", "공인중개사 가격 상담", "#inputs"],
-          ["철거 진행하기", "철거 맞춤 플랜", "#plan-h"],
-          ["리모델링 업체", "보유·리모델링 비용", "#inputs"],
-        ].map(([k, t, href]) => (
-          <li key={t}>
-            <a href={href} className="block rounded-lg bg-surface px-4 py-3 shadow-sm ring-1 ring-ink/70 transition hover:ring-2 hover:ring-brand">
-              <span className="block text-[11px] text-subtle">{k}</span>
-              <span className="block text-[15px] font-extrabold">{t}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
-      <p className="mt-2 text-[12px] text-subtle">제휴 업체는 없어요. 어디에 무엇을 물어볼지 정리해 드려요.</p>
-      <h2 id="plan-h" className="mt-8 text-[20px] font-extrabold">맞춤형 철거 플랜</h2>
-      <p className="mt-1 text-[13px] text-subtle">업체에 연락하기 전에 이 순서로 확인하세요. 최종 선택과 실행은 직접 결정해요. 제휴 업체는 없어요.</p>
-      <ol className="mt-3 space-y-2">
-        {data.plan.map((s) => (
-          <li key={s.no} className="flex gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
-            <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-[13px] font-extrabold ${tone[s.status]}`}>{s.status === "done" ? "✓" : s.no}</span>
-            <span><span className="block font-bold">{s.title}</span><span className="block text-[13px] text-muted">{s.detail}</span>
-              {s.contact && <span className="block text-[12px] text-subtle">상담: {s.contact}</span>}</span>
-          </li>
-        ))}
-      </ol>
-      {data.eligibility.contacts.length > 0 && <p className="mt-2 text-[13px] text-muted">먼저 필요한 상담: {data.eligibility.contacts.join(", ")}</p>}
-      <div className="mt-4 flex gap-2"><Link href="/"><Button variant="secondary">분석 종료</Button></Link></div>
     </section>
   );
 }
@@ -418,5 +317,183 @@ function BinzibeLink() {
           className="rounded-lg bg-fill px-4 py-2 text-[14px] font-bold hover:bg-fill-strong">구청 담당 부서 찾기</a>
       </span>
     </div>
+  );
+}
+
+// 지금까지의 가격 변동(예측 아님). 단위가 다른 두 가지는 그래프를 나눈다.
+const SERIES_COLOR = { house: "#c4733f", land: "#4f54b5" };
+const won1 = (v: number) => (v >= 100_000_000 ? `${(v / 100_000_000).toFixed(1)}억` : `${Math.round(v / 10_000).toLocaleString("ko-KR")}만`);
+const pctText = (c: { from: number; to: number; pct: number } | null) => (c ? `${c.from}→${c.to}년 ${c.pct > 0 ? "+" : ""}${c.pct}%` : null);
+
+function PriceTrend({ data }: { data: Analysis }) {
+  const t = data.trend;
+  const off = t?.official.points ?? [];
+  const trAll = t?.trades.points ?? [];
+  const tr = trAll.some((p) => p.houseUnit != null || p.landUnit != null) ? trAll : [];
+  if (!off.length && !tr.length) {
+    return (
+      <section aria-labelledby="trend" className="panel">
+        <h2 id="trend" className="text-[18px] font-extrabold">가격 변동</h2>
+        <p className="mt-2 text-[14px] text-muted">이 분석에는 가격 기록이 없어요. 주소를 다시 조회하면 연도별 공식 가격과 동네 거래 흐름을 볼 수 있어요.</p>
+      </section>
+    );
+  }
+  const ch = t!.official.change;
+  const summary = [pctText(ch.house5) && `집 공시가격 ${pctText(ch.house5)}`, pctText(ch.land5) && `땅 공시가격 ${pctText(ch.land5)}`].filter(Boolean).join(" · ");
+  return (
+    <section aria-labelledby="trend" className="panel space-y-6">
+      <div>
+        <h2 id="trend" className="text-[18px] font-extrabold">가격 변동</h2>
+        <p className="mt-1 text-[13px] text-subtle">지금까지의 기록이에요. 앞으로의 가격을 예측한 값이 아니에요.{summary && <> 최근 5년: <b className="text-ink">{summary}</b></>}</p>
+      </div>
+      {off.length > 0 && (
+        <LineChart title="공식 가격(연도별)" labels={off.map((p) => String(p.year))}
+          series={[
+            ...(off.some((p) => p.house) ? [{ key: "house", label: "집(공시가격)", short: "집", color: SERIES_COLOR.house, values: off.map((p) => p.house) }] : []),
+            ...(off.some((p) => p.land) ? [{ key: "land", label: "땅(공시지가×면적)", short: "땅", color: SERIES_COLOR.land, values: off.map((p) => p.land) }] : []),
+          ]}
+          format={formatWon} formatShort={won1}
+          note="정부가 매년 정하는 공시가격이라 실제 거래가보다 보통 낮아요. 집 공시가격은 단독·다가구 주택만 있어요." />
+      )}
+      {tr.length > 0 && (
+        <LineChart title={`${t!.trades.umdNm} 실거래 ㎡당 가격(분기별 중앙값)`} labels={tr.map((p) => p.quarter.replace("-Q", "년 ") + "분기")}
+          series={[
+            ...(tr.some((p) => p.houseUnit) ? [{ key: "house", label: "단독·다가구", short: "단독", color: SERIES_COLOR.house, values: tr.map((p) => p.houseUnit) }] : []),
+            ...(tr.some((p) => p.landUnit) ? [{ key: "land", label: "토지", short: "토지", color: SERIES_COLOR.land, values: tr.map((p) => p.landUnit) }] : []),
+          ]}
+          format={(v) => `${Math.round(v).toLocaleString("ko-KR")}원/㎡`} formatShort={(v) => `${Math.round(v / 10_000).toLocaleString("ko-KR")}만`}
+          note={`대지 면적 기준. 분기별 거래 수: ${tr.map((p) => `${p.quarter.slice(2).replace("-Q", ".")}분기 ${p.houseN + p.landN}건`).join(", ")} — 거래가 적은 분기는 크게 흔들리고, 0건인 분기는 값이 없어요.`} />
+      )}
+    </section>
+  );
+}
+
+// 예상 철거비(개략). 결과 비교는 이 범위의 가정값으로 계산한다.
+function DemolitionEstimate({ data }: { data: Analysis }) {
+  const e = data.demolitionEstimate;
+  if (!e) return null;
+  return (
+    <section aria-labelledby="demo-est" className="panel">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="demo-est" className="text-[18px] font-extrabold">예상 철거비</h2>
+        <span className="text-[12px] font-bold text-subtle">견적 아님 · 개략 범위</span>
+      </div>
+      <p className="tabular mt-1 text-[24px] font-extrabold">{formatWon(e.min)} ~ {formatWon(e.max)}</p>
+      <p className="mt-1 text-[13px] text-muted">위 결과는 이 범위로 계산했어요(가운데 값 {formatWon(e.mid)}).</p>
+      <ul className="mt-3 space-y-1 text-[13px]">
+        {e.items.map((i) => (
+          <li key={i.label} className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-line pt-1.5 first:border-t-0">
+            <span><b>{i.label}</b> <span className="text-subtle">{i.note}</span></span>
+            <span className="tabular shrink-0">{formatWon(i.min)} ~ {formatWon(i.max)}</span>
+          </li>
+        ))}
+      </ul>
+      {e.notes.map((n) => <p key={n} className="mt-2 text-[12px] text-subtle">{n}</p>)}
+    </section>
+  );
+}
+
+// 매물을 내놓을 동네 공인중개사무소(국토부 등록 정보). 로그인 + 관심자산 등록 후에만 보여준다.
+type Office = { name: string; regNo: string; jibunAddr: string; roadAddr: string; registeredOn: string;
+  phone?: string | null; placeUrl?: string | null; distanceM?: number | null };
+type Brokers = { dong: string; sgg: string; sameDong: Office[]; nearby: Office[]; total: number; source: string;
+  sortedBy: "distance" | "registry"; localNote: string | null };
+const distText = (m: number) => (m < 1000 ? `${Math.round(m / 10) * 10}m` : `${(m / 1000).toFixed(1)}km`);
+
+function BrokerConnect({ data, user }: { data: Analysis; user: User | null }) {
+  const [state, setState] = useState<"loading" | "login" | "save" | "ok" | "error">(user ? "loading" : "login");
+  const [list, setList] = useState<Brokers | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const load = useCallback(async () => {
+    if (!user) { setState("login"); return; }
+    const r = await fetch(`/api/analyses/${data.id}/brokers`);
+    if (r.status === 401) setState("login");
+    else if (r.status === 403) setState("save");
+    else if (r.ok) { setList(await r.json()); setState("ok"); }
+    else { setMsg((await r.json()).error ?? "중개사무소 정보를 불러오지 못했어요."); setState("error"); }
+  }, [data.id, user]);
+  useEffect(() => { void load(); }, [load]); // eslint-disable-line react-hooks/set-state-in-effect
+
+  async function save() {
+    try { await api(`/api/analyses/${data.id}/save`, { method: "POST" }); await load(); }
+    catch (e) { setMsg((e as Error).message); setState("error"); }
+  }
+  const house = data.reference.house.value;
+  const inquiry = `안녕하세요. ${data.address.roadAddr}(지번 ${data.address.jibunAddr}) 단독주택 소유자입니다. `
+    + `집을 내놓으려고 하는데, 지금 상태 그대로 팔 때와 철거 후 땅으로 팔 때 가격을 각각 알 수 있을까요?`
+    + (house ? ` (참고로 온라인 예상가는 약 ${formatWon(house)}이었어요.)` : "");
+  async function copy() {
+    try { await navigator.clipboard.writeText(inquiry); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { setCopied(false); }
+  }
+  // 지도 검색: 이름+전체 주소는 너무 길어 결과가 안 나와서 '사무소 이름 + 구'로, 안 나오면 주소로 찾기
+  const mapLinks = (o: Office) => {
+    const byName = encodeURIComponent(`${o.name} ${list?.sgg ?? ""}`.trim());
+    const byAddr = encodeURIComponent(o.roadAddr || o.jibunAddr || "");
+    return [["네이버 지도", `https://map.naver.com/p/search/${byName}`], ["카카오맵", o.placeUrl || `https://map.kakao.com/?q=${byName}`],
+      ...(byAddr ? [["주소로 찾기", `https://map.naver.com/p/search/${byAddr}`]] : [])];
+  };
+  const Row = ({ o }: { o: Office }) => (
+    <li className="flex flex-wrap items-center justify-between gap-2 border-t border-line py-2.5 first:border-t-0">
+      <span className="min-w-0">
+        <b className="text-[15px]">{o.name}</b>
+        {o.phone && <a href={`tel:${o.phone.replace(/[^0-9]/g, "")}`} className="tabular ml-2 text-[12px] text-muted underline-offset-2 hover:underline">{o.phone}</a>}
+        <span className="block text-[12px] text-subtle">
+          {o.distanceM != null && <span className="font-bold text-ink">집에서 {distText(o.distanceM)} · </span>}
+          {o.roadAddr || o.jibunAddr} · 등록번호 {o.regNo}
+        </span>
+      </span>
+      <span className="flex shrink-0 gap-1.5">
+        {mapLinks(o).map(([label, href]) => (
+          <a key={label} href={href} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-fill px-3 py-1.5 text-[13px] font-bold hover:bg-fill-strong">{label}</a>
+        ))}
+      </span>
+    </li>
+  );
+  return (
+    <section aria-labelledby="broker" className="panel">
+      <h2 id="broker" className="text-[18px] font-extrabold">공인중개사 연결</h2>
+      <p className="mt-1 text-[13px] text-subtle">매물을 내놓을 동네 공인중개사무소를 찾아 드려요. 국토교통부에 등록된 영업 중인 사무소예요. 이 서비스는 연결만 하고, 주소·연락처를 업체에 보내지 않아요.</p>
+      {state === "login" && (
+        <div className="mt-3 rounded-xl bg-fill p-4">
+          <p className="text-[14px] font-bold">로그인하고 이 집을 관심자산에 등록하면 동네 공인중개사를 보여 드려요.</p>
+          <Link href={`/login?next=/analyses/${data.id}%23broker`} className="mt-2 inline-flex rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white">로그인</Link>
+        </div>
+      )}
+      {state === "save" && (
+        <div className="mt-3 rounded-xl bg-fill p-4">
+          <p className="text-[14px] font-bold">이 집을 관심자산에 등록하면 동네 공인중개사를 보여 드려요.</p>
+          <Button className="mt-2" onClick={() => void save()}>관심자산에 등록</Button>
+        </div>
+      )}
+      {state === "loading" && <div className="mt-3 h-24 animate-pulse rounded-xl bg-fill" />}
+      {state === "error" && msg && <Notice tone="bad">{msg}</Notice>}
+      {state === "ok" && list && (
+        <div className="mt-3 space-y-4">
+          <div className="rounded-xl bg-fill p-4 text-[14px]">
+            <p className="font-bold">이렇게 문의해 보세요</p>
+            <p className="mt-1 text-muted">{inquiry}</p>
+            <Button variant="secondary" className="mt-2" onClick={() => void copy()}>{copied ? "복사했어요" : "문의 내용 복사"}</Button>
+          </div>
+          {list.sameDong.length > 0 && (
+            <div>
+              <p className="text-[14px] font-extrabold">{list.dong} 사무소 {list.sameDong.length}곳{list.sortedBy === "distance" && <span className="ml-1 text-[12px] font-bold text-subtle">가까운 순</span>}</p>
+              <ul className="mt-1">{list.sameDong.map((o) => <Row key={o.regNo + o.name} o={o} />)}</ul>
+            </div>
+          )}
+          {list.nearby.length > 0 && (
+            <details open={list.sameDong.length === 0}>
+              <summary className="cursor-pointer text-[14px] font-extrabold">{list.sgg}의 다른 사무소 보기</summary>
+              <ul className="mt-1">{list.nearby.map((o) => <Row key={o.regNo + o.name} o={o} />)}</ul>
+            </details>
+          )}
+          {list.total === 0 && <Notice>이 지역에 등록된 영업 중인 중개사무소 정보가 없어요.</Notice>}
+          <p className="text-[12px] text-subtle">
+            자료: {list.source}{list.sortedBy === "distance" ? " · 전화번호·위치: 카카오 로컬. 집에서 가까운 순이에요" : ""}. 특정 사무소를 추천하는 것이 아니에요.
+            {list.localNote && <span className="block text-warn">{list.localNote}</span>}
+          </p>
+        </div>
+      )}
+    </section>
   );
 }

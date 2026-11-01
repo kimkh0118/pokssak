@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid
 
-from . import valuation, comps, db as dbm, eligibility, engine, explain, plan
+from . import demolition, trend, valuation, comps, db as dbm, eligibility, engine, explain, plan
 from .auth import token_hash
 from .clock import now_iso, today_kst
 from .property import get_lookup, is_main
@@ -53,10 +53,17 @@ def save_asset(user: dict, analysis_id: str) -> dict:
         row = c.execute("SELECT id, deleted_at FROM watched_assets WHERE user_id = ? AND asset_id = ?", (user["id"], an["asset_id"])).fetchone()
         if row:
             c.execute("UPDATE watched_assets SET analysis_id = ?, deleted_at = NULL WHERE id = ?", (analysis_id, row["id"]))
-            return {"id": row["id"], "created": False}
-        wid = str(uuid.uuid4())
-        c.execute("INSERT INTO watched_assets VALUES (?, ?, ?, ?, ?, NULL)", (wid, user["id"], an["asset_id"], analysis_id, now_iso()))
-    return {"id": wid, "created": True}
+            out = {"id": row["id"], "created": False}
+        else:
+            wid = str(uuid.uuid4())
+            c.execute("INSERT INTO watched_assets VALUES (?, ?, ?, ?, ?, NULL)", (wid, user["id"], an["asset_id"], analysis_id, now_iso()))
+            out = {"id": wid, "created": True}
+    from . import pricewatch  # 예상 가격 기준값(이후 변동 알림의 비교 대상)
+    try:
+        pricewatch.baseline(out["id"], analysis_id)
+    except Exception:  # noqa: BLE001 — 기준값 실패가 저장을 막지 않게
+        pass
+    return out
 
 
 def _row(analysis_id: str, user: dict | None, guest_token: str | None):
@@ -118,7 +125,13 @@ def compute(row) -> dict:
         if est["value"]:
             reference[k].update(value=est["value"], range=est["range"], estimated=True)
     elig = eligibility.evaluate(answers, lk["checks"], scope)
-    result = engine.evaluate(inputs, {"eligibility": elig, "reference": reference,
+    # 철거비를 따로 입력하지 않았으면 예상 철거비(개략 범위)로 비교한다(가정값 — 확정 추천 근거는 아님)
+    demo = demolition.estimate(building, answers, today_kst().year)
+    calc_inputs = inputs
+    if demo and not (inputs.get("D") or {}).get("quote"):
+        calc_inputs = inputs | {"D": {"quote": {"kind": "assumption", "min": demo["min"], "max": demo["max"],
+                                                "source": "예상 철거비(개략)", "checkedOn": today_kst().isoformat()}}}
+    result = engine.evaluate(calc_inputs, {"eligibility": elig, "reference": reference,
                                       "floorArea": (building or {}).get("totArea"), "access": answers.get("access")})
     out = {
         "id": row["id"], "mode": lk["mode"], "ruleVersion": row["rule_version"], "createdAt": row["created_at"], "updatedAt": row["updated_at"],
@@ -127,6 +140,9 @@ def compute(row) -> dict:
         "tradeStatus": {k: {kk: lk[k].get(kk) for kk in ("ok", "failedMonths", "meta", "error")} for k in ("houseTrades", "landTrades")},
         "answers": answers, "inputs": inputs, "eligibility": elig, "reference": reference, "result": result,
         "explanation": explain.ai_explain(result, answers.get("direction")),
+        "demolitionEstimate": demo,
+        "trend": {"official": trend.official(land, lk.get("housePrice"), land_area),
+                  "trades": trend.trades(lk["houseTrades"], lk["landTrades"], subject, lk["months"]["extended"])},
         "holding": engine.holding_guide(inputs), "remodel": engine.remodel_option(inputs),
     }
     out["plan"] = plan.build(out)

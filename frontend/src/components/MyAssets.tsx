@@ -2,15 +2,22 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { api, type User } from "@/lib/api";
-import { Button, Notice } from "./ui";
+import { formatWon } from "@/lib/format";
+import { Notice } from "./ui";
+import { NotifyToggle } from "./NotifyToggle";
 
-type Asset = { id: string; analysis_id: string; created_at: string; road_addr: string; jibun_addr: string; pnu: string };
+type Snap = { house_value: number | null; land_value: number | null; checked_at: string };
+type Asset = { id: string; analysis_id: string; created_at: string; road_addr: string; jibun_addr: string; pnu: string; price: Snap | null; previous: Snap | null };
+
+function change(cur?: number | null, prev?: number | null) {
+  if (!cur || !prev) return null;
+  const p = (cur / prev - 1) * 100;
+  return Math.abs(p) < 0.05 ? "변동 없음" : `${p > 0 ? "▲" : "▼"} ${Math.abs(p).toFixed(1)}% (지난 확인 대비)`;
+}
 
 export function MyAssets() {
-  const router = useRouter();
-  const [user, setUser] = useState<User | null | undefined>(undefined);
+    const [user, setUser] = useState<User | null | undefined>(undefined);
   const [assets, setAssets] = useState<Asset[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,32 +28,54 @@ export function MyAssets() {
     }).catch((e) => setError(e.message));
   }, []);
 
-  if (user === undefined) return <div className="mx-auto h-24 max-w-2xl animate-pulse rounded-2xl bg-fill" />;
-  if (!user) return <div className="mx-auto max-w-2xl"><Notice>관심자산은 로그인한 뒤 볼 수 있어요. <Link className="font-bold text-brand-strong" href="/login?next=/my">로그인</Link></Notice></div>;
+  if (user === undefined) return <div className="mx-auto h-24 max-w-md animate-pulse rounded-2xl bg-fill" />;
+  if (!user) return (
+    <div className="mx-auto max-w-md rounded-2xl bg-surface p-6 text-center shadow-sm ring-1 ring-line">
+      <p className="text-[17px] font-extrabold">관심 집은 로그인한 뒤 볼 수 있어요</p>
+      <p className="mt-1 text-[13px] text-subtle">저장한 집의 예상 가격이 바뀌면 알림으로 알려드려요.</p>
+      <Link className="mt-4 inline-flex h-11 items-center rounded-xl bg-brand px-6 font-bold text-white" href="/login?next=/my">로그인</Link>
+    </div>
+  );
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-[26px] font-extrabold">관심자산</h1>
-        <Button variant="secondary" onClick={async () => { await api("/api/auth/logout", { method: "POST" }); router.push("/"); router.refresh(); }}>로그아웃</Button>
+    <div className="mx-auto max-w-md space-y-4">
+      <h1 className="text-[24px] font-extrabold">관심 집</h1>
+      <div className="rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
+        <NotifyToggle />
+        <p className="mt-1 text-[12px] text-subtle">매일 아침 다시 계산해서 예상 가격이 3% 넘게 바뀌거나 새 공시가격이 나오면 알려드려요.</p>
       </div>
-      <p className="text-[14px] text-subtle">{user.email} · 조회를 마치면 자동 저장돼요. 같은 건물·필지는 한 번만 저장해요. 저장은 소유권 인증이 아니에요.</p>
       {error && <Notice tone="bad">{error}</Notice>}
-      {assets?.length === 0 && <Notice>아직 저장한 빈집이 없어요. <Link className="font-bold text-brand-strong" href="/analyze?mode=live">분석 시작</Link></Notice>}
+      {assets?.length === 0 && (
+        <div className="rounded-2xl bg-surface p-6 text-center shadow-sm ring-1 ring-line">
+          <p className="font-bold">아직 저장한 집이 없어요</p>
+          <p className="mt-1 text-[13px] text-subtle">집을 조회하면 자동으로 여기에 저장돼요.</p>
+          <Link className="mt-4 inline-flex h-11 items-center rounded-xl bg-brand px-5 font-bold text-white" href="/analyze">집 조회하기</Link>
+        </div>
+      )}
       <ul className="space-y-2">
-        {assets?.map((a) => (
-          <li key={a.id} className="flex items-center gap-2 rounded-2xl bg-fill p-1 pr-2">
-            <Link href={`/analyses/${a.analysis_id}`} className="min-w-0 flex-1 rounded-xl p-4 hover:bg-fill-strong">
-              <span className="block truncate font-bold">{a.road_addr}</span>
-              <span className="text-[13px] text-subtle">{a.jibun_addr} · 저장 {new Date(a.created_at).toLocaleDateString("ko-KR")}</span>
-            </Link>
-            <button aria-label={`${a.road_addr} 삭제`} className="h-10 rounded-lg px-3 text-[13px] font-bold text-bad hover:bg-fill-strong"
-              onClick={async () => {
-                try { await api(`/api/assets/${a.id}`, { method: "DELETE" }); setAssets((s) => s?.filter((x) => x.id !== a.id) ?? null); }
-                catch (e) { setError(`삭제 실패: ${(e as Error).message}`); }
-              }}>삭제</button>
-          </li>
-        ))}
+        {assets?.map((a) => {
+          const ch = change(a.price?.house_value, a.previous?.house_value);
+          return (
+            <li key={a.id} className="flex items-center gap-1 rounded-2xl bg-surface shadow-sm ring-1 ring-line">
+              <Link href={`/analyses/${a.analysis_id}`} className="min-w-0 flex-1 p-4 active:opacity-70">
+                <span className="block truncate text-[15px] font-bold">{a.road_addr}</span>
+                <span className="block truncate text-[12px] text-subtle">{a.jibun_addr}</span>
+                {a.price?.house_value ? (
+                  <span className="mt-2 flex items-baseline gap-2">
+                    <b className="tabular text-[17px]">{formatWon(a.price.house_value)}</b>
+                    {ch && <span className={`text-[12px] font-bold ${ch.startsWith("▲") ? "text-bad" : ch.startsWith("▼") ? "text-sign" : "text-subtle"}`}>{ch}</span>}
+                  </span>
+                ) : <span className="mt-2 block text-[12px] text-subtle">예상 가격 계산 전</span>}
+                {a.price && <span className="block text-[11px] text-subtle">확인 {new Date(a.price.checked_at).toLocaleDateString("ko-KR")}</span>}
+              </Link>
+              <button aria-label={`${a.road_addr} 관심 집에서 빼기`} className="mr-2 h-10 rounded-lg px-3 text-[13px] font-bold text-subtle hover:text-bad"
+                onClick={async () => {
+                  try { await api(`/api/assets/${a.id}`, { method: "DELETE" }); setAssets((s) => s?.filter((x) => x.id !== a.id) ?? null); }
+                  catch (e) { setError(`삭제 실패: ${(e as Error).message}`); }
+                }}>빼기</button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

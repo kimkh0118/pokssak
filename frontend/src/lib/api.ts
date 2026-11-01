@@ -80,6 +80,11 @@ export interface Reference {
   estimated?: boolean;
   valuation?: Valuation;
 }
+export interface Trend {
+  official: { points: { year: number; house: number | null; land: number | null }[];
+    change: { house5: { from: number; to: number; pct: number } | null; land5: { from: number; to: number; pct: number } | null } };
+  trades: { umdNm: string; points: { quarter: string; houseUnit: number | null; houseN: number; landUnit: number | null; landN: number }[] };
+}
 export interface Valuation {
   value: number | null; range: { min: number; max: number } | null; agreement: "good" | "check" | "single" | null;
   methods: { key: string; name: string; value: number | null; weight: number; share?: number; detail: string }[];
@@ -98,6 +103,8 @@ export interface Analysis {
   holding: { perYear: Pair | null; totals: Record<string, Pair> | null; unreflected: string[]; plan: string | null; note: string };
   remodel: { enabled: boolean; need?: string[]; N_R?: number; range?: Pair; note?: string };
   plan: PlanStep[];
+  trend?: Trend;
+  demolitionEstimate?: { min: number; max: number; mid: number; items: { label: string; min: number; max: number; note: string }[]; notes: string[] } | null;
 }
 export interface User { id: string; email: string; isAdmin: boolean }
 

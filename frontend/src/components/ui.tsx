@@ -36,7 +36,7 @@ export function Button({
 export function BottomBar({ children }: { children: ReactNode }) {
   return (
     <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 backdrop-blur">
-      <div className="mx-auto flex max-w-3xl gap-2">{children}</div>
+      <div className="mx-auto flex max-w-md gap-2">{children}</div>
     </div>
   );
 }

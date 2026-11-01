@@ -25,6 +25,9 @@ def building_from_item(i: dict) -> dict:
         "totArea": num(i.get("totArea")),     # 연면적 ㎡
         "grndFlrCnt": num(i.get("grndFlrCnt")),
         "ugrndFlrCnt": num(i.get("ugrndFlrCnt")),
+        "archArea": num(i.get("archArea")),   # 건축면적 ㎡(지붕 면적 근사)
+        "heit": num(i.get("heit")),           # 높이 m
+        "roofCdNm": text(i.get("roofCdNm")),  # 지붕 구조(슬레이트 여부 판단)
         "useAprDay": text(i.get("useAprDay")),
         "dongNm": text(i.get("dongNm")),
         "bylotCnt": num(i.get("bylotCnt")),   # 외필지수

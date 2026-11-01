@@ -1,105 +1,51 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { NAV, SITE } from "@/lib/site";
+import { SITE, TABS } from "@/lib/site";
 import { LogoMark } from "./Logo";
 
+// 상단 바: 로고와 로그인 상태만. 넓은 화면에서는 탭 메뉴도 여기에.
 export function SiteHeader() {
   const path = usePathname();
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [user, setUser] = useState<{ email: string } | null | undefined>(undefined);
-  // 페이지가 바뀔 때마다 로그인 상태를 다시 확인(로그인·로그아웃 직후 반영)
+  const [unread, setUnread] = useState(0);
   useEffect(() => {
     let alive = true;
     fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((d) => alive && setUser(d.user ?? null)).catch(() => alive && setUser(null));
-    return () => { alive = false; };
+    const loadUnread = () => fetch("/api/notifications/unread", { cache: "no-store" }).then((r) => r.json()).then((d) => alive && setUnread(d.count ?? 0)).catch(() => {});
+    loadUnread();
+    window.addEventListener("notifications-read", loadUnread);
+    return () => { alive = false; window.removeEventListener("notifications-read", loadUnread); };
   }, [path]);
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setUser(null);
-    setOpen(false);
-    router.push("/");
-    router.refresh();
-  }
-  const loginHref = `/login?next=${encodeURIComponent(path)}`;
-  const active = (m: string) => path === m || path.startsWith(`${m}/`) || (m === "/analyze" && path.startsWith("/analyses"));
+  useEffect(() => { window.dispatchEvent(new CustomEvent("unread-count", { detail: unread })); }, [unread]);
+
   return (
-    <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4">
-        <Link href="/" className="flex shrink-0 items-center gap-2 text-[17px] font-extrabold tracking-tight text-ink" onClick={() => setOpen(false)}>
+    <header className="sticky top-0 z-30 bg-surface/95 pt-[env(safe-area-inset-top)] backdrop-blur">
+      <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">
+        <Link href="/" className="flex shrink-0 items-center gap-2 text-[18px] font-extrabold tracking-tight">
           <LogoMark />
           <span className="text-[#c9483b]">{SITE.name}</span>
-          <span className="hidden text-[13px] font-semibold text-subtle sm:inline">{SITE.tagline}</span>
         </Link>
         <nav aria-label="주 메뉴" className="hidden items-center gap-1 md:flex">
-          {NAV.map((n) => (
-            <Link
-              key={n.href}
-              href={n.href}
-              aria-current={active(n.match) ? "page" : undefined}
-              className={`rounded-lg px-3 py-2 text-[15px] font-bold transition ${active(n.match) ? "text-brand-strong" : "text-muted hover:bg-fill hover:text-ink"}`}
-            >
-              {n.label}
+          {TABS.slice(1).map((t) => (
+            <Link key={t.href} href={t.href} aria-current={t.match(path) ? "page" : undefined}
+              className={`relative rounded-lg px-3 py-2 text-[15px] font-bold ${t.match(path) ? "text-ink" : "text-muted hover:text-ink"}`}>
+              {t.label}
+              {t.href === "/notifications" && unread > 0 && <span className="ml-1 rounded-full bg-brand px-1.5 text-[11px] text-white">{unread}</span>}
             </Link>
           ))}
-          {user === undefined ? <span className="ml-2 h-9 w-20" aria-hidden /> : user ? (
-            <span className="ml-2 flex items-center gap-2">
-              <span className="max-w-40 truncate text-[13px] text-subtle" title={user.email}>{user.email}</span>
-              <button type="button" onClick={logout} className="rounded-lg bg-fill px-3 py-2 text-[14px] font-bold hover:bg-fill-strong">로그아웃</button>
-            </span>
-          ) : (
-            <Link href={loginHref} className="ml-2 rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white hover:bg-brand-strong">로그인</Link>
-          )}
         </nav>
-        <button
-          type="button"
-          className="grid h-10 w-10 place-items-center rounded-lg hover:bg-fill md:hidden"
-          aria-label={open ? "메뉴 닫기" : "메뉴 열기"}
-          aria-expanded={open}
-          aria-controls="mobile-nav"
-          onClick={() => setOpen((v) => !v)}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
-            {open ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
-          </svg>
-        </button>
+        {user === undefined ? <span className="h-8 w-16" aria-hidden /> : user ? (
+          <Link href="/more" className="grid h-9 w-9 place-items-center rounded-full bg-sign text-[14px] font-extrabold text-white md:hidden" aria-label={`내 계정 ${user.email}`}>
+            {user.email[0]?.toUpperCase()}
+          </Link>
+        ) : (
+          <Link href={`/login?next=${encodeURIComponent(path)}`} className="rounded-full bg-fill px-3.5 py-1.5 text-[14px] font-bold md:hidden">로그인</Link>
+        )}
       </div>
       <div className="brick-strip" aria-hidden />
-      {open && (
-        <nav id="mobile-nav" aria-label="주 메뉴" className="border-t border-line bg-surface px-4 pb-4 md:hidden">
-          {NAV.map((n) => (
-            <Link
-              key={n.href}
-              href={n.href}
-              onClick={() => setOpen(false)}
-              aria-current={active(n.match) ? "page" : undefined}
-              className={`flex h-12 items-center justify-between border-b border-line text-[16px] font-bold ${active(n.match) ? "text-brand-strong" : "text-ink"}`}
-            >
-              {n.label}
-              <span aria-hidden className="text-subtle">›</span>
-            </Link>
-          ))}
-          {user === undefined ? <span className="ml-2 h-9 w-20" aria-hidden /> : user ? (
-            <span className="ml-2 flex items-center gap-2">
-              <span className="max-w-40 truncate text-[13px] text-subtle" title={user.email}>{user.email}</span>
-              <button type="button" onClick={logout} className="rounded-lg bg-fill px-3 py-2 text-[14px] font-bold hover:bg-fill-strong">로그아웃</button>
-            </span>
-          ) : (
-            <Link href={loginHref} className="ml-2 rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white hover:bg-brand-strong">로그인</Link>
-          )}
-          {user ? (
-            <div className="mt-3 flex items-center justify-between gap-2">
-              <span className="truncate text-[14px] text-subtle">{user.email}</span>
-              <button type="button" onClick={logout} className="h-11 shrink-0 rounded-xl bg-fill px-4 text-[15px] font-bold">로그아웃</button>
-            </div>
-          ) : user === null && (
-            <Link href={loginHref} onClick={() => setOpen(false)} className="mt-3 flex h-12 items-center justify-center rounded-xl bg-brand text-[15px] font-bold text-white">로그인 · 회원가입</Link>
-          )}
-        </nav>
-      )}
     </header>
   );
 }

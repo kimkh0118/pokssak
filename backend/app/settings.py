@@ -31,6 +31,18 @@ class Settings:
     # 구글 로그인(OAuth). Google Cloud 콘솔에서 발급. 리디렉션 URI 는 {FRONTEND_ORIGIN}/api/auth/google/callback
     google_client_id: str | None = _env("GOOGLE_CLIENT_ID")
     google_client_secret: str | None = _env("GOOGLE_CLIENT_SECRET")
+    # 관심자산 예상 가격 변동 알림: 기준 비율(%)과 매주 확인 요일(0=월)·시각(한국 시간)
+    # 예상 가격이 이 비율(%) 이상 바뀌고, 비교 거래가 최소 건수 이상일 때만 알림. 매일 이 시각(한국 시간) 이후 하루 1번 확인
+    price_alert_pct: float = float(_env("PRICE_ALERT_PCT") or 3.0)
+    price_alert_min_samples: int = int(_env("PRICE_ALERT_MIN_SAMPLES") or 3)
+    price_watch_hour: int = int(_env("PRICE_WATCH_HOUR") or 9)
+    # 웹 푸시(VAPID)
+    vapid_public_key: str | None = _env("VAPID_PUBLIC_KEY")
+    vapid_private_key: str | None = _env("VAPID_PRIVATE_KEY")
+    vapid_subject: str = _env("VAPID_SUBJECT") or "mailto:admin@example.com"
+    price_watch_enabled: bool = (_env("PRICE_WATCH_ENABLED") or "1") == "1"
+    # 카카오 로컬 API(중개사무소 전화번호·위치). developers.kakao.com 앱에서 '카카오맵' 서비스를 켜야 함
+    kakao_rest_api_key: str | None = _env("KAKAO_REST_API_KEY")
     # AI 설명(선택). 키가 없으면 규칙 기반 설명
     anthropic_api_key: str | None = _env("ANTHROPIC_API_KEY")
     llm_model: str = _env("LLM_MODEL") or "claude-sonnet-5-5"

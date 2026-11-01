@@ -21,7 +21,7 @@ SLOPE = {"평지": 1.00, "저지": 0.97, "완경사": 0.97, "고지": 0.95, "급
 STRUCTURE = (("철근콘크리트", 1_900_000, 50), ("철골철근", 1_900_000, 50), ("철골", 1_400_000, 40), ("경량철골", 1_300_000, 30),
              ("벽돌", 1_500_000, 40), ("조적", 1_500_000, 40), ("블록", 1_300_000, 35), ("목조", 1_300_000, 30))
 DEFAULT_STRUCTURE = ("기타·미상", 1_500_000, 40)
-DEMOLITION_PER_M2 = 300_000      # 단독주택 철거·폐기물 처리 개략 단가(원/㎡) — 매수자가 가격에서 깎는 몫 계산용
+# 낡은 집 매수자가 깎는 철거 부담: 예상 철거비(demolition.py)와 같은 구조별 단가의 가운데 값을 쓴다
 BUYER_SHARE = 0.5                # 낡은 집 매수자는 철거 부담의 절반 정도를 가격에서 뺀다고 가정
 NATIONAL_RATIO = 1.8             # 동네 토지 거래가 없을 때 쓰는 시세/공시 비율 가정(단독주택 공시가 현실화율 약 55%)
 WEIGHTS = {"comparable": 0.45, "cost": 0.35, "official": 0.20}
@@ -141,7 +141,9 @@ def estimate(subject: dict, land: dict, building: dict | None, house_ref: dict, 
         if floor and age is not None:
             residual = cost * floor * max(0.0, 1 - age / life)
             if age >= life * 0.8:  # 낡은 집: 매수자가 철거 부담 일부를 깎는다
-                burden = DEMOLITION_PER_M2 * floor * BUYER_SHARE
+                from .demolition import _unit
+                lo, hi = _unit(b.get("strctCdNm"))[1]
+                burden = (lo + hi) / 2 * floor * BUYER_SHARE
         value = max(land_est["value"] * 0.5, land_est["value"] + residual - burden)
         methods.append({"key": "cost", "name": "땅값 + 남은 건물값", "value": value, "weight": WEIGHTS["cost"],
                         "detail": f"땅값 {land_est['value']:,.0f}원 + 건물 잔존 {residual:,.0f}원({sname}, "

@@ -74,7 +74,7 @@ export function PublicInfo({ lookup }: { lookup: Info }) {
             </div>
           ) : <ProviderErrorBox error={land.error} title="토지특성" />}
           {lookup.landUse.ok ? (
-            <div className="mt-2 flex flex-wrap gap-1.5">{lookup.landUse.data.map((u) => <Pill key={u.name}>{u.name}({u.conflict})</Pill>)}</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">{lookup.landUse.data.map((u, i) => <Pill key={`${u.name}-${u.conflict}-${i}`}>{u.name}({u.conflict})</Pill>)}</div>
           ) : <div className="mt-2"><ProviderErrorBox error={lookup.landUse.error} title="토지이용계획" /></div>}
           <p className="mt-2 text-[12px] text-subtle">공시지가는 참고용이며 매각가격으로 쓰지 않아요.</p>
         </div>

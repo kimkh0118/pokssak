@@ -1,66 +1,53 @@
 import { HomeSign } from "@/components/HomeSign";
-import { LogoMark } from "@/components/Logo";
+import { HomeWatchlist } from "@/components/HomeWatchlist";
 
 export const dynamic = "force-dynamic";
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
-async function keyStatus(): Promise<Record<string, boolean> | null> {
+async function backendUp(): Promise<boolean> {
   try {
-    const r = await fetch(`${BACKEND_URL}/api/status`, { cache: "no-store" });
-    return r.ok ? await r.json() : null;
+    return (await fetch(`${BACKEND_URL}/api/status`, { cache: "no-store" })).ok;
   } catch {
-    return null;
+    return false;
   }
 }
 
-const STEPS = [
-  ["공공자료 6종 조회", "주소·건축물대장·토지특성·토지이용계획·주택/토지 실거래"],
-  ["네 가지 질문", "소유 형태·사용 상태·건물 상태·차량 진입"],
-  ["두 판매 방식 비교", "현 상태 판매 vs 철거 후 토지 판매, 철거비 손익분기점"],
-  ["철거 플랜·지원 신청", "확인 순서와 빈집애 철거 지원 연결"],
+// 폭싹이 알려주는 것(순서가 아니라 기능 목록)
+const FEATURES = [
+  ["₩", "예상 집값·땅값", "공인중개사가 쓰는 세 가지 방법으로 계산해요"],
+  ["⛏", "예상 철거비", "건축물대장의 면적·구조·지붕으로 항목별 범위를 내요"],
+  ["🔔", "가격 알림", "관심 집의 예상 가격이 바뀌면 휴대폰으로 알려요"],
 ];
 
 export default async function Home() {
-  const s = await keyStatus();
+  const up = await backendUp();
   return (
-    <div className="mx-auto max-w-3xl space-y-12">
-      <section className="rounded-2xl bg-surface/90 p-6 shadow-sm ring-1 ring-line sm:p-8">
-        <p className="flex items-center gap-1 text-[14px] font-extrabold text-[#c9483b]"><LogoMark size={18} />폭싹</p>
-        <h1 className="mt-2 text-[28px] font-extrabold leading-[1.25] tracking-tight sm:text-[36px]">
-          집에 관련된 정보
+    <div className="mx-auto max-w-md space-y-7">
+      <section className="pt-2">
+        <p className="text-[13px] font-bold text-subtle">부산 빈집 소유자를 위한</p>
+        <h1 className="mt-1 text-[30px] font-extrabold leading-[1.2] tracking-tight">
+          그대로 팔까,
           <br />
-          알아보기.
+          철거하고 팔까?
         </h1>
-        <p className="mt-2 text-[15px] text-muted">부산 빈집, 그대로 팔지 철거하고 팔지 — 비용 빼고 얼마 남는지 비교해요.</p>
-        <div className="mt-6 max-w-md">
-          <HomeSign />
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2 text-[13px]">
-          {s ? (
-            [["juso", "주소"], ["dataGoKr", "건축물·실거래"], ["vworld", "토지특성·이용계획"]].map(([k, t]) => (
-              <span key={k} className={`rounded-full px-2.5 py-1 font-bold ${s[k] ? "bg-brand-soft text-brand-strong" : "bg-fill text-subtle"}`}>{s[k] ? "✓" : "–"} {t}</span>
-            ))
-          ) : (
-            <span className="text-bad">백엔드 서버가 꺼져 있어요(README 실행 방법 참고)</span>
-          )}
-        </div>
+        <p className="mt-2 text-[15px] text-muted">주소만 넣으면 예상 집값과 철거비로 어느 쪽이 얼마 더 남는지 알려드려요.</p>
+        <div className="mt-5"><HomeSign /></div>
+        {!up && <p className="mt-2 text-[13px] font-bold text-bad">서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.</p>}
       </section>
 
-      <section>
-        <h2 className="text-[22px] font-extrabold">이렇게 진행돼요</h2>
-        <ol className="mt-4 grid gap-2 sm:grid-cols-2">
-          {STEPS.map(([t, d], i) => (
-            <li key={t} className="rounded-2xl bg-surface p-4 ring-1 ring-line">
-              <span className="text-[13px] font-extrabold text-brand-strong">0{i + 1}</span>
-              <p className="mt-1 font-extrabold">{t}</p>
-              <p className="text-[13px] text-subtle">{d}</p>
+      <HomeWatchlist />
+
+      <section aria-labelledby="features">
+        <h2 id="features" className="text-[17px] font-extrabold">폭싹이 알려주는 것</h2>
+        <ul className="mt-3 space-y-2">
+          {FEATURES.map(([icon, t, d]) => (
+            <li key={t} className="flex items-center gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
+              <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-[18px] font-extrabold text-brand-strong">{icon}</span>
+              <span><b className="block text-[15px]">{t}</b><span className="text-[13px] text-subtle">{d}</span></span>
             </li>
           ))}
-        </ol>
-        <p className="mt-4 text-[13px] text-subtle">
-          맞춤 분석 대상: 부산 단독·다가구주택 · 건물과 매각할 토지를 같은 개인이 단독소유 · 전체 미사용 · 범위가 명확한 경우.
-          그 밖의 경우에도 공개 정보와 확인 경로는 볼 수 있어요. 추천은 입력 조건에서의 비교이며 가격·거래·지원금을 보장하지 않아요.
-        </p>
+        </ul>
+        <p className="mt-3 px-1 text-[12px] leading-relaxed text-subtle">부산 단독·다가구주택 기준이에요. 결과는 공개 자료로 계산한 예상값이라 실제 거래가·견적과 다를 수 있어요.</p>
       </section>
     </div>
   );

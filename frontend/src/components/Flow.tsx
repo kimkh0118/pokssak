@@ -91,7 +91,7 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
   const typeFail = lookup?.checks.find((c) => c.key === "type")?.status === "fail";
 
   return (
-    <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-md">
       <ol className="mb-6 flex gap-1" aria-label={`진행 단계 ${idx + 1}/${ORDER.length}: ${STEP_LABEL[step]}`}>
         {GROUPS.map((g) => {
           const state = idx > g.last ? "done" : idx >= g.first ? "now" : "todo";

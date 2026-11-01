@@ -13,6 +13,8 @@ def isolated(tmp_path, monkeypatch):
     for k in ("juso_key", "data_go_kr_key", "vworld_key", "anthropic_api_key"):
         monkeypatch.setattr(settings, k, None)
     monkeypatch.setattr(settings, "sample_mode", True)
+    monkeypatch.setattr(settings, "price_watch_enabled", False)
+    monkeypatch.setattr(settings, "kakao_rest_api_key", None)
     monkeypatch.setattr(settings, "admin_emails", ["admin@example.com"])
     clock.set_now(datetime(2026, 10, 22, 10, 0, tzinfo=clock.KST))
     yield

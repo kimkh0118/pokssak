@@ -117,3 +117,15 @@ def test_정보확인_단계_저장은_로그인_필요():
     with TestClient(app) as c:
         lk = lookup(c)
         assert c.post(f"/api/lookups/{lk['id']}/watch", json={}).status_code == 401
+
+
+def test_단독다가구가_아니면_분석도_관심집_저장도_안됨():
+    with TestClient(app) as c:
+        c.post("/api/auth/signup", json={"email": "apt@example.com", "password": "password1"})
+        c.post("/api/auth/login", json={"email": "apt@example.com", "password": "password1"})
+        apt = lookup(c, "sample-apt")
+        r = c.post("/api/analyses", json={"lookupId": apt["id"], "answers": ANSWERS})
+        assert r.status_code == 400 and "단독·다가구" in r.json()["error"]
+        w = c.post(f"/api/lookups/{apt['id']}/watch", json={})
+        assert w.status_code == 400
+        assert c.get("/api/assets").json()["assets"] == []

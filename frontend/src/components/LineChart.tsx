@@ -18,6 +18,20 @@ function niceTicks(min: number, max: number, count = 4): number[] {
   return out;
 }
 
+/** 처음·끝의 빈 값만 가장 가까운 실제 값으로 채운다(중간 빈 값은 그대로 두고 선으로 잇는다) */
+export function fillEdges(vals: (number | null)[]): (number | null)[] {
+  const first = vals.findIndex((v) => v != null);
+  if (first < 0) return vals;
+  let last = vals.length - 1;
+  while (vals[last] == null) last--;
+  return vals.map((v, i) => (i < first ? vals[first] : i > last ? vals[last] : v));
+}
+
+/** i 가 실제 값들 사이(중간)의 빈 칸인지 */
+function between(vals: (number | null)[], i: number) {
+  return vals[i] == null && vals.slice(0, i).some((v) => v != null) && vals.slice(i + 1).some((v) => v != null);
+}
+
 export function LineChart({ title, labels, series, format, formatShort, note }: {
   title: string; labels: string[]; series: Series[]; format: (v: number) => string; formatShort: (v: number) => string; note?: string;
 }) {
@@ -36,10 +50,11 @@ export function LineChart({ title, labels, series, format, formatShort, note }: 
   }, [all, labels.length]);
   if (!all.length) return null;
 
-  // 빈 기간은 건너뛰고 앞뒤 값을 바로 잇는다
-  const paths = series.map((s) => {
+  // 빈 기간 처리: 처음·끝이 비면 가장 가까운 값으로 평평하게 채우고, 중간이 비면 앞뒤 두 점을 곧게 잇는다
+  const filled = series.map((s) => fillEdges(s.values));
+  const paths = filled.map((vals) => {
     let d = "";
-    s.values.forEach((v, i) => {
+    vals.forEach((v, i) => {
       if (v == null) return;
       d += `${d ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`;
     });
@@ -47,9 +62,9 @@ export function LineChart({ title, labels, series, format, formatShort, note }: 
   });
   // 앞뒤가 비어 있는 외톨이 값은 선이 안 생기므로 항상 점으로 보여준다
   const isolated = (vals: (number | null)[], i: number) => vals[i] != null && vals[i - 1] == null && vals[i + 1] == null;
-  const lastIdx = series.map((s) => { for (let i = s.values.length - 1; i >= 0; i--) if (s.values[i] != null) return i; return -1; });
+  const lastIdx = filled.map((vals) => { for (let i = vals.length - 1; i >= 0; i--) if (vals[i] != null) return i; return -1; });
   // 끝점 이름표가 겹치면 아래쪽을 내린다
-  const endY = series.map((s, k) => (lastIdx[k] >= 0 ? y(s.values[lastIdx[k]]!) : 0));
+  const endY = filled.map((vals, k) => (lastIdx[k] >= 0 ? y(vals[lastIdx[k]]!) : 0));
   if (endY.length === 2 && Math.abs(endY[0] - endY[1]) < 16) {
     const [a, b] = endY[0] <= endY[1] ? [0, 1] : [1, 0];
     endY[a] -= 8; endY[b] += 8;
@@ -104,7 +119,7 @@ export function LineChart({ title, labels, series, format, formatShort, note }: 
             {series.map((s) => (
               <p key={s.key} className="flex items-center gap-1.5 whitespace-nowrap text-ink">
                 <span className="inline-block h-2 w-2 rounded-full" style={{ background: s.color }} />
-                {s.label} <b className="tabular">{s.values[hover] == null ? "기록 없음" : format(s.values[hover]!)}</b>
+                {s.label} <b className="tabular">{s.values[hover] != null ? format(s.values[hover]!) : between(s.values, hover) ? "거래 없음(앞뒤 값 잇기)" : filled[series.indexOf(s)][hover] != null ? `${format(filled[series.indexOf(s)][hover]!)} (거래 없어 ${hover === 0 || s.values.slice(0, hover).every((v) => v == null) ? "다음" : "이전"} 값)` : "기록 없음"}</b>
               </p>
             ))}
           </div>

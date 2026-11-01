@@ -217,6 +217,8 @@ def _wrap(fn):
         raise HTTPException(404, str(e))
     except analyses.AccessError as e:
         raise HTTPException(403, str(e))
+    except analyses.NotEligible as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/api/analyses")
@@ -408,7 +410,7 @@ def delete_asset(watch_id: str, request: Request):
 def my_notifications(request: Request):
     u = require_user(request)
     with dbm.connect() as c:
-        rows = c.execute("SELECT id, event, title, body, asset_id, created_at, read_at FROM notifications WHERE user_id = ? "
+        rows = c.execute("SELECT id, event, title, body, asset_id, link, created_at, read_at FROM notifications WHERE user_id = ? "
                          "AND event IN ('price_change', 'inquiry_reply') ORDER BY created_at DESC LIMIT 100", (u["id"],)).fetchall()
     return {"items": [dict(r) for r in rows]}
 
@@ -472,9 +474,18 @@ def my_inquiries(request: Request):
 @app.post("/api/inquiries")
 def new_inquiry(body: dict, request: Request):
     try:
-        return inquiries.create(require_user(request), str(body.get("category", "")), str(body.get("body", "")))
+        return inquiries.create(require_user(request), str(body.get("category", "")), str(body.get("title", "")),
+                                str(body.get("body", "")), str(body.get("custom", "")))
     except inquiries.InquiryError as e:
         raise HTTPException(400, str(e))
+
+
+@app.get("/api/inquiries/{inquiry_id}")
+def one_inquiry(inquiry_id: str, request: Request):
+    try:
+        return inquiries.get(require_user(request), inquiry_id)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
 
 
 @app.get("/api/admin/inquiries")

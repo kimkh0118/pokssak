@@ -20,6 +20,20 @@ class NotFound(Exception):
     pass
 
 
+class NotEligible(Exception):
+    """부산 단독·다가구주택이 아니면 분석·관심 집 저장을 하지 않는다."""
+
+
+BLOCKING = {"busan": "부산광역시에 있는 집만 분석할 수 있어요.",
+            "type": "단독·다가구주택만 분석하고 관심 집으로 저장할 수 있어요. 아파트·연립·다세대·상가 등은 대상이 아니에요."}
+
+
+def ensure_target(lk: dict):
+    for c in lk.get("checks") or []:
+        if c.get("key") in BLOCKING and c.get("status") == "fail":
+            raise NotEligible(BLOCKING[c["key"]])
+
+
 def _scope_key(pnu: str, building_key: str | None) -> str:
     return f"{pnu}:{building_key or 'all'}"
 
@@ -28,6 +42,7 @@ def create(lookup_id: str, answers: dict, scope: dict, user: dict | None, guest_
     lk = get_lookup(lookup_id)
     if not lk:
         raise NotFound("조회 기록을 찾을 수 없습니다. 주소부터 다시 진행해 주세요.")
+    ensure_target(lk)
     a = lk["address"]
     key = _scope_key(lk["pnu"], scope.get("buildingKey"))
     aid, now = str(uuid.uuid4()), now_iso()

@@ -107,7 +107,8 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
   const idx = ORDER.indexOf(step);
   const set = <K extends keyof Answers>(k: K, v: Answers[K]) => setA((s) => ({ ...s, [k]: v }));
   const multi = (lookup?.mainBuildings.length ?? 0) > 1;
-  const typeFail = lookup?.checks.find((c) => c.key === "type")?.status === "fail";
+  // 부산 단독·다가구주택이 아니면 다음 단계·관심 집 저장을 막는다(서버도 같은 규칙)
+  const notTarget = !!lookup?.checks.some((c) => (c.key === "type" || c.key === "busan") && c.status === "fail");
 
   return (
     <div className="mx-auto max-w-md">
@@ -159,7 +160,7 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
         <div className="space-y-6">
           <AddressPlate title={plateTitle(lookup.address.jibunAddr, lookup.address.roadAddr)} sub={lookup.address.roadAddr} />
           <div className="rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line"><PublicInfo lookup={lookup} /></div>
-          {multi && (
+          {multi && !notTarget && (
             <fieldset className="space-y-2 rounded-2xl bg-warn-soft p-5">
               <legend className="sr-only">분석 대상 건물</legend>
               <p className="text-[16px] font-extrabold">분석할 건물을 골라 주세요</p>
@@ -175,7 +176,7 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
               </label>
             </fieldset>
           )}
-          {watch === "new" || watch === "existing" ? (
+          {notTarget ? null : watch === "new" || watch === "existing" ? (
             <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
               <p className="text-[15px] font-bold">♥ {watch === "new" ? "관심 집에 저장했어요" : "이미 관심 집에 있어요"}</p>
               <Link href="/my" className="shrink-0 text-[14px] font-bold text-brand-strong">관심 집 보기 ›</Link>
@@ -186,10 +187,14 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
               <span aria-hidden className="text-brand">♡</span>{watch === "saving" ? "저장하는 중…" : "관심 집에 저장하기"}
             </button>
           )}
-          {typeFail && <Notice tone="bad">이 물건은 맞춤 분석 대상(부산 단독·다가구주택)이 아니어서 금액 추천은 보류되지만, 공개 기본정보와 확인 경로는 계속 볼 수 있어요.</Notice>}
+          {notTarget && (
+            <Notice tone="bad">폭싹은 <b>부산의 단독·다가구주택</b>만 분석해요. 이 건물은 다음 단계로 넘어가거나 관심 집으로 저장할 수 없어요. 다른 주소를 찾아 주세요.</Notice>
+          )}
           <BottomBar>
-            <Button variant="secondary" size="lg" className="w-28" onClick={() => setStep("address")}>다른 주소</Button>
-            <Button size="lg" className="flex-1" disabled={multi && !buildingKey} onClick={() => setStep("intro")}>다음</Button>
+            {!notTarget && <Button variant="secondary" size="lg" className="w-28" onClick={() => setStep("address")}>다른 주소</Button>}
+            {notTarget
+              ? <Button size="lg" className="flex-1" onClick={() => setStep("address")}>다른 주소 찾기</Button>
+              : <Button size="lg" className="flex-1" disabled={multi && !buildingKey} onClick={() => setStep("intro")}>다음</Button>}
           </BottomBar>
         </div>
       )}

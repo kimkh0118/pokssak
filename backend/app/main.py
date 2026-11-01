@@ -14,7 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import ValidationError
 
-from . import analyses, auth, db as dbm, google_oauth, pricewatch, property as prop, push
+from . import analyses, auth, db as dbm, google_oauth, keepalive, pricewatch, property as prop, push
 from .clock import now_iso
 from .schemas import (
     Answers, CreateAnalysis, Credentials, Evidence, LookupRequest, UpdateAnalysis,
@@ -29,6 +29,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     dbm.connect().close()  # 마이그레이션
+    keepalive.start()  # Render 무료 서버가 잠들지 않게 10분마다 자기 주소 열기
     pricewatch.start_scheduler()  # 관심자산 예상 가격 매주 확인
     yield
 

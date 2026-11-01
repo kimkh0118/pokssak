@@ -3,7 +3,7 @@
 - **화면**: Vercel이 GitHub `kimkh0118/pokssak`의 `frontend`를 보고 자동 배포
 - **서버**: Render가 `render.yaml` 대로 `backend/Dockerfile`을 빌드해 자동 배포(미국 동부)
 - **데이터**: Turso(원격 SQLite, 미국 동부). 서버가 다시 켜져도 계정·관심 집·가격 기록이 남음
-- **잠 깨우기**: Render 무료 서버는 15분 동안 안 쓰면 잠들어요 → cron-job.org가 10분마다 깨움
+- **잠 깨우기**: Render 무료 서버는 15분 동안 안 쓰면 잠들어요 → 서버가 10분마다 스스로 깨움
 - 이후 수정은 루트의 **`저장하고배포.command`** 더블클릭 → GitHub에 올라가면 Vercel·Render가 알아서 다시 배포
 
 ## 1. 데이터 — Turso
@@ -41,10 +41,9 @@
 > 브이월드 조회만 서울 리전(`frontend/vercel.json` 의 `icn1`)의 Vercel `/relay/vworld` 를 거쳐 불러요.
 > 중계는 앱이 쓰는 브이월드 조회 4가지만 넘기고, 인증은 브이월드가 우리 키와 등록된 사이트 주소로 직접 해요.
 
-## 4. 잠 깨우기 — cron-job.org
-1. https://cron-job.org 가입 → **Create cronjob**
-2. URL `https://<render 주소>/api/status`, 실행 간격 **Every 10 minutes** → 저장
-   (매일 가격 확인도 이 덕분에 제때 돌아요. Render 무료 750시간/월이면 서버 1개를 한 달 내내 켤 수 있어요)
+## 4. 잠 깨우기 — 자동(설정 없음)
+서버가 10분마다 자기 공개 주소(`RENDER_EXTERNAL_URL`, Render가 자동으로 넣어 줌)를 열어서 잠들지 않아요(`backend/app/keepalive.py`).
+매일 가격 확인도 이 덕분에 제때 돌아요. Render 무료 750시간/월이면 서버 1개를 한 달 내내 켤 수 있어요.
 
 ## 5. 외부 서비스에 새 주소 등록
 | 서비스 | 할 일 |

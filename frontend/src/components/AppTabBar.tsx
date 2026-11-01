@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { TABS } from "@/lib/site";
 import { AppIcon } from "./AppIcon";
 
-// 휴대폰 하단 탭. 주소 입력·질문 단계와 로그인 화면에서는 숨겨 집중하게 한다.
+// 휴대폰 하단 탭. 앱으로 설치하면 뒤로 가기 버튼이 없으니 모든 화면에서 보여 준다.
 export function AppTabBar() {
   const path = usePathname();
   const [unread, setUnread] = useState(0);
@@ -15,7 +15,6 @@ export function AppTabBar() {
     window.addEventListener("unread-count", on);
     return () => window.removeEventListener("unread-count", on);
   }, []);
-  if (path.startsWith("/analyze") || path.startsWith("/login")) return null;
   return (
     <nav aria-label="하단 메뉴" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
       <ul className="mx-auto grid max-w-md grid-cols-5">

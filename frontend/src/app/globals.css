@@ -126,3 +126,57 @@ body {
 .app-bg { background-color: #f4f1ec; }
 /* 터치 기기: 탭 강조 제거, 스크롤 튕김 방지 */
 html { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+
+/* 앱 시작 화면(Splash.tsx): 약 1.6초 뒤 스스로 사라짐 */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: #f4f1ec;
+  animation: splash-out 0.35s ease-in 1.45s forwards;
+}
+.no-splash .splash { display: none; }
+.splash-inner { display: flex; flex-direction: column; align-items: center; }
+.splash-house path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: splash-draw 0.5s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+.splash-house path:nth-child(2) { animation-delay: 0.12s; }
+.splash-house path:nth-child(3) { animation-delay: 0.3s; }
+.splash-bricks { display: flex; gap: 3px; margin-top: 6px; }
+.splash-bricks span {
+  width: 14px;
+  height: 7px;
+  border-radius: 1.5px;
+  background: var(--brick);
+  opacity: 0;
+  transform: translateY(8px);
+  animation: splash-rise 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.splash-name {
+  margin-top: 14px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #c9483b;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: splash-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.85s forwards;
+}
+.splash-tag {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--subtle);
+  opacity: 0;
+  animation: splash-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) 1s forwards;
+}
+@keyframes splash-draw { to { stroke-dashoffset: 0; } }
+@keyframes splash-rise { to { opacity: 1; transform: none; } }
+@keyframes splash-out { to { opacity: 0; visibility: hidden; transform: scale(1.04); } }
+@media (prefers-reduced-motion: reduce) {
+  .splash { display: none; }
+}

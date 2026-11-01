@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { toast } from "@/lib/toast";
 import { api, type User } from "@/lib/api";
 import { formatWon } from "@/lib/format";
 import { Notice } from "./ui";
@@ -52,7 +53,7 @@ export function MyAssets() {
           <Link className="mt-4 inline-flex h-11 items-center rounded-xl bg-brand px-5 font-bold text-white" href="/analyze">집 조회하기</Link>
         </div>
       )}
-      <ul className="space-y-2">
+      <ul className="stagger space-y-2">
         {assets?.map((a) => {
           const ch = change(a.price?.house_value, a.previous?.house_value);
           return (
@@ -70,9 +71,20 @@ export function MyAssets() {
               </Link>
               <button aria-label={`${a.road_addr} 관심 집에서 빼기`} className="mr-2 h-10 rounded-lg px-3 text-[13px] font-bold text-subtle hover:text-bad"
                 onClick={async () => {
-                  try { await api(`/api/assets/${a.id}`, { method: "DELETE" }); setAssets((s) => s?.filter((x) => x.id !== a.id) ?? null); }
-                  catch (e) { setError(`삭제 실패: ${(e as Error).message}`); }
-                }}>빼기</button>
+                  const before = assets;
+                  setAssets((s) => s?.filter((x) => x.id !== a.id) ?? null);  // 먼저 화면에서 빼고(바로 반응)
+                  try {
+                    await api(`/api/assets/${a.id}`, { method: "DELETE" });
+                    toast("관심 집에서 뺐어요", { action: { label: "되돌리기", run: async () => {
+                      await api(`/api/analyses/${a.analysis_id}/save`, { method: "POST" });
+                      setAssets(before);
+                      toast("다시 저장했어요");
+                    } } });
+                  } catch (e) {
+                    setAssets(before);
+                    toast(`빼지 못했어요: ${(e as Error).message}`, { tone: "bad" });
+                  }
+                }}>관심 해제</button>
             </li>
           );
         })}

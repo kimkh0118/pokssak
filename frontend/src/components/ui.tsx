@@ -21,10 +21,10 @@ export function Button({
     secondary: "bg-fill text-ink hover:bg-fill-strong",
     ghost: "text-brand-strong hover:underline",
   }[variant];
-  const sizes = size === "lg" ? "min-h-14 rounded-lg px-5 text-[17px]" : "min-h-11 rounded-lg px-4 text-[15px]";
+  const sizes = size === "lg" ? "min-h-14 rounded-2xl px-5 text-[17px]" : "min-h-11 rounded-xl px-4 text-[15px]";
   return (
     <button
-      className={`inline-flex items-center justify-center font-bold transition active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-fill-strong disabled:text-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${sizes} ${styles} ${className}`}
+      className={`inline-flex items-center justify-center font-bold transition-[transform,background-color,opacity,box-shadow] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:bg-fill-strong disabled:text-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${sizes} ${styles} ${className}`}
       {...rest}
     >
       {children}
@@ -137,7 +137,7 @@ export function Stat({ label, value, sub, tone }: { label: string; value: ReactN
   return (
     <div className="rounded-xl bg-fill p-3.5">
       <p className="text-[12px] font-semibold text-subtle">{label}</p>
-      <p className={`tabular mt-1 text-[17px] font-extrabold ${tone === "blue" ? "text-brand-strong" : tone === "red" ? "text-bad" : "text-ink"}`}>{value}</p>
+      <p className={`num-in tabular mt-1 text-[17px] font-extrabold ${tone === "blue" ? "text-brand-strong" : tone === "red" ? "text-bad" : "text-ink"}`}>{value}</p>
       {sub && <p className="mt-0.5 text-[12px] text-subtle">{sub}</p>}
     </div>
   );

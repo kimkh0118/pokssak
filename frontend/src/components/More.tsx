@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { api, type User } from "@/lib/api";
 import { isStandalone } from "@/lib/device";
+import { toast } from "@/lib/toast";
 import { SITE } from "@/lib/site";
 import { DeviceGuide } from "./InstallGuide";
 import { NotifyToggle } from "./NotifyToggle";
@@ -44,7 +45,7 @@ export function More() {
             <span className="grid h-11 w-11 place-items-center rounded-full bg-sign text-[17px] font-extrabold text-white">{user.email[0]?.toUpperCase()}</span>
             <span className="min-w-0 flex-1"><b className="block truncate">{user.email}</b><span className="text-[13px] text-subtle">로그인됨</span></span>
             <button className="rounded-lg bg-fill px-3 py-2 text-[13px] font-bold"
-              onClick={async () => { await api("/api/auth/logout", { method: "POST" }); router.replace("/welcome"); }}>로그아웃</button>
+              onClick={async () => { await api("/api/auth/logout", { method: "POST" }); toast("로그아웃했어요"); router.replace("/welcome"); }}>로그아웃</button>
           </div>
         ) : (
           <div>

@@ -85,15 +85,15 @@ function Numbers({ b, demolitionKnown }: { b: NonNullable<Analysis["result"]["ca
     <div className="mt-4 grid gap-2 sm:grid-cols-2">
       <div className="rounded-2xl bg-white/10 p-4">
         <p className="text-[13px] text-white/70">그대로 팔면 남는 돈</p>
-        <p className="tabular mt-1 text-[24px] font-extrabold">약 {formatWon(b.N_H)}</p>
+        <p className="num-in tabular mt-1 text-[24px] font-extrabold">약 {formatWon(b.N_H)}</p>
       </div>
       <div className="rounded-2xl bg-white/10 p-4">
         <p className="text-[13px] text-white/70">철거하고 땅으로 팔면 남는 돈</p>
         {demolitionKnown ? (
-          <p className="tabular mt-1 text-[24px] font-extrabold">약 {formatWon(b.N_L)}</p>
+          <p className="num-in tabular mt-1 text-[24px] font-extrabold">약 {formatWon(b.N_L)}</p>
         ) : (
           <>
-            <p className="tabular mt-1 text-[24px] font-extrabold">약 {formatWon(beforeDemolition)} − 철거비</p>
+            <p className="num-in tabular mt-1 text-[24px] font-extrabold">약 {formatWon(beforeDemolition)} − 철거비</p>
             <p className="text-[12px] text-white/60">건물 면적을 몰라 예상 철거비를 계산하지 못했어요</p>
           </>
         )}

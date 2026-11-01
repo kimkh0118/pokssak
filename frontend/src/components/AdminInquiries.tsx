@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { InquiryRow, type InquiryItem } from "./Inquiry";
+import { InquiryRow, TypeChips, typeOf, type InquiryItem } from "./Inquiry";
 import { Notice } from "./ui";
 
 const FILTERS = [{ key: "open", label: "답변 대기" }, { key: "answered", label: "답변 완료" }, { key: "all", label: "전체" }] as const;
@@ -13,6 +13,8 @@ export function AdminInquiries() {
   const [items, setItems] = useState<InquiryItem[] | null>(null);
   const [openCount, setOpenCount] = useState(0);
   const [err, setErr] = useState<string | null>(null);
+  const [type, setType] = useState("전체");
+  const shown = type === "전체" ? items : items?.filter((q) => typeOf(q.category) === type) ?? null;
 
   useEffect(() => {
     let alive = true;
@@ -36,13 +38,14 @@ export function AdminInquiries() {
           </button>
         ))}
       </div>
+      <TypeChips value={type} onChange={setType} items={items} />
       {err && <Notice tone="bad">{err}</Notice>}
-      {items === null && !err ? <div className="h-24 animate-pulse rounded-2xl bg-fill" /> : items?.length === 0 ? (
+      {items === null && !err ? <div className="h-24 animate-pulse rounded-2xl bg-fill" /> : shown?.length === 0 ? (
         <p className="rounded-2xl bg-surface p-6 text-center text-[14px] text-subtle shadow-sm ring-1 ring-line">
-          {filter === "open" ? "답할 문의가 없어요." : "문의가 없어요."}
+          {type !== "전체" ? `${type} 문의가 없어요.` : filter === "open" ? "답할 문의가 없어요." : "문의가 없어요."}
         </p>
       ) : (
-        <ul className="space-y-2">{items?.map((q) => <InquiryRow key={q.id} q={q} showEmail />)}</ul>
+        <ul key={`${filter}-${type}`} className="stagger space-y-2">{shown?.map((q) => <InquiryRow key={q.id} q={q} showEmail />)}</ul>
       )}
     </div>
   );

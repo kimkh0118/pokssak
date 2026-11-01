@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { toast } from "@/lib/toast";
 import { DeviceGuide } from "./InstallGuide";
 import { currentSubscription, disablePush, enablePush, isIosNotInstalled, pushSupported } from "@/lib/push";
 
@@ -20,10 +21,10 @@ export function NotifyToggle({ compact }: { compact?: boolean }) {
   }, []);
   async function toggle() {
     setBusy(true); setNote(null);
-    if (state === "on") { await disablePush(); setState("off"); }
+    if (state === "on") { await disablePush(); setState("off"); toast("이 기기 알림을 껐어요"); }
     else {
       const r = await enablePush();
-      if (r === "on") { setState("on"); await fetch("/api/push/test", { method: "POST" }); }
+      if (r === "on") { setState("on"); toast("알림을 켰어요 · 시험 알림을 보냈어요"); await fetch("/api/push/test", { method: "POST" }); }
       else if (r === "denied") setState("denied");
       else if (r === "unsupported") setState("unsupported");
       else setNote("알림을 켜지 못했어요. 잠시 후 다시 시도해 주세요.");

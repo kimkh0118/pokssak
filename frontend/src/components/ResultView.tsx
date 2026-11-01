@@ -236,7 +236,7 @@ function Breakeven({ cmp, known }: { cmp: Compare; known: boolean; costsComplete
         <p className="mt-1 text-[15px] font-bold">이 가격대에서는 철거비가 0원이어도 그대로 파는 쪽이 더 남아요.</p>
       ) : (
         <>
-          <p className="tabular mt-1 text-[24px] font-extrabold">{formatWon(b.D_star)}</p>
+          <p className="num-in tabular mt-1 text-[24px] font-extrabold">{formatWon(b.D_star)}</p>
           <p className="text-[14px] text-muted">철거비가 이보다 적게 나오면 철거 후 땅으로 파는 게 더 남아요.{known && ` 예상 철거비는 ${formatWon(b.D)}이에요.`}</p>
         </>
       )}
@@ -256,7 +256,7 @@ function RefCard({ r }: { r: Reference }) {
   return (
     <Card>
       <p className="text-[13px] font-bold text-subtle">{r.label} {est ? "추정가(중개사 방식)" : "참고가격"}</p>
-      <p className="tabular mt-1 text-[22px] font-extrabold">{r.value == null ? "산정 보류" : formatWon(r.value)}</p>
+      <p className="num-in tabular mt-1 text-[22px] font-extrabold">{r.value == null ? "산정 보류" : formatWon(r.value)}</p>
       {est && v?.range ? (
         <p className="text-[12px] text-subtle">추정 범위 {formatWon(v.range.min)} ~ {formatWon(v.range.max)}
           {v.agreement && <span className={v.agreement === "check" ? " font-bold text-warn" : ""}> · {AGREE[v.agreement]}</span>}</p>
@@ -381,7 +381,7 @@ function DemolitionEstimate({ data }: { data: Analysis }) {
         <h2 id="demo-est" className="text-[18px] font-extrabold">예상 철거비</h2>
         <span className="text-[12px] font-bold text-subtle">견적 아님 · 개략 범위</span>
       </div>
-      <p className="tabular mt-1 text-[24px] font-extrabold">{formatWon(e.min)} ~ {formatWon(e.max)}</p>
+      <p className="num-in tabular mt-1 text-[24px] font-extrabold">{formatWon(e.min)} ~ {formatWon(e.max)}</p>
       <p className="mt-1 text-[13px] text-muted">위 결과는 이 범위로 계산했어요(가운데 값 {formatWon(e.mid)}).</p>
       <ul className="mt-3 space-y-1 text-[13px]">
         {e.items.map((i) => (
@@ -459,14 +459,14 @@ function BrokerConnect({ data, user }: { data: Analysis; user: User | null }) {
       <p className="mt-1 text-[13px] text-subtle">매물을 내놓을 동네 공인중개사무소를 찾아 드려요. 국토교통부에 등록된 영업 중인 사무소예요. 이 서비스는 연결만 하고, 주소·연락처를 업체에 보내지 않아요.</p>
       {state === "login" && (
         <div className="mt-3 rounded-xl bg-fill p-4">
-          <p className="text-[14px] font-bold">로그인하고 이 집을 관심자산에 등록하면 동네 공인중개사를 보여 드려요.</p>
+          <p className="text-[14px] font-bold">로그인하고 이 집을 관심 집으로 저장하면 동네 공인중개사를 보여 드려요.</p>
           <Link href={`/login?next=/analyses/${data.id}%23broker`} className="mt-2 inline-flex rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white">로그인</Link>
         </div>
       )}
       {state === "save" && (
         <div className="mt-3 rounded-xl bg-fill p-4">
-          <p className="text-[14px] font-bold">이 집을 관심자산에 등록하면 동네 공인중개사를 보여 드려요.</p>
-          <Button className="mt-2" onClick={() => void save()}>관심자산에 등록</Button>
+          <p className="text-[14px] font-bold">이 집을 관심 집으로 저장하면 동네 공인중개사를 보여 드려요.</p>
+          <Button className="mt-2" onClick={() => void save()}>관심 집에 저장하기</Button>
         </div>
       )}
       {state === "loading" && <div className="mt-3 h-24 animate-pulse rounded-xl bg-fill" />}

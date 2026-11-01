@@ -33,7 +33,7 @@ export default function AboutPage() {
           <li>예상값이라 실제 판매가격·견적과 다를 수 있어요. 팔기 전에는 공인중개사·철거업체에 확인하세요.</li>
         </ul>
       </Section>
-      <div className="border-t border-line pt-8"><Link href="/analyze?mode=live" className="inline-flex h-14 items-center rounded-xl bg-brand px-6 text-[17px] font-bold text-white">빈집 비교 시작</Link></div>
+      <div className="border-t border-line pt-8"><Link href="/analyze?mode=live" className="inline-flex h-14 items-center rounded-xl bg-brand px-6 text-[17px] font-bold text-white">내 집 조회하기</Link></div>
     </article>
   );
 }

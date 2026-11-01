@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { toast } from "@/lib/toast";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, type Address, type Answers, type Fetched, type Lookup } from "@/lib/api";
@@ -82,6 +83,7 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
         method: "POST", body: { buildingKey, costsSeparable },
       });
       setWatch(out.saved.created ? "new" : "existing");
+      toast(out.saved.created ? "관심 집에 저장했어요" : "이미 관심 집에 있어요");
     } catch (e) {
       setError((e as Error).message);
       setWatch("idle");
@@ -204,7 +206,7 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
           <p className="text-[20px] font-extrabold">잠깐, 질문이 있어요</p>
           <p className="mt-1 text-[13px] text-subtle">더 좋은 결과를 위해서 수집하는 정보예요. 네 가지만 답하면 돼요.</p>
           <Button className="mt-4 w-full" onClick={() => setStep("q1")}>다음</Button>
-          <button type="button" className="mt-2 w-full text-[13px] text-subtle underline" onClick={() => setStep("target")}>이전으로</button>
+          <button type="button" className="mt-2 w-full text-[13px] text-subtle underline" onClick={() => setStep("target")}>이전</button>
         </div>
       )}
 

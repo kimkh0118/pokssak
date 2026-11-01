@@ -43,7 +43,7 @@ export function Inbox() {
           <p className="mt-1 text-[13px] text-subtle">관심 집의 예상 가격이 3% 넘게 바뀌거나 새 공시가격이 나오면 여기와 휴대폰으로 알려드려요.</p>
         </div>
       )}
-      <ul className="space-y-2">
+      <ul className="stagger space-y-2">
         {items?.map((n) => (
           <li key={n.id} className="rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
             <p className="flex items-center justify-between gap-2">

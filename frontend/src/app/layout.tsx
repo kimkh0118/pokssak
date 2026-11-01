@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { AppTabBar } from "@/components/AppTabBar";
 import { SWRegister } from "@/components/SWRegister";
 import { MemberGate } from "@/components/MemberGate";
+import { Toaster } from "@/components/Toaster";
 import { Splash, SPLASH_SCRIPT } from "@/components/Splash";
 
 export const metadata: Metadata = {
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AppTabBar />
         <SWRegister />
         <MemberGate />
+        <Toaster />
       </body>
     </html>
   );

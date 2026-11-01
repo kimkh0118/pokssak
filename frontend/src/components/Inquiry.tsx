@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, type User } from "@/lib/api";
+import { toast } from "@/lib/toast";
 import { Notice } from "./ui";
 
 export type InquiryItem = {
@@ -20,6 +21,29 @@ export function StatusPill({ answered }: { answered: boolean }) {
     <span className={`shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold ${answered ? "bg-[#e7f6ee] text-good" : "bg-fill text-muted"}`}>
       {answered ? "답변 완료" : "답변 대기"}
     </span>
+  );
+}
+
+/** 종류별 보기: 기타에서 직접 적은 종류는 '기타'로 묶는다 */
+export const TYPE_FILTERS = ["전체", "이용 문의", "오류 신고", "기능 제안", "기타"];
+export function typeOf(category: string) {
+  return CATEGORIES.slice(0, 3).includes(category) ? category : "기타";
+}
+
+export function TypeChips({ value, onChange, items }: { value: string; onChange: (v: string) => void; items: InquiryItem[] | null }) {
+  return (
+    <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4" role="group" aria-label="문의 종류로 보기">
+      {TYPE_FILTERS.map((t) => {
+        const n = t === "전체" ? items?.length ?? 0 : items?.filter((q) => typeOf(q.category) === t).length ?? 0;
+        return (
+          <button key={t} type="button" aria-pressed={value === t}
+            onClick={(e) => { onChange(t); e.currentTarget.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" }); }}
+            className={`press shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-bold ring-1 transition-colors duration-150 ${value === t ? "bg-sign text-white ring-sign" : "bg-surface text-muted ring-line"}`}>
+            {t}{items && n > 0 ? <span className={`ml-1 tabular ${value === t ? "text-white/80" : "text-subtle"}`}>{n}</span> : null}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -43,6 +67,8 @@ export function InquiryRow({ q, showEmail }: { q: InquiryItem; showEmail?: boole
 // 내 문의 목록
 export function InquiryList() {
   const [items, setItems] = useState<InquiryItem[] | null>(null);
+  const [type, setType] = useState("전체");
+  const shown = type === "전체" ? items : items?.filter((q) => typeOf(q.category) === type) ?? null;
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     api<{ inquiries: InquiryItem[] }>("/api/inquiries").then((r) => setItems(r.inquiries)).catch((e) => setErr(e.message));
@@ -58,11 +84,14 @@ export function InquiryList() {
       </Link>
       <section>
         <h2 className="text-[17px] font-extrabold">내 문의</h2>
+        {!!items?.length && <div className="mt-3"><TypeChips value={type} onChange={setType} items={items} /></div>}
         {err && <div className="mt-3"><Notice tone="bad">{err}</Notice></div>}
         {items === null && !err ? <div className="mt-3 h-20 animate-pulse rounded-2xl bg-fill" /> : items?.length === 0 ? (
           <p className="mt-3 rounded-2xl bg-surface p-6 text-center text-[14px] text-subtle shadow-sm ring-1 ring-line">아직 남긴 문의가 없어요.</p>
         ) : (
-          <ul className="mt-3 space-y-2">{items?.map((q) => <InquiryRow key={q.id} q={q} />)}</ul>
+          shown?.length === 0
+            ? <p className="mt-3 text-center text-[14px] text-subtle">{type} 문의가 없어요.</p>
+            : <ul key={type} className="stagger mt-3 space-y-2">{shown?.map((q) => <InquiryRow key={q.id} q={q} />)}</ul>
         )}
       </section>
     </div>
@@ -86,6 +115,7 @@ export function InquiryNew() {
     setBusy(true); setErr(null);
     try {
       const q = await api<InquiryItem>("/api/inquiries", { method: "POST", body: { category: cat, custom, title, body } });
+      toast("문의를 보냈어요");
       router.replace(`/inquiry/${q.id}?sent=1`);
     } catch (e) {
       setErr((e as Error).message);
@@ -131,7 +161,7 @@ export function InquiryNew() {
 }
 
 // 문의 상세: 내 질문(오른쪽) ↔ 운영자 답변(왼쪽) 대화 모양. 관리자는 아래에서 답장
-export function InquiryDetail({ id, sent }: { id: string; sent?: boolean }) {
+export function InquiryDetail({ id }: { id: string; sent?: boolean }) {
   const [q, setQ] = useState<InquiryItem | null>(null);
   const [me, setMe] = useState<User | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -145,7 +175,6 @@ export function InquiryDetail({ id, sent }: { id: string; sent?: boolean }) {
   const admin = !!me?.isAdmin;
   return (
     <div className="mx-auto max-w-md space-y-5">
-      {sent && <p role="status" className="rounded-xl bg-[#e7f6ee] px-4 py-3 text-[14px] font-bold text-good">문의를 보냈어요. 답장이 오면 알림으로 알려드릴게요.</p>}
       <div>
         <div className="flex items-center gap-2"><span className="text-[13px] font-bold text-subtle">{q.category}</span><StatusPill answered={!!q.reply} /></div>
         <h1 className="mt-1.5 text-[22px] font-extrabold leading-snug">{q.title}</h1>
@@ -189,6 +218,7 @@ function ReplyBox({ q, onDone }: { q: InquiryItem; onDone: (q: InquiryItem) => v
       try {
         onDone(await api<InquiryItem>(`/api/admin/inquiries/${q.id}/reply`, { method: "POST", body: { reply: text } }));
         setOpen(false);
+        toast("답장을 보냈어요 · 문의한 사람에게 알림이 갔어요");
       } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
     }}>
       <label className="text-[14px] font-bold" htmlFor="reply">{q.reply ? "답장 고치기" : "답장 쓰기"}</label>

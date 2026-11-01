@@ -25,6 +25,9 @@ class Settings:
     timeout_seconds: float = float(_env("PUBLIC_API_TIMEOUT_SECONDS") or 10)
     # 저장
     database_path: str = _env("DATABASE_PATH") or str(BACKEND_DIR / "data" / "app.db")
+    # 배포: Turso(원격 SQLite). 있으면 위 파일 대신 이것을 쓴다
+    turso_url: str | None = _env("TURSO_DATABASE_URL")
+    turso_token: str | None = _env("TURSO_AUTH_TOKEN")
     frontend_origin: str = _env("FRONTEND_ORIGIN") or "http://localhost:3000"
     # 관리자: 이 이메일로 가입하면 관리자 권한
     admin_emails: list[str] = field(default_factory=lambda: [e.strip().lower() for e in (_env("ADMIN_EMAILS") or "").split(",") if e.strip()])

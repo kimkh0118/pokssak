@@ -12,7 +12,25 @@ from .settings import settings
 MIGRATIONS = Path(__file__).parent / "migrations"
 
 
+_client = None
+_remote_migrated = False
+
+
 def connect() -> sqlite3.Connection:
+    """TURSO_DATABASE_URL 이 있으면 Turso(배포), 없으면 로컬 SQLite 파일(개발)"""
+    global _client, _remote_migrated
+    if settings.turso_url:
+        import httpx
+
+        from . import turso
+
+        if _client is None:
+            _client = httpx.Client(timeout=15)
+        db = turso.Connection(settings.turso_url, settings.turso_token, _client)
+        if not _remote_migrated:
+            migrate(db)
+            _remote_migrated = True
+        return db  # type: ignore[return-value]
     if settings.database_path != ":memory:":
         Path(settings.database_path).parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(settings.database_path, timeout=10)

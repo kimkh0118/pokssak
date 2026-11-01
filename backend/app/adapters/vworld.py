@@ -26,7 +26,8 @@ ERRORS = {
 def _headers() -> dict | None:
     h = {"Referer": settings.vworld_domain.rstrip("/") + "/"} if settings.vworld_domain else {}
     if settings.vworld_relay_url:
-        h["X-Relay-Key"] = settings.vworld_relay_secret or ""
+        if settings.vworld_relay_secret:
+            h["X-Relay-Key"] = settings.vworld_relay_secret
     return h or None
 
 

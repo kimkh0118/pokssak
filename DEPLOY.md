@@ -33,14 +33,13 @@
 3. **Environment Variables**
    - `BACKEND_URL` = Render 주소
    - `NEXT_PUBLIC_SITE_URL` = Vercel 주소(처음엔 비워 두고 나중에 채워 재배포)
-   - `VWORLD_RELAY_SECRET` = 아무도 모르는 긴 임의 문자열(터미널에서 `openssl rand -hex 24` 로 만들기)
 4. **Deploy** → 생긴 주소를 Render **Environment** 에 넣기(저장하면 자동 재시작)
    - `VWORLD_DOMAIN`·`FRONTEND_ORIGIN` = Vercel 주소
    - `VWORLD_RELAY_URL` = `https://<vercel 주소>/relay/vworld`
-   - `VWORLD_RELAY_SECRET` = 위와 같은 값
 
 > 왜 중계가 필요한가: 브이월드(토지 정보·공시가격·중개사무소)는 해외 서버 접속을 막아요. Render 서버는 미국에 있어서,
 > 브이월드 조회만 서울 리전(`frontend/vercel.json` 의 `icn1`)의 Vercel `/relay/vworld` 를 거쳐 불러요.
+> 중계는 앱이 쓰는 브이월드 조회 4가지만 넘기고, 인증은 브이월드가 우리 키와 등록된 사이트 주소로 직접 해요.
 
 ## 4. 잠 깨우기 — cron-job.org
 1. https://cron-job.org 가입 → **Create cronjob**

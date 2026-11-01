@@ -23,8 +23,6 @@ services:
         sync: false
       - key: VWORLD_RELAY_URL
         value: https://pokssak.vercel.app/relay/vworld
-      - key: VWORLD_RELAY_SECRET
-        sync: false
       - key: VWORLD_DOMAIN
         value: https://pokssak.vercel.app
       - key: FRONTEND_ORIGIN

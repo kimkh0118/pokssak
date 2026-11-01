@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { Button, Notice } from "./ui";
+import { LogoMark } from "./Logo";
 
 const ERRORS: Record<string, string> = {
   google_not_configured: "구글 로그인이 아직 설정되지 않았어요(서버의 GOOGLE_CLIENT_ID·GOOGLE_CLIENT_SECRET 필요).",
@@ -12,7 +13,7 @@ const ERRORS: Record<string, string> = {
 };
 
 function safeNext(v: string | null) {
-  return v && v.startsWith("/") && !v.startsWith("//") ? v : "/my";
+  return v && v.startsWith("/") && !v.startsWith("//") ? v : "/welcome/done";
 }
 
 export function LoginForm() {
@@ -47,10 +48,19 @@ export function LoginForm() {
   }
 
   return (
-    <div className="mx-auto max-w-sm space-y-6 rounded-2xl bg-surface p-6 shadow-sm ring-1 ring-line">
+    <div className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#f4f1ec] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
+      <div className="flex h-14 shrink-0 items-center px-2">
+        <button type="button" onClick={() => (window.history.length > 1 ? router.back() : router.replace("/welcome"))} aria-label="뒤로"
+          className="press grid h-11 w-11 place-items-center rounded-full">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+      </div>
+      <div className="page-in mx-auto flex w-full max-w-sm flex-1 flex-col px-5 pb-6">
+      <div className="mt-6 flex flex-1 flex-col justify-center space-y-6">
       <div>
-        <h1 className="text-[26px] font-extrabold">로그인</h1>
-        <p className="mt-1 text-[14px] text-subtle">로그인하면 조회한 빈집을 관심자산으로 저장해 두고 다시 볼 수 있어요. 계정 연결은 실제 소유권 인증이 아니에요.</p>
+        <span className="grid h-16 w-16 place-items-center rounded-[22px] bg-surface shadow-sm ring-1 ring-line"><LogoMark size={34} /></span>
+        <h1 className="mt-5 text-[28px] font-extrabold leading-tight tracking-tight">로그인하고<br />시작해요</h1>
+        <p className="mt-2 text-[15px] text-muted">관심 집을 저장하고 가격이 바뀌면 알림을 받을 수 있어요.</p>
       </div>
 
       {error && <Notice tone="bad">{error}</Notice>}
@@ -58,7 +68,7 @@ export function LoginForm() {
       <a
         href={google ? `/api/auth/google/start?next=${encodeURIComponent(next)}` : undefined}
         aria-disabled={!google}
-        className={`flex h-12 w-full items-center justify-center gap-3 rounded-lg bg-surface text-[16px] font-bold text-ink ring-1 ring-line transition ${google ? "hover:bg-fill" : "pointer-events-none opacity-50"}`}
+        className={`press flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-surface text-[16px] font-bold text-ink shadow-sm ring-1 ring-line transition ${google ? "hover:bg-fill" : "pointer-events-none opacity-50"}`}
       >
         <svg aria-hidden width="20" height="20" viewBox="0 0 48 48">
           <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z" />
@@ -88,6 +98,8 @@ export function LoginForm() {
             </button>
           </form>
         )}
+      </div>
+      </div>
       </div>
     </div>
   );

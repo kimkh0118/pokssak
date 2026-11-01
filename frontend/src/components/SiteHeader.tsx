@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SITE, TABS } from "@/lib/site";
 import { LogoMark } from "./Logo";
@@ -9,6 +9,7 @@ import { LogoMark } from "./Logo";
 // 상단 바: 로고와 로그인 상태만. 넓은 화면에서는 탭 메뉴도 여기에.
 export function SiteHeader() {
   const path = usePathname();
+  const router = useRouter();
   const [user, setUser] = useState<{ email: string } | null | undefined>(undefined);
   const [unread, setUnread] = useState(0);
   useEffect(() => {
@@ -21,10 +22,23 @@ export function SiteHeader() {
   }, [path]);
   useEffect(() => { window.dispatchEvent(new CustomEvent("unread-count", { detail: unread })); }, [unread]);
 
+  if (path.startsWith("/welcome") || path.startsWith("/login")) return null;
+  // 탭 첫 화면이 아니면(계산 방법·약관·분석 결과 등) 휴대폰에서 뒤로 가기 버튼을 보여준다
+  const sub = !TABS.some((t) => t.href === path);
+  function back() {
+    if (window.history.length > 1) router.back();
+    else router.replace("/");
+  }
+
   return (
     <header className="sticky top-0 z-30 bg-surface/95 pt-[env(safe-area-inset-top)] backdrop-blur">
       <div className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-3 px-4">
-        <Link href="/" className="flex shrink-0 items-center gap-2 text-[18px] font-extrabold tracking-tight">
+        {sub && (
+          <button type="button" onClick={back} aria-label="뒤로" className="press -ml-2 grid h-10 w-10 shrink-0 place-items-center rounded-full md:hidden">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+          </button>
+        )}
+        <Link href="/" className="flex shrink-0 items-center gap-2 text-[18px] font-extrabold tracking-tight max-md:mr-auto">
           <LogoMark />
           <span className="text-[#c9483b]">{SITE.name}</span>
         </Link>
@@ -42,7 +56,7 @@ export function SiteHeader() {
             {user.email[0]?.toUpperCase()}
           </Link>
         ) : (
-          <Link href={`/login?next=${encodeURIComponent(path)}`} className="rounded-full bg-fill px-3.5 py-1.5 text-[14px] font-bold md:hidden">로그인</Link>
+          <Link href="/welcome" className="rounded-full bg-fill px-3.5 py-1.5 text-[14px] font-bold md:hidden">시작하기</Link>
         )}
       </div>
       <div className="brick-strip" aria-hidden />

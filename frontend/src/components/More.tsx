@@ -44,7 +44,7 @@ export function More() {
             <span className="grid h-11 w-11 place-items-center rounded-full bg-sign text-[17px] font-extrabold text-white">{user.email[0]?.toUpperCase()}</span>
             <span className="min-w-0 flex-1"><b className="block truncate">{user.email}</b><span className="text-[13px] text-subtle">로그인됨</span></span>
             <button className="rounded-lg bg-fill px-3 py-2 text-[13px] font-bold"
-              onClick={async () => { await api("/api/auth/logout", { method: "POST" }); setUser(null); router.refresh(); }}>로그아웃</button>
+              onClick={async () => { await api("/api/auth/logout", { method: "POST" }); router.replace("/welcome"); }}>로그아웃</button>
           </div>
         ) : (
           <div>
@@ -79,6 +79,15 @@ export function More() {
         <Row href="/terms" label="이용약관" />
         <Row href="/privacy" label="개인정보처리방침" />
       </section>
+
+      {user && (
+        <button type="button" className="px-1 text-[13px] font-bold text-subtle underline underline-offset-2"
+          onClick={async () => {
+            if (!window.confirm("탈퇴하면 관심 집·분석 기록·알림·동의 기록이 모두 바로 지워지고 되돌릴 수 없어요. 탈퇴할까요?")) return;
+            await api("/api/auth/delete", { method: "POST" });
+            router.replace("/welcome");
+          }}>회원 탈퇴</button>
+      )}
 
       <p className="px-1 text-[12px] leading-relaxed text-subtle">
         자료: 행정안전부 도로명주소, 국토교통부 건축물대장·실거래가(공공데이터포털), 브이월드 토지특성·개별주택가격·부동산중개업 정보.

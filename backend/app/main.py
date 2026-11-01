@@ -14,7 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import ValidationError
 
-from . import analyses, auth, db as dbm, google_oauth, keepalive, pricewatch, property as prop, push
+from . import analyses, auth, consents, db as dbm, google_oauth, keepalive, pricewatch, property as prop, push
 from .clock import now_iso
 from .schemas import (
     Answers, CreateAnalysis, Credentials, Evidence, LookupRequest, UpdateAnalysis,
@@ -35,6 +35,22 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="부산 빈집 처리 비교 API", version="2.0", lifespan=lifespan)
+
+
+# 로그인·필수 동의 없이 열 수 있는 API(나머지는 회원 전용)
+OPEN_API = ("/api/status", "/api/auth/", "/api/consents", "/api/push/key")
+
+
+@app.middleware("http")
+async def member_only(request: Request, call_next):
+    path = request.url.path
+    if settings.require_member and path.startswith("/api/") and not path.startswith(OPEN_API):
+        u = user_of(request)
+        if not u:
+            return JSONResponse({"error": "로그인이 필요해요.", "code": "login_required"}, 401)
+        if not consents.complete(u["id"]):
+            return JSONResponse({"error": "필수 항목 동의가 필요해요.", "code": "consent_required"}, 403)
+    return await call_next(request)
 
 
 @app.exception_handler(HTTPException)
@@ -108,6 +124,13 @@ def logout(request: Request, response: Response):
     return {"ok": True}
 
 
+@app.post("/api/auth/delete")
+def delete_account(request: Request, response: Response):
+    auth.delete_account(require_user(request)["id"])
+    response.delete_cookie(auth.SESSION_COOKIE)
+    return {"ok": True}
+
+
 @app.get("/api/auth/google/start")
 def google_start(next: str | None = None):
     if not google_oauth.configured():
@@ -141,7 +164,23 @@ def auth_config():
 
 @app.get("/api/auth/me")
 def me(request: Request):
-    return {"user": user_of(request)}
+    u = user_of(request)
+    return {"user": u and u | {"consented": consents.complete(u["id"])}}
+
+
+# ---------------------------------------------------------------- 동의
+@app.get("/api/consents")
+def consent_status(request: Request):
+    return consents.status(require_user(request)["id"])
+
+
+@app.post("/api/consents")
+def consent_save(body: dict, request: Request):
+    u = require_user(request)
+    try:
+        return consents.save(u["id"], {k: bool(v) for k, v in body.items() if isinstance(v, bool)})
+    except consents.ConsentError as e:
+        raise HTTPException(400, str(e))
 
 
 # ---------------------------------------------------------------- 주소·공공자료

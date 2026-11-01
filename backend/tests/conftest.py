@@ -27,6 +27,7 @@ def isolated(tmp_path, monkeypatch):
     for k in ("juso_key", "data_go_kr_key", "vworld_key", "anthropic_api_key"):
         monkeypatch.setattr(settings, k, None)
     monkeypatch.setattr(settings, "sample_mode", True)
+    monkeypatch.setattr(settings, "require_member", False)  # 계산·흐름 테스트는 잠금 없이(잠금은 test_consents.py)
     monkeypatch.setattr(settings, "price_watch_enabled", False)
     monkeypatch.setattr(settings, "kakao_rest_api_key", None)
     monkeypatch.setattr(settings, "admin_emails", ["admin@example.com"])

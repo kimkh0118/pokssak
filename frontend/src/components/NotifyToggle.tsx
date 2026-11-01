@@ -38,8 +38,11 @@ export function NotifyToggle({ compact }: { compact?: boolean }) {
   if (state === "unsupported") return <p className="text-[13px] text-muted">이 브라우저는 푸시 알림을 지원하지 않아요. 아래 <b>앱으로 설치</b> 안내대로 크롬·사파리에서 열어 주세요. 알림은 앱의 알림 탭에서도 볼 수 있어요.</p>;
   if (state === "denied") return (
     <div>
-      <p className="text-[13px] font-bold text-bad">알림이 차단돼 있어요. 아래 순서로 다시 허용해 주세요.</p>
-      <div className="mt-2"><DeviceGuide kind="unblock" /></div>
+      <p className="text-[13px] font-bold text-bad">알림이 차단돼 있어요.</p>
+      <details className="mt-1">
+        <summary className="cursor-pointer text-[13px] font-bold text-muted">다시 허용하는 방법 보기</summary>
+        <div className="mt-2"><DeviceGuide kind="unblock" /></div>
+      </details>
     </div>
   );
   return (

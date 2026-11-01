@@ -102,3 +102,24 @@ def current_user(token: str | None) -> dict | None:
     if not row or row["expires_at"] < now_iso():
         return None
     return {"id": row["id"], "email": row["email"], "isAdmin": bool(row["is_admin"])}
+
+
+def delete_account(user_id: str):
+    """회원 탈퇴: 이 회원의 기록을 모두 지운다(동의 철회 포함). 원격 DB는 외래키 연쇄 삭제를 보장하지 않아 순서대로 직접 지운다."""
+    mine = "SELECT id FROM analyses WHERE owner_user_id = ?"
+    with dbm.connect() as c:
+        for sql in (
+            f"DELETE FROM evidence_inputs WHERE analysis_id IN ({mine})",
+            f"DELETE FROM demolition_plans WHERE analysis_id IN ({mine})",
+            "DELETE FROM price_snapshots WHERE watch_id IN (SELECT id FROM watched_assets WHERE user_id = ?)",
+            "DELETE FROM outbox WHERE notification_id IN (SELECT id FROM notifications WHERE user_id = ?)",
+            "DELETE FROM notifications WHERE user_id = ?",
+            "DELETE FROM push_subscriptions WHERE user_id = ?",
+            "DELETE FROM watched_assets WHERE user_id = ?",
+            "DELETE FROM analyses WHERE owner_user_id = ?",
+            "DELETE FROM notification_settings WHERE user_id = ?",
+            "DELETE FROM user_consents WHERE user_id = ?",
+            "DELETE FROM sessions WHERE user_id = ?",
+            "DELETE FROM users WHERE id = ?",
+        ):
+            c.execute(sql, (user_id,))

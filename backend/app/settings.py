@@ -52,6 +52,8 @@ class Settings:
     # AI 설명(선택). 키가 없으면 규칙 기반 설명
     anthropic_api_key: str | None = _env("ANTHROPIC_API_KEY")
     llm_model: str = _env("LLM_MODEL") or "claude-sonnet-5-5"
+    # 로그인 + 필수 동의를 마친 회원만 자료 조회·분석 가능(테스트에서만 끔)
+    require_member: bool = (_env("REQUIRE_MEMBER") or "1") == "1"
     # 예시(가상) 주소: 화면에서는 제거됨. 개발·테스트에서만 SAMPLE_MODE=1로 켬
     sample_mode: bool = (_env("SAMPLE_MODE") or "0") == "1"
 

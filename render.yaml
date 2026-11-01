@@ -1,5 +1,5 @@
 # Render 블루프린트: backend 폴더의 Dockerfile로 서버 1개(무료). GitHub main에 올리면 자동 재배포.
-# 키 값(sync: false)은 Render 화면에서 직접 넣는다. 저장소에는 값이 들어가지 않는다.
+# 비밀이 아닌 주소(value)는 여기서 정하고, 키 값(sync: false)은 Render 화면에서 직접 넣는다(저장소에 안 올라감).
 services:
   - type: web
     name: pokssak-api
@@ -22,13 +22,13 @@ services:
       - key: VWORLD_API_KEY
         sync: false
       - key: VWORLD_RELAY_URL
-        sync: false
+        value: https://pokssak.vercel.app/relay/vworld
       - key: VWORLD_RELAY_SECRET
         sync: false
       - key: VWORLD_DOMAIN
-        sync: false
+        value: https://pokssak.vercel.app
       - key: FRONTEND_ORIGIN
-        sync: false
+        value: https://pokssak.vercel.app
       - key: ADMIN_EMAILS
         sync: false
       - key: GOOGLE_CLIENT_ID

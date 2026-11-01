@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { DeviceGuide } from "./InstallGuide";
 import { currentSubscription, disablePush, enablePush, isIosNotInstalled, pushSupported } from "@/lib/push";
 
 // 이 기기에서 푸시 알림 켜기·끄기
@@ -33,9 +34,14 @@ export function NotifyToggle({ compact }: { compact?: boolean }) {
     const short = { ios: "홈 화면에 추가하면 알림 가능", unsupported: "이 브라우저는 알림 미지원", denied: "알림 차단됨" }[state as "ios"];
     return <Link href="/more" className="shrink-0 rounded-lg bg-fill px-2.5 py-1.5 text-right text-[12px] font-bold text-muted">{short}</Link>;
   }
-  if (state === "ios") return <p className="text-[13px] text-muted">아이폰은 <b>홈 화면에 추가</b>한 앱에서만 알림을 받을 수 있어요(더보기 → 앱으로 설치).</p>;
-  if (state === "unsupported") return <p className="text-[13px] text-muted">이 브라우저는 푸시 알림을 지원하지 않아요. 알림은 앱의 알림 탭에서 볼 수 있어요.</p>;
-  if (state === "denied") return <p className="text-[13px] text-muted">알림이 차단돼 있어요. 브라우저(또는 휴대폰) 설정에서 이 사이트 알림을 허용해 주세요.</p>;
+  if (state === "ios") return <p className="text-[13px] text-muted">아이폰은 <b>홈 화면에 추가</b>한 앱에서만 알림을 받을 수 있어요. 아래 <b>앱으로 설치</b> 안내를 따라 해 주세요.</p>;
+  if (state === "unsupported") return <p className="text-[13px] text-muted">이 브라우저는 푸시 알림을 지원하지 않아요. 아래 <b>앱으로 설치</b> 안내대로 크롬·사파리에서 열어 주세요. 알림은 앱의 알림 탭에서도 볼 수 있어요.</p>;
+  if (state === "denied") return (
+    <div>
+      <p className="text-[13px] font-bold text-bad">알림이 차단돼 있어요. 아래 순서로 다시 허용해 주세요.</p>
+      <div className="mt-2"><DeviceGuide kind="unblock" /></div>
+    </div>
+  );
   return (
     <div className={compact ? "" : "flex items-center justify-between gap-3"}>
       {!compact && <span className="text-[15px] font-bold">이 기기로 알림 받기</span>}

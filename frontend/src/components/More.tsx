@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { api, type User } from "@/lib/api";
+import { isStandalone } from "@/lib/device";
 import { SITE } from "@/lib/site";
+import { DeviceGuide } from "./InstallGuide";
 import { NotifyToggle } from "./NotifyToggle";
 
 function Row({ href, label }: { href: string; label: string }) {
@@ -15,6 +17,8 @@ function Row({ href, label }: { href: string; label: string }) {
   );
 }
 
+const noopSub = () => () => {};
+
 type InstallEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
 
 // 더보기: 계정 · 알림 · 앱 설치 · 안내
@@ -22,14 +26,13 @@ export function More() {
   const router = useRouter();
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [install, setInstall] = useState<InstallEvent | null>(null);
-  const [standalone] = useState(() => typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches);
+  const standalone = useSyncExternalStore(noopSub, isStandalone, () => false);
   useEffect(() => {
     api<{ user: User | null }>("/api/auth/me").then((r) => setUser(r.user)).catch(() => setUser(null));
     const on = (e: Event) => { e.preventDefault(); setInstall(e as InstallEvent); };
     window.addEventListener("beforeinstallprompt", on);
     return () => window.removeEventListener("beforeinstallprompt", on);
   }, []);
-  const ios = typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent);
 
   return (
     <div className="mx-auto max-w-md space-y-5">
@@ -62,16 +65,11 @@ export function More() {
       {!standalone && (
         <section className="rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
           <h2 className="text-[16px] font-extrabold">앱으로 설치</h2>
-          {install ? (
-            <>
-              <p className="mt-0.5 text-[13px] text-subtle">홈 화면에 {SITE.name} 아이콘을 추가해 앱처럼 써요.</p>
-              <button className="mt-3 h-11 w-full rounded-xl bg-ink text-[15px] font-bold text-white" onClick={async () => { await install.prompt(); setInstall(null); }}>홈 화면에 추가</button>
-            </>
-          ) : ios ? (
-            <p className="mt-1 text-[14px] text-muted">사파리 아래쪽 <b>공유 버튼(□↑)</b> → <b>홈 화면에 추가</b>를 누르세요. 아이폰은 홈 화면에 추가해야 알림을 받을 수 있어요.</p>
-          ) : (
-            <p className="mt-1 text-[14px] text-muted">브라우저 메뉴(⋮)에서 <b>앱 설치</b> 또는 <b>홈 화면에 추가</b>를 누르세요.</p>
+          <p className="mt-0.5 text-[13px] text-subtle">{SITE.name}을 앱처럼 설치하면 바로 열 수 있고, 휴대폰으로 가격 알림을 받을 수 있어요.</p>
+          {install && (
+            <button className="mt-3 h-11 w-full rounded-xl bg-ink text-[15px] font-bold text-white" onClick={async () => { await install.prompt(); setInstall(null); }}>지금 설치하기</button>
           )}
+          <div className="mt-3"><DeviceGuide kind="install" /></div>
         </section>
       )}
 

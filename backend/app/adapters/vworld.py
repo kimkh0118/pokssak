@@ -22,6 +22,20 @@ ERRORS = {
 }
 
 
+
+def _headers() -> dict | None:
+    h = {"Referer": settings.vworld_domain.rstrip("/") + "/"} if settings.vworld_domain else {}
+    if settings.vworld_relay_url:
+        h["X-Relay-Key"] = settings.vworld_relay_secret or ""
+    return h or None
+
+
+def _url(url: str) -> str:
+    """브이월드는 해외 서버 접속을 막는다 → 설정돼 있으면 서울 리전 중계(Vercel)를 거친다."""
+    if settings.vworld_relay_url:
+        return settings.vworld_relay_url.rstrip("/") + url.removeprefix("https://api.vworld.kr")
+    return url
+
 def _rows(body: str, spec: dict) -> dict:
     try:
         node = json.loads(body).get(spec["node"])
@@ -81,9 +95,9 @@ def parse_land_use(body: str) -> dict:
 
 
 async def _call(spec: dict, pnu: str) -> tuple[int | None, object]:
-    headers = {"Referer": settings.vworld_domain.rstrip("/") + "/"} if settings.vworld_domain else None
+    headers = _headers()
     async with httpx.AsyncClient() as client:
-        return await get(client, spec["url"], {"key": settings.vworld_key, "pnu": pnu, "format": "json",
+        return await get(client, _url(spec["url"]), {"key": settings.vworld_key, "pnu": pnu, "format": "json",
                                                "numOfRows": 1000, "pageNo": 1}, spec["source"], headers)
 
 
@@ -154,11 +168,11 @@ async def offices(sgg_code: str) -> dict:
     """시군구(5자리) 등록 중개사무소 전체(페이지를 모두 받음)."""
     if not settings.vworld_key:
         return fail("not_configured", OFFICES["source"], "VWORLD_API_KEY가 설정되지 않았습니다.")
-    headers = {"Referer": settings.vworld_domain.rstrip("/") + "/"} if settings.vworld_domain else None
+    headers = _headers()
     found: list[dict] = []
     async with httpx.AsyncClient() as client:
         for page in range(1, 11):
-            status, body = await get(client, OFFICES["url"], {"key": settings.vworld_key, "ldCode": sgg_code, "format": "json",
+            status, body = await get(client, _url(OFFICES["url"]), {"key": settings.vworld_key, "ldCode": sgg_code, "format": "json",
                                                               "numOfRows": 1000, "pageNo": page}, OFFICES["source"], headers)
             if status is None:
                 return body

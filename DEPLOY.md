@@ -30,8 +30,17 @@
 ## 3. 화면 — Vercel
 1. https://vercel.com 에 GitHub로 가입 → **Add New → Project → pokssak → Import**
 2. **Root Directory**: `frontend`
-3. **Environment Variables**: `BACKEND_URL` = Render 주소, `NEXT_PUBLIC_SITE_URL` = Vercel 주소(처음엔 비워 두고 나중에 채워 재배포)
-4. **Deploy** → 생긴 주소를 Render **Environment** 의 `VWORLD_DOMAIN`·`FRONTEND_ORIGIN`에 넣기(저장하면 자동 재시작)
+3. **Environment Variables**
+   - `BACKEND_URL` = Render 주소
+   - `NEXT_PUBLIC_SITE_URL` = Vercel 주소(처음엔 비워 두고 나중에 채워 재배포)
+   - `VWORLD_RELAY_SECRET` = 아무도 모르는 긴 임의 문자열(터미널에서 `openssl rand -hex 24` 로 만들기)
+4. **Deploy** → 생긴 주소를 Render **Environment** 에 넣기(저장하면 자동 재시작)
+   - `VWORLD_DOMAIN`·`FRONTEND_ORIGIN` = Vercel 주소
+   - `VWORLD_RELAY_URL` = `https://<vercel 주소>/relay/vworld`
+   - `VWORLD_RELAY_SECRET` = 위와 같은 값
+
+> 왜 중계가 필요한가: 브이월드(토지 정보·공시가격·중개사무소)는 해외 서버 접속을 막아요. Render 서버는 미국에 있어서,
+> 브이월드 조회만 서울 리전(`frontend/vercel.json` 의 `icn1`)의 Vercel `/relay/vworld` 를 거쳐 불러요.
 
 ## 4. 잠 깨우기 — cron-job.org
 1. https://cron-job.org 가입 → **Create cronjob**
@@ -51,7 +60,7 @@
 - 휴대폰: 안드로이드 크롬은 바로, 아이폰은 사파리 **공유 → 홈 화면에 추가** 후 앱에서 알림 켜기
 
 ## 참고
-- 서버가 해외(미국)에 있어요. 일부 공공 API가 해외 접속을 막으면 그 조회만 실패할 수 있어요(배포 후 확인).
+- 서버가 미국에 있어요. 주소·실거래가 API는 해외에서도 되지만 브이월드는 막혀서 위의 서울 중계를 써요.
 - Turso를 다른 지역에 만들었다면 `render.yaml` 의 `region` 도 가까운 곳으로 바꾸세요(oregon·ohio·virginia·frankfurt·singapore).
 - 로컬 DB(`backend/data/app.db`)는 옮기지 않아요. 배포는 빈 DB로 시작합니다.
 - 서버는 1개만 실행하세요.

@@ -22,6 +22,9 @@ class Settings:
     data_go_kr_key: str | None = _env("DATA_GO_KR_SERVICE_KEY")
     vworld_key: str | None = _env("VWORLD_API_KEY")
     vworld_domain: str | None = _env("VWORLD_DOMAIN")
+    # 해외 서버(Render)에서는 브이월드가 막혀서 서울 리전 Vercel 중계를 거친다. 예: https://<vercel 주소>/relay/vworld
+    vworld_relay_url: str | None = _env("VWORLD_RELAY_URL")
+    vworld_relay_secret: str | None = _env("VWORLD_RELAY_SECRET")
     timeout_seconds: float = float(_env("PUBLIC_API_TIMEOUT_SECONDS") or 10)
     # 저장
     database_path: str = _env("DATABASE_PATH") or str(BACKEND_DIR / "data" / "app.db")

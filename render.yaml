@@ -21,6 +21,10 @@ services:
         sync: false
       - key: VWORLD_API_KEY
         sync: false
+      - key: VWORLD_RELAY_URL
+        sync: false
+      - key: VWORLD_RELAY_SECRET
+        sync: false
       - key: VWORLD_DOMAIN
         sync: false
       - key: FRONTEND_ORIGIN

@@ -10,12 +10,14 @@ import { AddressPlate, AddressSign, plateTitle } from "./AddressSign";
 import { BottomBar, Button, ChoiceGroup, Notice, Pill, ProviderErrorBox } from "./ui";
 import { PublicInfo } from "./PublicInfo";
 
-type Step = "address" | "target" | "intro" | "q1" | "q2" | "q3" | "q4";
-const STEP_LABEL: Record<Step, string> = { address: "주소", target: "정보 제공", intro: "질문", q1: "질문 1", q2: "질문 2", q3: "질문 3", q4: "질문 4" };
-const ORDER: Step[] = ["address", "target", "intro", "q1", "q2", "q3", "q4"];
+type Step = "address" | "target" | "intro" | "q1" | "q2" | "q3" | "q4" | "notes";
+const STEP_LABEL: Record<Step, string> = { address: "주소", target: "정보 제공", intro: "질문", q1: "질문 1", q2: "질문 2", q3: "질문 3", q4: "질문 4", notes: "집 상태" };
+const ORDER: Step[] = ["address", "target", "intro", "q1", "q2", "q3", "q4", "notes"];
 const mode = "live";
+const NOTE_HINTS = ["비 오면 물이 새요", "지붕이 슬레이트예요", "작년에 수리했어요", "차가 못 들어가요", "짐이 많이 남아 있어요", "형제 공동명의예요", "남향이라 햇볕이 잘 들어요"];
+
 // 진행 표시는 사용자가 이해하는 세 덩어리로(주소 → 정보 확인 → 질문)
-const GROUPS = [{ label: "주소", first: 0, last: 0 }, { label: "정보 확인", first: 1, last: 1 }, { label: "질문 4개", first: 2, last: 6 }];
+const GROUPS = [{ label: "주소", first: 0, last: 0 }, { label: "정보 확인", first: 1, last: 1 }, { label: "질문", first: 2, last: 7 }];
 const LOOKUP_STEPS = ["주소·지번 확인", "건축물대장", "토지특성·공시지가", "토지이용계획", "주택 실거래(최근 2년)", "토지 실거래(최근 2년)"];
 
 export function Flow({ initialQuery }: { initialQuery?: string }) {
@@ -266,7 +268,33 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
           <QTitle n={4} text={QUESTIONS.access.title} hint="철거 견적·현장 작업 가능성 확인에 쓰여요." />
           <ChoiceGroup name="access" legend="차량 진입" columns={2} value={a.access ?? null} onChange={(v) => set("access", v)}
             options={Object.entries(QUESTIONS.access.options).map(([value, label]) => ({ value: value as Answers["access"], label }))} />
-          <Nav back={() => setStep("q3")} next={submit} disabled={!a.access || busy} label={busy ? "비교하고 있어요…" : "완료"} />
+          <Nav back={() => setStep("q3")} next={() => setStep("notes")} disabled={!a.access} />
+        </div>
+      )}
+
+      {step === "notes" && (
+        <div className="space-y-5 rounded-2xl bg-surface p-5 shadow-sm ring-1 ring-line sm:p-6">
+          <div>
+            <p className="text-[13px] font-bold text-brand-strong">마지막 · 선택</p>
+            <h2 className="mt-1 text-[22px] font-extrabold leading-snug">집 상태를 편하게 알려 주세요</h2>
+            <p className="mt-1.5 text-[14px] text-muted">중개사가 현장에서 보는 것처럼 상태를 점수로 매겨 예상 가격에 반영해요. 쓸수록 상담 결과에 가까워져요.</p>
+          </div>
+          <div className="flex flex-wrap gap-1.5" aria-label="예시 문장 넣기">
+            {NOTE_HINTS.map((h) => (
+              <button key={h} type="button" onClick={() => set("notes", `${a.notes ? `${a.notes.trim()} ` : ""}${h}`)}
+                className="press rounded-full bg-fill px-3 py-1.5 text-[13px] font-semibold text-muted">＋ {h}</button>
+            ))}
+          </div>
+          <label className="block">
+            <span className="sr-only">집 상태 설명</span>
+            <textarea value={a.notes ?? ""} onChange={(e) => set("notes", e.target.value)} rows={5} maxLength={2000}
+              placeholder="예: 15년 비어 있었고 지붕이 슬레이트예요. 비 오면 안방에 물이 새요. 차는 골목 입구까지만 들어와요."
+              className="block w-full resize-none rounded-xl bg-fill p-3.5 text-[15px] leading-relaxed outline-none focus:ring-2 focus:ring-brand" />
+            <span className="mt-1 block text-right text-[12px] text-subtle tabular">{(a.notes ?? "").length} / 2000</span>
+          </label>
+          <p className="text-[12px] text-subtle">이름·전화번호 같은 개인정보는 쓰지 마세요. 적은 내용은 상태 점수를 매기는 데만 써요.</p>
+          <Nav back={() => setStep("q4")} next={submit} disabled={busy}
+            label={busy ? "가격을 계산하고 있어요…" : (a.notes ?? "").trim() ? "점수 매기고 결과 보기" : "건너뛰고 결과 보기"} />
         </div>
       )}
     </div>

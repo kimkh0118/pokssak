@@ -50,6 +50,7 @@ class Answers(BaseModel):
     condition: Literal["usable", "old", "severe", "unknown"]
     access: Literal["good", "narrow", "none", "unknown"]
     vacancyMonths: int | None = Field(default=None, ge=0, le=600)
+    notes: str | None = Field(default=None, max_length=2000)  # 집 상태 주관식 설명(선택)
 
 
 class Scope(BaseModel):

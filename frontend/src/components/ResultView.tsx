@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import type { ConditionAssessment } from "@/lib/api";
 import { api, type Analysis, type Compare, type Reference, type User } from "@/lib/api";
 import { formatWon } from "@/lib/format";
 import { AnswersEditor } from "./AnswersEditor";
@@ -249,6 +250,36 @@ function Breakeven({ cmp, known }: { cmp: Compare; known: boolean; costsComplete
 
 const AGREE = { good: "세 방법이 비슷해요", check: "방법별 차이가 커요 — 중개사 확인 필요", single: "한 가지 방법으로만 계산했어요" } as const;
 
+const SOURCE = { ai: "AI가 설명을 읽고 매긴 점수", rules: "설명 속 키워드로 매긴 점수", choices: "질문 답으로 매긴 점수" } as const;
+
+/** 상태 점수: 기본 예상가 → 항목별 +/− → 최종 예상가 */
+function ConditionBreakdown({ base, final, c }: { base: number; final: number; c: ConditionAssessment }) {
+  return (
+    <div className="mt-3 rounded-xl bg-fill p-3.5">
+      <p className="flex items-center justify-between text-[12px] font-bold text-subtle">
+        <span>집 상태 반영</span><span>{SOURCE[c.source]}</span>
+      </p>
+      <div className="mt-2 flex items-baseline justify-between text-[13px]">
+        <span className="text-muted">공공자료 기본 예상가</span><span className="tabular font-semibold">{formatWon(base)}</span>
+      </div>
+      <ul className="stagger mt-1 space-y-1">
+        {c.items.map((i) => (
+          <li key={i.key} className="flex items-baseline justify-between gap-3 text-[13px]">
+            <span className="min-w-0"><span className="font-semibold">{i.label}</span> <span className="text-[12px] text-subtle">{i.evidence}</span></span>
+            <span className={`tabular shrink-0 font-bold ${i.pct > 0 ? "text-good" : "text-bad"}`}>{i.pct > 0 ? "+" : ""}{i.pct}%</span>
+          </li>
+        ))}
+        {c.items.length === 0 && <li className="text-[12px] text-subtle">가격에 영향을 줄 상태가 없었어요.</li>}
+      </ul>
+      <div className="mt-2 flex items-baseline justify-between border-t border-line pt-2 text-[14px]">
+        <b>최종 예상가 <span className={`tabular text-[12px] ${c.pct > 0 ? "text-good" : c.pct < 0 ? "text-bad" : "text-subtle"}`}>{c.pct > 0 ? "+" : ""}{c.pct}%{c.capped ? " (한도)" : ""}</span></b>
+        <b className="tabular">{formatWon(final)}</b>
+      </div>
+      {!c.notes && <p className="mt-2 text-[12px] text-subtle">아래 ‘질문 답 바꾸기’에서 집 상태를 글로 적으면 더 정확해져요.</p>}
+    </div>
+  );
+}
+
 function RefCard({ r }: { r: Reference }) {
   const v = r.valuation;
   const est = r.estimated && v?.value != null;
@@ -256,7 +287,10 @@ function RefCard({ r }: { r: Reference }) {
     <Card>
       <p className="text-[13px] font-bold text-subtle">{r.label} {est ? "추정가(중개사 방식)" : "참고가격"}</p>
       <p className="num-in tabular mt-1 text-[22px] font-extrabold">{r.value == null ? "산정 보류" : formatWon(r.value)}</p>
-      {est && v?.range ? (
+      {r.condition && r.baseValue != null && <ConditionBreakdown base={r.baseValue} final={r.value!} c={r.condition} />}
+      {r.condition && r.range ? (
+        <p className="text-[12px] text-subtle">상태 반영 범위 {formatWon(r.range.min)} ~ {formatWon(r.range.max)}</p>
+      ) : est && v?.range ? (
         <p className="text-[12px] text-subtle">추정 범위 {formatWon(v.range.min)} ~ {formatWon(v.range.max)}
           {v.agreement && <span className={v.agreement === "check" ? " font-bold text-warn" : ""}> · {AGREE[v.agreement]}</span>}</p>
       ) : (
@@ -277,7 +311,7 @@ function RefCard({ r }: { r: Reference }) {
             ))}
           </ul>
           <p className="text-[12px] text-muted">이 땅의 보정: {v.factors.map((f) => `${f.label} ${f.factor === 1 ? "±0%" : `${f.factor > 1 ? "+" : ""}${Math.round((f.factor - 1) * 100)}%`}`).join(", ")}</p>
-          <p className="text-[12px] text-subtle">집 내부 상태·수요는 반영하지 못해요. 실제로 팔기 전에는 공인중개사에게 시세를 확인하세요.</p>
+          <p className="text-[12px] text-subtle">{r.condition ? "알려 주신 집 상태까지 반영했어요." : "집 내부 상태는 반영하지 못했어요."} 실제로 팔기 전에는 공인중개사에게 시세를 확인하세요.</p>
         </div>
       )}
       {r.notes.map((n) => <p key={n} className="mt-1 text-[12px] text-warn">{n}</p>)}

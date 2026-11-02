@@ -50,7 +50,7 @@ export interface Answers {
   ownership: "single" | "joint" | "other"; corporate?: boolean; ownerMismatch?: boolean;
   usage: "vacant" | "storage" | "occupied" | "unknown"; storageFollowup?: { inUse?: string; cleanupKnown?: string } | null;
   direction: "recovery" | "fast" | "undecided"; condition: "usable" | "old" | "severe" | "unknown";
-  access: "good" | "narrow" | "none" | "unknown"; vacancyMonths?: number | null;
+  access: "good" | "narrow" | "none" | "unknown"; vacancyMonths?: number | null; notes?: string | null;
   scope?: { buildingKey?: string | null; costsSeparable?: boolean };
 }
 
@@ -73,6 +73,7 @@ export interface Result {
   brokerageRule: { name: string; effective: string; version: string; note: string };
 }
 export interface Reference {
+  baseValue?: number; condition?: ConditionAssessment;
   label: string; status: "withheld" | "single" | "median"; value: number | null; range: { min: number; max: number } | null;
   sampleSize: number; notes: string[]; rule: { areaRatio: Pair; buildYearGap: number };
   decisions: { trade: { dealDate: string; umdNm: string; jibunMasked: string; landArea: number; floorArea?: number; buildYear?: number; amountWon: number; jimok?: string }; included: boolean; reason: string }[];
@@ -119,3 +120,7 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
   if (typeof body?.error === "string") throw new Error(body.error);
   return body as T;
 }
+
+/** 집 상태 점수(서버 condition.py). 기본 예상가 × (1 + pct/100) = 최종 예상가 */
+export interface ConditionItem { key: string; label: string; score: number; pct: number; evidence: string }
+export interface ConditionAssessment { pct: number; items: ConditionItem[]; source: "ai" | "rules" | "choices"; notes: string | null; capped: boolean }

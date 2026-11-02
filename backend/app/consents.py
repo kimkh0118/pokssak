@@ -8,7 +8,7 @@ from __future__ import annotations
 from . import db as dbm
 from .clock import now_iso
 
-VERSION = "2026-11-01"
+VERSION = "2026-11-02"  # 집 상태 설명(AI 전송 가능) 추가
 ITEMS = [
     {"key": "age14", "label": "만 14세 이상이에요", "required": True, "doc": None},
     {"key": "terms", "label": "서비스 이용약관 동의", "required": True, "doc": "/terms"},

@@ -48,6 +48,12 @@ export function AnswersEditor({ data, onSaved }: { data: Analysis; onSaved: (a: 
           <input type="number" min={0} value={a.vacancyMonths ?? ""} onChange={(e) => set("vacancyMonths", e.target.value === "" ? null : Number(e.target.value))}
             className="mt-1 block h-11 w-full rounded-xl bg-fill px-3 text-[15px]" />
         </label>
+        <label className="block text-[14px] font-semibold">집 상태 설명(선택)
+          <textarea value={a.notes ?? ""} onChange={(e) => set("notes", e.target.value)} rows={4} maxLength={2000}
+            placeholder="예: 비 오면 안방에 물이 새요. 작년에 보일러를 새로 바꿨어요."
+            className="mt-1 block w-full resize-none rounded-xl bg-fill p-3 text-[15px] font-normal leading-relaxed" />
+          <span className="mt-1 block text-[12px] font-normal text-subtle">적은 내용으로 집 상태 점수를 다시 매겨 예상가에 반영해요.</span>
+        </label>
       </div>
       <div className="space-y-2 rounded-xl bg-fill p-3 text-[14px]">
         <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4" checked={!!a.corporate} onChange={(e) => set("corporate", e.target.checked)} />법인 명의예요</label>

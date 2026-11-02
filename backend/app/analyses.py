@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid
 
-from . import demolition, trend, valuation, comps, db as dbm, eligibility, engine, explain, plan
+from . import condition, demolition, trend, valuation, comps, db as dbm, eligibility, engine, explain, plan
 from .auth import token_hash
 from .clock import now_iso, today_kst
 from .property import get_lookup, is_main
@@ -43,6 +43,8 @@ def create(lookup_id: str, answers: dict, scope: dict, user: dict | None, guest_
     if not lk:
         raise NotFound("조회 기록을 찾을 수 없습니다. 주소부터 다시 진행해 주세요.")
     ensure_target(lk)
+    # 집 상태 점수(객관식 + 주관식)를 한 번 계산해 답과 함께 저장 → 이후 계산·매일 가격 확인은 이 값을 그대로 쓴다
+    answers = {**answers, "assessment": condition.assess(answers, answers.get("notes"))}
     a = lk["address"]
     key = _scope_key(lk["pnu"], scope.get("buildingKey"))
     aid, now = str(uuid.uuid4()), now_iso()
@@ -125,6 +127,7 @@ def update(analysis_id: str, user, guest, inputs: dict | None, answers: dict | N
             old = dbm.loads(row["answers"])
             merged = {**old, **answers}
             merged.pop("draft", None)  # 질문에 답했으면 임시 답변 표시를 지운다
+            merged["assessment"] = condition.assess(merged, merged.get("notes"))
             c.execute("UPDATE analyses SET answers = ?, updated_at = ? WHERE id = ?", (dbm.dumps(merged), now_iso(), analysis_id))
         else:
             c.execute("UPDATE analyses SET updated_at = ? WHERE id = ?", (now_iso(), analysis_id))
@@ -153,6 +156,8 @@ def compute(row) -> dict:
         reference[k]["valuation"] = est
         if est["value"]:
             reference[k].update(value=est["value"], range=est["range"], estimated=True)
+    # 집 상태 보정: 그대로 팔 때(집값)에만. 땅값은 건물 상태와 무관
+    reference["house"] = condition.apply(reference["house"], answers.get("assessment") or condition.assess(answers, None))
     elig = eligibility.evaluate(answers, lk["checks"], scope)
     # 철거비를 따로 입력하지 않았으면 예상 철거비(개략 범위)로 비교한다(가정값 — 확정 추천 근거는 아님)
     demo = demolition.estimate(building, answers, today_kst().year)

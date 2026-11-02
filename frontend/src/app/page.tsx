@@ -16,7 +16,7 @@ async function backendUp(): Promise<boolean> {
 const FEATURES = [
   ["₩", "예상 집값·땅값", "공인중개사가 쓰는 세 가지 방법으로 계산해요"],
   ["⛏", "예상 철거비", "건축물대장의 면적·구조·지붕으로 항목별 범위를 내요"],
-  ["🔔", "가격 알림", "관심 집의 예상 가격이 바뀌면 휴대폰으로 알려요"],
+  ["🔔", "가격 알림", "내 자산의 예상 가격이 바뀌면 휴대폰으로 알려요"],
 ];
 
 export default async function Home() {

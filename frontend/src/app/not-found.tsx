@@ -8,7 +8,7 @@ export default function NotFound() {
       <p className="mt-2 text-[15px] text-muted">주소가 바뀌었거나 삭제된 페이지예요.</p>
       <div className="mt-8 flex justify-center gap-2">
         <Link href="/" className="rounded-xl bg-brand px-5 py-3 text-[15px] font-bold text-white">홈으로</Link>
-        <Link href="/my" className="rounded-xl bg-fill px-5 py-3 text-[15px] font-bold text-ink">관심 집</Link>
+        <Link href="/my" className="rounded-xl bg-fill px-5 py-3 text-[15px] font-bold text-ink">내 자산</Link>
       </div>
     </div>
   );

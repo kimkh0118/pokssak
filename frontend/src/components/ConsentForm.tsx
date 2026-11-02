@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { CONSENT_ITEMS, PRIVACY_SUMMARY, requiredDone, savePending, type Choices } from "@/lib/consent";
+import { CONSENT_ITEMS, PRIVACY_SUMMARY, requiredDone, savePending, type Choices, afterConsent } from "@/lib/consent";
 
 const NONE: Choices = { age14: false, terms: false, privacy: false, notify: false };
 
@@ -44,7 +44,7 @@ export function ConsentForm() {
       return;
     }
     const r = await fetch("/api/consents", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(c) });
-    if (r.ok) router.replace(next || "/");
+    if (r.ok) router.replace(afterConsent(next || "/"));
     else { setErr((await r.json().catch(() => ({}))).error ?? "저장하지 못했어요. 다시 시도해 주세요."); setBusy(false); }
   }
 

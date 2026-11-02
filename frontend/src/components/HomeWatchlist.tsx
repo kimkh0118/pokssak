@@ -7,7 +7,7 @@ import { formatWon } from "@/lib/format";
 type Snap = { house_value: number | null; checked_at: string } | null;
 type Asset = { id: string; analysis_id: string; road_addr: string; jibun_addr: string; price: Snap; previous: Snap };
 
-// 홈: 로그인했으면 관심 집 최대 3곳을 바로 보여준다
+// 홈: 로그인했으면 내 자산 최대 3곳을 바로 보여준다
 export function HomeWatchlist() {
   const [assets, setAssets] = useState<Asset[] | null>(null);
   useEffect(() => {
@@ -17,7 +17,7 @@ export function HomeWatchlist() {
   return (
     <section aria-labelledby="watch">
       <div className="flex items-baseline justify-between">
-        <h2 id="watch" className="text-[17px] font-extrabold">관심 집</h2>
+        <h2 id="watch" className="text-[17px] font-extrabold">내 자산</h2>
         <Link href="/my" className="text-[13px] font-bold text-subtle">전체 보기 ›</Link>
       </div>
       <ul className="mt-3 space-y-2">

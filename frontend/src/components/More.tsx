@@ -8,7 +8,6 @@ import { isStandalone } from "@/lib/device";
 import { toast } from "@/lib/toast";
 import { SITE } from "@/lib/site";
 import { DeviceGuide } from "./InstallGuide";
-import { NotifyToggle } from "./NotifyToggle";
 
 function Row({ href, label }: { href: string; label: string }) {
   return (
@@ -49,19 +48,12 @@ export function More() {
           </div>
         ) : (
           <div>
-            <p className="font-bold">로그인하면 관심 집을 저장하고 가격이 바뀔 때 알림을 받을 수 있어요.</p>
+            <p className="font-bold">로그인하면 내 자산을 저장하고 가격이 바뀔 때 알림을 받을 수 있어요.</p>
             <Link href="/login?next=/more" className="mt-3 flex h-12 items-center justify-center rounded-xl bg-brand text-[15px] font-bold text-white">로그인</Link>
           </div>
         )}
       </section>
 
-      {user && (
-        <section className="rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
-          <h2 className="text-[16px] font-extrabold">알림</h2>
-          <p className="mt-0.5 text-[13px] text-subtle">관심 집의 예상 가격이 3% 넘게 바뀌거나 새 공시가격이 나오면 휴대폰으로 알려드려요.</p>
-          <div className="mt-3"><NotifyToggle /></div>
-        </section>
-      )}
 
       {!standalone && (
         <section className="rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
@@ -75,6 +67,7 @@ export function More() {
       )}
 
       <section className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-sm ring-1 ring-line">
+        {user && <Row href="/notify?next=/more" label="알림 설정" />}
         <Row href="/inquiry" label="문의하기" />
         {user?.isAdmin && <Row href="/admin/inquiries" label="문의 관리 (관리자)" />}
         <Row href="/about" label="계산 방법" />
@@ -86,7 +79,7 @@ export function More() {
       {user && (
         <button type="button" className="px-1 text-[13px] font-bold text-subtle underline underline-offset-2"
           onClick={async () => {
-            if (!window.confirm("탈퇴하면 관심 집·분석 기록·알림·동의 기록이 모두 바로 지워지고 되돌릴 수 없어요. 탈퇴할까요?")) return;
+            if (!window.confirm("탈퇴하면 내 자산·분석 기록·알림·동의 기록이 모두 바로 지워지고 되돌릴 수 없어요. 탈퇴할까요?")) return;
             await api("/api/auth/delete", { method: "POST" });
             router.replace("/welcome");
           }}>회원 탈퇴</button>

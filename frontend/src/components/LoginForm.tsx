@@ -60,7 +60,7 @@ export function LoginForm() {
       <div>
         <span className="grid h-16 w-16 place-items-center rounded-[22px] bg-surface shadow-sm ring-1 ring-line"><LogoMark size={34} /></span>
         <h1 className="mt-5 text-[28px] font-extrabold leading-tight tracking-tight">로그인하고<br />시작해요</h1>
-        <p className="mt-2 text-[15px] text-muted">관심 집을 저장하고 가격이 바뀌면 알림을 받을 수 있어요.</p>
+        <p className="mt-2 text-[15px] text-muted">내 자산을 저장하고 가격이 바뀌면 알림을 받을 수 있어요.</p>
       </div>
 
       {error && <Notice tone="bad">{error}</Notice>}

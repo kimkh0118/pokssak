@@ -21,11 +21,11 @@ class NotFound(Exception):
 
 
 class NotEligible(Exception):
-    """부산 단독·다가구주택이 아니면 분석·관심 집 저장을 하지 않는다."""
+    """부산 단독·다가구주택이 아니면 분석·내 자산 저장을 하지 않는다."""
 
 
 BLOCKING = {"busan": "부산광역시에 있는 집만 분석할 수 있어요.",
-            "type": "단독·다가구주택만 분석하고 관심 집으로 저장할 수 있어요. 아파트·연립·다세대·상가 등은 대상이 아니에요."}
+            "type": "단독·다가구주택만 분석하고 내 자산으로 저장할 수 있어요. 아파트·연립·다세대·상가 등은 대상이 아니에요."}
 
 
 def ensure_target(lk: dict):
@@ -59,20 +59,20 @@ def create(lookup_id: str, answers: dict, scope: dict, user: dict | None, guest_
     return {"id": aid, "saved": saved}
 
 
-# 질문에 답하기 전(정보 확인 단계)에 관심 집으로 저장할 때 쓰는 임시 답변.
+# 질문에 답하기 전(정보 확인 단계)에 내 자산으로 저장할 때 쓰는 임시 답변.
 # 모르는 값은 'unknown', 소유 형태는 가장 흔한 단독 소유로 두고 draft 표시 → 결과 화면에서 답하라고 안내한다.
 DRAFT_ANSWERS = {"ownership": "single", "corporate": False, "ownerMismatch": False, "usage": "unknown",
                  "direction": "undecided", "condition": "unknown", "access": "unknown", "vacancyMonths": None, "draft": True}
 
 
 def watch_from_lookup(lookup_id: str, scope: dict, user: dict) -> dict:
-    """정보 확인 단계에서 바로 관심 집으로 저장(질문은 나중에)."""
+    """정보 확인 단계에서 바로 내 자산으로 저장(질문은 나중에)."""
     out = create(lookup_id, DRAFT_ANSWERS, scope, user, None)
     return {"analysisId": out["id"], "saved": out["saved"]}
 
 
 def save_asset(user: dict, analysis_id: str) -> dict:
-    """로그인 사용자의 조회 완료 시 관심자산으로 자동 저장(같은 범위는 중복 저장하지 않음)."""
+    """로그인 사용자의 조회 완료 시 내 자산으로 자동 저장(같은 범위는 중복 저장하지 않음)."""
     with dbm.connect() as c:
         an = c.execute("SELECT asset_id FROM analyses WHERE id = ? AND owner_user_id = ?", (analysis_id, user["id"])).fetchone()
         if not an:

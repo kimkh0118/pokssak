@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
-import { takePending } from "@/lib/consent";
+import { afterConsent, takePending } from "@/lib/consent";
 import { LogoMark } from "./Logo";
 
 // 로그인 직후: 로그인 전에 고른 동의를 서버에 저장하고, 동의가 끝났으면 앱으로, 아니면 동의 화면으로
@@ -17,9 +17,9 @@ export function WelcomeDone() {
       const pending = takePending();
       if (pending) {
         const r = await fetch("/api/consents", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(pending) });
-        if (r.ok) return router.replace(next);
+        if (r.ok) return router.replace(afterConsent(next));
       }
-      if (me.user.consented) return router.replace(next);
+      if (me.user.consented) return router.replace(afterConsent(next));
       router.replace(`/welcome/agree?next=${encodeURIComponent(next)}`);
     })();
   }, [router, next]);

@@ -8,7 +8,6 @@ import { formatWon } from "@/lib/format";
 import { AnswersEditor } from "./AnswersEditor";
 import { LEGAL_KEYS, Verdict } from "./Verdict";
 import { LineChart } from "./LineChart";
-import { NotifyToggle } from "./NotifyToggle";
 import { AddressPlate, plateTitle } from "./AddressSign";
 import { PublicInfo } from "./PublicInfo";
 import { Button, Card, Notice, Pill, SampleBanner } from "./ui";
@@ -129,7 +128,7 @@ function ResultTabs({ tab, setTab, blocked }: { tab: Tab; setTab: (t: Tab) => vo
   );
 }
 
-// 관심 집 저장 + 이 기기 알림. 로그인 전에는 로그인 유도.
+// 내 자산 저장 + 이 기기 알림. 로그인 전에는 로그인 유도.
 function WatchCta({ data, user, saved, onSaved }: { data: Analysis; user: User | null; saved: string | null; onSaved: () => void }) {
   const [isSaved, setIsSaved] = useState<boolean | null>(saved ? true : null);
   const [busy, setBusy] = useState(false);
@@ -140,7 +139,7 @@ function WatchCta({ data, user, saved, onSaved }: { data: Analysis; user: User |
   if (!user) {
     return (
       <Link href={`/login?next=/analyses/${data.id}`} className="flex items-center justify-between rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
-        <span><b className="block text-[15px]">가격이 바뀌면 알려드릴까요?</b><span className="text-[13px] text-subtle">로그인하면 관심 집으로 저장하고 알림을 받아요</span></span>
+        <span><b className="block text-[15px]">가격이 바뀌면 알려드릴까요?</b><span className="text-[13px] text-subtle">로그인하면 내 자산으로 저장하고 알림을 받아요</span></span>
         <span className="shrink-0 rounded-lg bg-brand px-3 py-2 text-[14px] font-bold text-white">로그인</span>
       </Link>
     );
@@ -148,7 +147,7 @@ function WatchCta({ data, user, saved, onSaved }: { data: Analysis; user: User |
   if (isSaved === false) {
     return (
       <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
-        <span><b className="block text-[15px]">관심 집으로 저장할까요?</b><span className="text-[13px] text-subtle">저장하면 예상 가격이 바뀔 때 알려드려요</span></span>
+        <span><b className="block text-[15px]">내 자산으로 저장할까요?</b><span className="text-[13px] text-subtle">저장하면 예상 가격이 바뀔 때 알려드려요</span></span>
         <Button disabled={busy} onClick={async () => { setBusy(true); try { await api(`/api/analyses/${data.id}/save`, { method: "POST" }); setIsSaved(true); onSaved(); } finally { setBusy(false); } }}>저장</Button>
       </div>
     );
@@ -156,8 +155,8 @@ function WatchCta({ data, user, saved, onSaved }: { data: Analysis; user: User |
   if (!isSaved) return null;
   return (
     <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
-      <span className="min-w-0"><b className="block text-[15px]">♥ 관심 집으로 저장됐어요</b><span className="text-[13px] text-subtle">예상 가격이 3% 넘게 바뀌면 알림</span></span>
-      <NotifyToggle compact />
+      <span className="min-w-0"><b className="block text-[15px]">✓ 내 자산으로 저장됐어요</b><span className="text-[13px] text-subtle">예상 가격이 3% 넘게 바뀌면 알림</span></span>
+      <Link href={`/notify?next=/analyses/${data.id}`} className="shrink-0 rounded-lg bg-fill px-3 py-2 text-[13px] font-bold">알림 설정</Link>
     </div>
   );
 }
@@ -396,7 +395,7 @@ function DemolitionEstimate({ data }: { data: Analysis }) {
   );
 }
 
-// 매물을 내놓을 동네 공인중개사무소(국토부 등록 정보). 로그인 + 관심자산 등록 후에만 보여준다.
+// 매물을 내놓을 동네 공인중개사무소(국토부 등록 정보). 로그인 + 내 자산 등록 후에만 보여준다.
 type Office = { name: string; regNo: string; jibunAddr: string; roadAddr: string; registeredOn: string;
   phone?: string | null; placeUrl?: string | null; distanceM?: number | null };
 type Brokers = { dong: string; sgg: string; sameDong: Office[]; nearby: Office[]; total: number; source: string;
@@ -459,14 +458,14 @@ function BrokerConnect({ data, user }: { data: Analysis; user: User | null }) {
       <p className="mt-1 text-[13px] text-subtle">매물을 내놓을 동네 공인중개사무소를 찾아 드려요. 국토교통부에 등록된 영업 중인 사무소예요. 이 서비스는 연결만 하고, 주소·연락처를 업체에 보내지 않아요.</p>
       {state === "login" && (
         <div className="mt-3 rounded-xl bg-fill p-4">
-          <p className="text-[14px] font-bold">로그인하고 이 집을 관심 집으로 저장하면 동네 공인중개사를 보여 드려요.</p>
+          <p className="text-[14px] font-bold">로그인하고 이 집을 내 자산으로 저장하면 동네 공인중개사를 보여 드려요.</p>
           <Link href={`/login?next=/analyses/${data.id}%23broker`} className="mt-2 inline-flex rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white">로그인</Link>
         </div>
       )}
       {state === "save" && (
         <div className="mt-3 rounded-xl bg-fill p-4">
-          <p className="text-[14px] font-bold">이 집을 관심 집으로 저장하면 동네 공인중개사를 보여 드려요.</p>
-          <Button className="mt-2" onClick={() => void save()}>관심 집에 저장하기</Button>
+          <p className="text-[14px] font-bold">이 집을 내 자산으로 저장하면 동네 공인중개사를 보여 드려요.</p>
+          <Button className="mt-2" onClick={() => void save()}>내 자산에 저장하기</Button>
         </div>
       )}
       {state === "loading" && <div className="mt-3 h-24 animate-pulse rounded-xl bg-fill" />}

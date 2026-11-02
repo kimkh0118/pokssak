@@ -73,7 +73,7 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
     }
   }
 
-  // 정보 확인 단계에서 바로 관심 집으로 저장(질문은 나중에 결과 화면에서 답할 수 있음)
+  // 정보 확인 단계에서 바로 내 자산으로 저장(질문은 나중에 결과 화면에서 답할 수 있음)
   async function saveWatch() {
     if (!lookup) return;
     setWatch("saving");
@@ -83,7 +83,7 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
         method: "POST", body: { buildingKey, costsSeparable },
       });
       setWatch(out.saved.created ? "new" : "existing");
-      toast(out.saved.created ? "관심 집에 저장했어요" : "이미 관심 집에 있어요");
+      toast(out.saved.created ? "내 자산에 저장했어요" : "이미 내 자산에 있어요");
     } catch (e) {
       setError((e as Error).message);
       setWatch("idle");
@@ -109,7 +109,7 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
   const idx = ORDER.indexOf(step);
   const set = <K extends keyof Answers>(k: K, v: Answers[K]) => setA((s) => ({ ...s, [k]: v }));
   const multi = (lookup?.mainBuildings.length ?? 0) > 1;
-  // 부산 단독·다가구주택이 아니면 다음 단계·관심 집 저장을 막는다(서버도 같은 규칙)
+  // 부산 단독·다가구주택이 아니면 다음 단계·내 자산 저장을 막는다(서버도 같은 규칙)
   const notTarget = !!lookup?.checks.some((c) => (c.key === "type" || c.key === "busan") && c.status === "fail");
 
   return (
@@ -180,17 +180,17 @@ export function Flow({ initialQuery }: { initialQuery?: string }) {
           )}
           {notTarget ? null : watch === "new" || watch === "existing" ? (
             <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
-              <p className="text-[15px] font-bold">♥ {watch === "new" ? "관심 집에 저장했어요" : "이미 관심 집에 있어요"}</p>
-              <Link href="/my" className="shrink-0 text-[14px] font-bold text-brand-strong">관심 집 보기 ›</Link>
+              <p className="text-[15px] font-bold">✓ {watch === "new" ? "내 자산에 저장했어요" : "이미 내 자산에 있어요"}</p>
+              <Link href="/my" className="shrink-0 text-[14px] font-bold text-brand-strong">내 자산 보기 ›</Link>
             </div>
           ) : (
             <button type="button" onClick={() => void saveWatch()} disabled={watch === "saving" || (multi && !buildingKey)}
               className="press flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-surface text-[15px] font-bold shadow-sm ring-1 ring-line disabled:opacity-50">
-              <span aria-hidden className="text-brand">♡</span>{watch === "saving" ? "저장하는 중…" : "관심 집에 저장하기"}
+              <span aria-hidden className="text-brand">＋</span>{watch === "saving" ? "저장하는 중…" : "내 자산에 저장하기"}
             </button>
           )}
           {notTarget && (
-            <Notice tone="bad">폭싹은 <b>부산의 단독·다가구주택</b>만 분석해요. 이 건물은 다음 단계로 넘어가거나 관심 집으로 저장할 수 없어요. 다른 주소를 찾아 주세요.</Notice>
+            <Notice tone="bad">폭싹은 <b>부산의 단독·다가구주택</b>만 분석해요. 이 건물은 다음 단계로 넘어가거나 내 자산으로 저장할 수 없어요. 다른 주소를 찾아 주세요.</Notice>
           )}
           <BottomBar>
             {!notTarget && <Button variant="secondary" size="lg" className="w-28" onClick={() => setStep("address")}>다른 주소</Button>}

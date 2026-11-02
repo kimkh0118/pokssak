@@ -9,6 +9,8 @@ export function AppIcon({ name, active }: { name: string; active?: boolean }) {
       return <svg {...p}><circle cx="11" cy="11" r="6.5" fill={fill} fillOpacity={active ? 0.15 : 0} /><path d="m20 20-4.2-4.2" /></svg>;
     case "heart":
       return <svg {...p}><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10Z" fill={fill} fillOpacity={active ? 0.9 : 0} /></svg>;
+    case "asset":
+      return <svg {...p}><rect x="3.5" y="7.5" width="17" height="12" rx="2.5" fill={fill} fillOpacity={active ? 0.15 : 0} /><path d="M9 7.5V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5" /><path d="M3.5 12.5h17" /><path d="M11 12.5v1.5h2v-1.5" /></svg>;
     case "bell":
       return <svg {...p}><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15Z" fill={fill} fillOpacity={active ? 0.15 : 0} /><path d="M10 20.5a2 2 0 0 0 4 0" /></svg>;
     default:

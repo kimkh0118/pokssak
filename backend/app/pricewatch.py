@@ -1,6 +1,6 @@
-"""관심자산 예상 가격 변동 알림(앱 알림함 + 웹 푸시).
+"""내 자산 예상 가격 변동 알림(앱 알림함 + 웹 푸시).
 
-매일(기본 09:00 한국 시간 이후 하루 1번) 관심자산의 공공자료를 다시 조회해 중개사 방식 예상 가격을 새로 계산한다.
+매일(기본 09:00 한국 시간 이후 하루 1번) 내 자산의 공공자료를 다시 조회해 중개사 방식 예상 가격을 새로 계산한다.
 - 예상 가격: 직전 기록보다 PRICE_ALERT_PCT(기본 3%) 이상 바뀌고, 비교 거래가 PRICE_ALERT_MIN_SAMPLES(기본 3)건 이상일 때만 알림
   (거래 한두 건 때문에 출렁이는 값은 알리지 않음)
 - 공시가격: 새 연도 개별주택가격이 나오면 변동률과 함께 따로 알림(1년에 한 번)
@@ -46,7 +46,7 @@ def _snapshot(c, watch_id: str, analysis_id: str, v: dict, base: bool = False):
 
 
 def baseline(watch_id: str, analysis_id: str) -> None:
-    """관심자산 저장 시 기준값(알림 없음). 이미 기록이 있으면 그대로 둔다."""
+    """내 자산 저장 시 기준값(알림 없음). 이미 기록이 있으면 그대로 둔다."""
     with dbm.connect() as c:
         if c.execute("SELECT 1 FROM price_snapshots WHERE watch_id = ?", (watch_id,)).fetchone():
             return
@@ -79,7 +79,7 @@ def _refresh_lookup(analysis_id: str) -> None:
 
 
 def check_all(refresh: bool = True) -> dict:
-    """모든 관심자산을 확인. 반환: {checked, alerts, failed}"""
+    """모든 내 자산을 확인. 반환: {checked, alerts, failed}"""
     out = {"checked": 0, "alerts": 0, "failed": 0}
     with dbm.connect() as c:
         watches = c.execute("SELECT w.id, w.user_id, w.asset_id, w.analysis_id, a.road_addr, a.jibun_addr FROM watched_assets w "
@@ -100,7 +100,7 @@ def check_all(refresh: bool = True) -> dict:
                 out["checked"] += 1
                 if not last:
                     continue
-                name = w["road_addr"] or w["jibun_addr"] or "관심자산"
+                name = w["road_addr"] or w["jibun_addr"] or "내 자산"
                 for title, body in alerts:
                     c.execute("INSERT INTO notifications (id, user_id, dedupe_key, asset_id, program_id, event, title, body, created_at) "
                               "VALUES (?, ?, ?, ?, NULL, 'price_change', ?, ?, ?)",
@@ -111,7 +111,7 @@ def check_all(refresh: bool = True) -> dict:
                 out["alerts"] += 1
         except Exception as e:  # noqa: BLE001 — 한 집이 실패해도 나머지는 계속
             out["failed"] += 1
-            log.warning("관심자산 가격 확인 실패(%s): %s", w["id"], type(e).__name__)
+            log.warning("내 자산 가격 확인 실패(%s): %s", w["id"], type(e).__name__)
     return out
 
 
@@ -170,9 +170,9 @@ def start_scheduler():
         while True:
             try:
                 if due():
-                    log.info("관심자산 예상 가격 확인: %s", run_once())
+                    log.info("내 자산 예상 가격 확인: %s", run_once())
             except Exception as e:  # noqa: BLE001
-                log.warning("관심자산 가격 확인 작업 실패: %s", type(e).__name__)
+                log.warning("내 자산 가격 확인 작업 실패: %s", type(e).__name__)
             time.sleep(900)
     threading.Thread(target=loop, name="price-watch", daemon=True).start()
 

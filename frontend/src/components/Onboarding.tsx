@@ -9,7 +9,7 @@ import { LogoMark } from "./Logo";
 const SLIDES = [
   { art: "sign", title: "주소 하나로 시작해요", body: "도로명이나 지번만 넣으면 공공자료로 집값·땅값·철거비를 바로 계산해요." },
   { art: "compare", title: "그대로 팔까,\n철거하고 팔까", body: "비용을 다 빼고 손에 남는 돈을 나란히 놓고 비교해 드려요." },
-  { art: "bell", title: "가격이 바뀌면\n먼저 알려드려요", body: "관심 집의 예상 가격이 3% 넘게 바뀌거나 새 공시가격이 나오면 휴대폰으로 알려드려요." },
+  { art: "bell", title: "가격이 바뀌면\n먼저 알려드려요", body: "내 자산의 예상 가격이 3% 넘게 바뀌거나 새 공시가격이 나오면 휴대폰으로 알려드려요." },
 ] as const;
 
 function Art({ kind }: { kind: (typeof SLIDES)[number]["art"] }) {

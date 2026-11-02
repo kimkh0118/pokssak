@@ -1,4 +1,4 @@
--- 관심자산 예상 가격(중개사 방식 추정) 기록. 변동이 기준 이상이면 notifications 에 알림을 남긴다.
+-- 내 자산 예상 가격(중개사 방식 추정) 기록. 변동이 기준 이상이면 notifications 에 알림을 남긴다.
 CREATE TABLE price_snapshots (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
  watch_id TEXT NOT NULL REFERENCES watched_assets(id) ON DELETE CASCADE,

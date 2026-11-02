@@ -23,7 +23,7 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       { name: "빈집 조회", url: "/analyze", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
-      { name: "관심 집", url: "/my", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+      { name: "내 자산", url: "/my", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
       { name: "알림", url: "/notifications", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
     ],
   };

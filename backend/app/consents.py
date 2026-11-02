@@ -13,7 +13,7 @@ ITEMS = [
     {"key": "age14", "label": "만 14세 이상이에요", "required": True, "doc": None},
     {"key": "terms", "label": "서비스 이용약관 동의", "required": True, "doc": "/terms"},
     {"key": "privacy", "label": "개인정보 수집·이용 동의", "required": True, "doc": "/privacy"},
-    {"key": "notify", "label": "관심 집 가격 변동 알림 받기", "required": False, "doc": None},
+    {"key": "notify", "label": "내 자산 가격 변동 알림 받기", "required": False, "doc": None},
 ]
 REQUIRED = [i["key"] for i in ITEMS if i["required"]]
 

@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, type User } from "@/lib/api";
 import { Notice } from "./ui";
-import { NotifyToggle } from "./NotifyToggle";
+import { NotifyBanner } from "./NotifyPrime";
 
 type Item = { id: string; event?: string; link?: string | null; title: string; body: string; created_at: string; read_at: string | null };
 
-// 관심 집의 예상 가격 변동 알림과 문의 답장 알림. 열면 모두 읽음으로 바꾼다.
+// 내 자산의 예상 가격 변동 알림과 문의 답장 알림. 열면 모두 읽음으로 바꾼다.
 export function Inbox() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [items, setItems] = useState<Item[] | null>(null);
@@ -35,12 +35,12 @@ export function Inbox() {
   return (
     <div className="mx-auto max-w-md space-y-4">
       <h1 className="text-[24px] font-extrabold">알림</h1>
-      <div className="rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line"><NotifyToggle /></div>
+      <NotifyBanner from="/notifications" />
       {error && <Notice tone="bad">{error}</Notice>}
       {items?.length === 0 && (
         <div className="rounded-2xl bg-surface p-6 text-center shadow-sm ring-1 ring-line">
           <p className="font-bold">아직 알림이 없어요</p>
-          <p className="mt-1 text-[13px] text-subtle">관심 집의 예상 가격이 3% 넘게 바뀌거나 새 공시가격이 나오면 여기와 휴대폰으로 알려드려요.</p>
+          <p className="mt-1 text-[13px] text-subtle">내 자산의 예상 가격이 3% 넘게 바뀌거나 새 공시가격이 나오면 여기와 휴대폰으로 알려드려요.</p>
         </div>
       )}
       <ul className="stagger space-y-2">

@@ -30,7 +30,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 async def lifespan(_: FastAPI):
     dbm.connect().close()  # 마이그레이션
     keepalive.start()  # Render 무료 서버가 잠들지 않게 10분마다 자기 주소 열기
-    pricewatch.start_scheduler()  # 관심자산 예상 가격 매주 확인
+    pricewatch.start_scheduler()  # 내 자산 예상 가격 매주 확인
     yield
 
 
@@ -241,7 +241,7 @@ _OFFICE_CACHE: dict[str, tuple[float, dict]] = {}
 
 @app.get("/api/analyses/{analysis_id}/brokers")
 async def nearby_brokers(analysis_id: str, request: Request):
-    """매물을 내놓을 동네 공인중개사무소(국토부 등록 정보). 로그인 + 이 집을 관심자산에 등록한 경우만."""
+    """매물을 내놓을 동네 공인중개사무소(국토부 등록 정보). 로그인 + 이 집을 내 자산에 등록한 경우만."""
     import time
     from .adapters import vworld
     u = require_user(request)
@@ -249,7 +249,7 @@ async def nearby_brokers(analysis_id: str, request: Request):
         row = c.execute("SELECT a.lookup_id FROM analyses a JOIN watched_assets w ON w.asset_id = a.asset_id "
                         "WHERE a.id = ? AND w.user_id = ? AND w.deleted_at IS NULL", (analysis_id, u["id"])).fetchone()
     if not row:
-        raise HTTPException(403, "관심자산에 등록한 집에서만 공인중개사를 연결할 수 있어요.")
+        raise HTTPException(403, "내 자산에 등록한 집에서만 공인중개사를 연결할 수 있어요.")
     lk = prop.get_lookup(row["lookup_id"])
     sgg, dong = lk["pnu"][:5], lk["address"].get("emdNm") or ""
     hit = _OFFICE_CACHE.get(sgg)
@@ -367,7 +367,7 @@ def update_analysis(analysis_id: str, body: UpdateAnalysis, request: Request):
     return _wrap(lambda: analyses.update(analysis_id, user_of(request), guest_of(request), inputs, answers))
 
 
-# ---------------------------------------------------------------- 관심자산
+# ---------------------------------------------------------------- 내 자산
 @app.post("/api/lookups/{lookup_id}/watch")
 def watch_lookup(lookup_id: str, body: Scope, request: Request):
     return _wrap(lambda: analyses.watch_from_lookup(lookup_id, body.model_dump(), require_user(request)))
@@ -401,11 +401,11 @@ def delete_asset(watch_id: str, request: Request):
         n = c.execute("UPDATE watched_assets SET deleted_at = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
                       (now_iso(), watch_id, u["id"])).rowcount
     if not n:
-        raise HTTPException(404, "관심자산을 찾을 수 없습니다.")
+        raise HTTPException(404, "내 자산을 찾을 수 없습니다.")
     return {"ok": True}
 
 
-# ---------------------------------------------------------------- 알림(관심자산 예상 가격 변동)
+# ---------------------------------------------------------------- 알림(내 자산 예상 가격 변동)
 @app.get("/api/notifications")
 def my_notifications(request: Request):
     u = require_user(request)
@@ -461,7 +461,7 @@ async def push_unsubscribe(request: Request):
 @app.post("/api/push/test")
 def push_test(request: Request):
     u = require_user(request)
-    n = push.send(u["id"], "알림이 켜졌어요", "관심 집의 예상 가격이 바뀌면 이렇게 알려드려요.", url="/notifications")
+    n = push.send(u["id"], "알림이 켜졌어요", "내 자산의 예상 가격이 바뀌면 이렇게 알려드려요.", url="/notifications")
     return {"sent": n}
 
 

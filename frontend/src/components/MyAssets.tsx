@@ -6,7 +6,7 @@ import { toast } from "@/lib/toast";
 import { api, type User } from "@/lib/api";
 import { formatWon } from "@/lib/format";
 import { Notice } from "./ui";
-import { NotifyToggle } from "./NotifyToggle";
+import { NotifyBanner } from "./NotifyPrime";
 
 type Snap = { house_value: number | null; land_value: number | null; checked_at: string };
 type Asset = { id: string; analysis_id: string; created_at: string; road_addr: string; jibun_addr: string; pnu: string; price: Snap | null; previous: Snap | null };
@@ -32,7 +32,7 @@ export function MyAssets() {
   if (user === undefined) return <div className="mx-auto h-24 max-w-md animate-pulse rounded-2xl bg-fill" />;
   if (!user) return (
     <div className="mx-auto max-w-md rounded-2xl bg-surface p-6 text-center shadow-sm ring-1 ring-line">
-      <p className="text-[17px] font-extrabold">관심 집은 로그인한 뒤 볼 수 있어요</p>
+      <p className="text-[17px] font-extrabold">내 자산은 로그인한 뒤 볼 수 있어요</p>
       <p className="mt-1 text-[13px] text-subtle">저장한 집의 예상 가격이 바뀌면 알림으로 알려드려요.</p>
       <Link className="mt-4 inline-flex h-11 items-center rounded-xl bg-brand px-6 font-bold text-white" href="/login?next=/my">로그인</Link>
     </div>
@@ -40,11 +40,8 @@ export function MyAssets() {
 
   return (
     <div className="mx-auto max-w-md space-y-4">
-      <h1 className="text-[24px] font-extrabold">관심 집</h1>
-      <div className="rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
-        <NotifyToggle />
-        <p className="mt-1 text-[12px] text-subtle">매일 아침 다시 계산해서 예상 가격이 3% 넘게 바뀌거나 새 공시가격이 나오면 알려드려요.</p>
-      </div>
+      <h1 className="text-[24px] font-extrabold">내 자산</h1>
+      <NotifyBanner from="/my" />
       {error && <Notice tone="bad">{error}</Notice>}
       {assets?.length === 0 && (
         <div className="rounded-2xl bg-surface p-6 text-center shadow-sm ring-1 ring-line">
@@ -69,13 +66,13 @@ export function MyAssets() {
                 ) : <span className="mt-2 block text-[12px] text-subtle">예상 가격 계산 전</span>}
                 {a.price && <span className="block text-[11px] text-subtle">확인 {new Date(a.price.checked_at).toLocaleDateString("ko-KR")}</span>}
               </Link>
-              <button aria-label={`${a.road_addr} 관심 집에서 빼기`} className="mr-2 h-10 rounded-lg px-3 text-[13px] font-bold text-subtle hover:text-bad"
+              <button aria-label={`${a.road_addr} 내 자산에서 삭제`} className="mr-2 h-10 rounded-lg px-3 text-[13px] font-bold text-subtle hover:text-bad"
                 onClick={async () => {
                   const before = assets;
                   setAssets((s) => s?.filter((x) => x.id !== a.id) ?? null);  // 먼저 화면에서 빼고(바로 반응)
                   try {
                     await api(`/api/assets/${a.id}`, { method: "DELETE" });
-                    toast("관심 집에서 뺐어요", { action: { label: "되돌리기", run: async () => {
+                    toast("내 자산에서 뺐어요", { action: { label: "되돌리기", run: async () => {
                       await api(`/api/analyses/${a.analysis_id}/save`, { method: "POST" });
                       setAssets(before);
                       toast("다시 저장했어요");
@@ -84,7 +81,7 @@ export function MyAssets() {
                     setAssets(before);
                     toast(`빼지 못했어요: ${(e as Error).message}`, { tone: "bad" });
                   }
-                }}>관심 해제</button>
+                }}>삭제</button>
             </li>
           );
         })}

@@ -50,6 +50,9 @@ class Settings:
     # 카카오 로컬 API(중개사무소 전화번호·위치). developers.kakao.com 앱에서 '카카오맵' 서비스를 켜야 함
     kakao_rest_api_key: str | None = _env("KAKAO_REST_API_KEY")
     # AI 설명(선택). 키가 없으면 규칙 기반 설명
+    # 구글 제미나이(우선 사용). aistudio.google.com 에서 발급한 키
+    gemini_api_key: str | None = _env("GEMINI_API_KEY")
+    gemini_model: str = _env("GEMINI_MODEL") or "gemini-2.5-flash"
     anthropic_api_key: str | None = _env("ANTHROPIC_API_KEY")
     llm_model: str = _env("LLM_MODEL") or "claude-sonnet-5-5"
     # 로그인 + 필수 동의를 마친 회원만 자료 조회·분석 가능(테스트에서만 끔)

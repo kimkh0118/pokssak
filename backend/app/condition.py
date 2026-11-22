@@ -2,7 +2,7 @@
 
 흐름: 공공자료 기본 예상가(valuation.py) × (1 + 상태 보정률) = 최종 예상가
 - 점수는 항목별 정수(범위 고정), 항목별 1점당 보정률도 고정 → AI가 금액을 직접 만들지 않는다.
-- 근거: 객관식 4문항(항상) + 주관식 설명(있으면). 주관식은 AI(키가 있을 때) 또는 키워드 규칙으로 점수화.
+- 근거: 객관식 4문항(항상) + 주관식 설명(있으면). 주관식은 AI(제미나이 우선, 없으면 Claude — 키가 있을 때) 또는 키워드 규칙으로 점수화.
 - 결과는 답변을 낼 때 한 번 계산해 분석에 저장한다(매일 가격 확인 때는 다시 부르지 않음 → 같은 입력엔 같은 값).
 보정률 계수는 감정평가 건물 개별요인·중개 현장 관행을 단순화한 개발 설정값이며, 화면에 항목별 근거를 모두 보여준다.
 """
@@ -87,6 +87,49 @@ def from_text_rules(notes: str) -> dict[str, dict]:
     return out
 
 
+def _system_prompt() -> str:
+    guide = "\n".join(f"- {k}: {v[0]} (점수 {v[1]}~{v[2]})" for k, v in FACTORS.items())
+    return ("너는 부산 단독주택을 현장 확인하는 공인중개사다. 집주인이 쓴 설명을 읽고, 매매가에 영향을 주는 항목만 점수로 매긴다.\n"
+            f"항목과 점수 범위:\n{guide}\n"
+            "규칙: 글에 근거가 있는 항목만 넣는다(추측 금지). 0점은 넣지 않는다. 근거는 글에서 그대로 따온 20자 이내. 금액은 쓰지 않는다.")
+
+
+def _collect(items) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for it in items or []:
+        f, sc, ev = it.get("factor"), it.get("score"), str(it.get("evidence") or "")
+        if f in FACTORS and isinstance(sc, (int, float)) and int(sc) != 0:
+            out[f] = {"score": _clamp(f, int(sc)), "evidence": f"“{ev[:40]}”"}
+    return out
+
+
+def from_text_gemini(notes: str, answers: dict) -> dict[str, dict] | None:
+    """구글 제미나이로 주관식 설명을 항목 점수로(JSON 스키마 고정 출력). 키가 없거나 실패하면 None."""
+    if not settings.gemini_api_key:
+        return None
+    try:
+        import httpx
+
+        schema = {"type": "OBJECT", "properties": {"items": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+            "factor": {"type": "STRING", "enum": list(FACTORS)},
+            "score": {"type": "INTEGER"},
+            "evidence": {"type": "STRING"}}, "required": ["factor", "score", "evidence"]}}}, "required": ["items"]}
+        body = {
+            "systemInstruction": {"parts": [{"text": _system_prompt()}]},
+            "contents": [{"role": "user", "parts": [{"text": f"객관식 답: {answers}\n집 설명:\n{notes[:2000]}"}]}],
+            "generationConfig": {"temperature": 0, "responseMimeType": "application/json", "responseSchema": schema},
+        }
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent"
+        r = httpx.post(url, json=body, headers={"x-goog-api-key": settings.gemini_api_key}, timeout=30)
+        r.raise_for_status()
+        import json as _json
+        text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+        return _collect(_json.loads(text).get("items"))
+    except Exception as e:  # noqa: BLE001 — AI 실패는 다음 방법으로
+        log.warning("제미나이 상태 점수 실패: %s", type(e).__name__)
+        return None
+
+
 def from_text_ai(notes: str, answers: dict) -> dict[str, dict] | None:
     """Claude 로 주관식 설명을 항목 점수로 바꾼다. 키가 없거나 실패하면 None(→ 키워드 규칙)."""
     if not settings.anthropic_api_key:
@@ -133,7 +176,9 @@ def assess(answers: dict, notes: str | None) -> dict:
     source = "choices"
     notes = (notes or "").strip()
     if notes:
-        text = from_text_ai(notes, answers)
+        text = from_text_gemini(notes, answers)
+        if text is None:
+            text = from_text_ai(notes, answers)
         source = "ai" if text is not None else "rules"
         if text is None:
             text = from_text_rules(notes)
@@ -155,15 +200,28 @@ def assess(answers: dict, notes: str | None) -> dict:
             "capped": pct != total}
 
 
+def score_of(pct: float) -> int:
+    """보정률을 0~100점으로(50점 = 공공자료 기본값 그대로, 0점 = 범위 바닥, 100점 = 범위 꼭대기)."""
+    if pct < 0:
+        return round(50 - 50 * pct / MIN_PCT)
+    return round(50 + 50 * pct / MAX_PCT)
+
+
 def apply(house: dict, assessment: dict | None) -> dict:
-    """기본 예상가에 상태 보정을 곱한다. 기본값은 baseValue 로 남겨 화면에 함께 보여준다."""
+    """1) 공공자료로 대략 범위를 잡고 2) 답변 점수(0~100)로 그 범위 안의 자리를 골라 최종 예상가를 확정한다.
+    범위는 방법별 최소~최대에, 상태가 가장 나쁠 때(−25%)·좋을 때(+12%)까지 넓힌 것."""
     if not assessment or not house.get("value"):
         return house
-    f = 1 + assessment["pct"] / 100
+    v = house["value"]
+    r = house.get("range") or {"min": v, "max": v}
+    lo = min(r["min"], v * (1 + MIN_PCT / 100))
+    hi = max(r["max"], v * (1 + MAX_PCT / 100))
+    pct = assessment["pct"]
+    final = v - (v - lo) * (pct / MIN_PCT) if pct < 0 else v + (hi - v) * (pct / MAX_PCT)
     out = dict(house)
-    out["baseValue"] = house["value"]
-    out["value"] = house["value"] * f
-    if house.get("range"):
-        out["range"] = {"min": house["range"]["min"] * f, "max": house["range"]["max"] * f}
-    out["condition"] = assessment
+    out["baseValue"] = v
+    out["baseRange"] = {"min": lo, "max": hi}
+    out["value"] = final
+    out["range"] = None  # 점수로 확정했으므로 하나의 값
+    out["condition"] = assessment | {"score": score_of(pct), "finalPct": round((final / v - 1) * 100, 1)}
     return out

@@ -253,12 +253,32 @@ const AGREE = { good: "세 방법이 비슷해요", check: "방법별 차이가 
 const SOURCE = { ai: "AI가 설명을 읽고 매긴 점수", rules: "설명 속 키워드로 매긴 점수", choices: "질문 답으로 매긴 점수" } as const;
 
 /** 상태 점수: 기본 예상가 → 항목별 +/− → 최종 예상가 */
-function ConditionBreakdown({ base, final, c }: { base: number; final: number; c: ConditionAssessment }) {
+function ScoreBar({ lo, hi, base, final, score }: { lo: number; hi: number; base: number; final: number; score: number }) {
+  const pos = (x: number) => `${Math.max(0, Math.min(100, ((x - lo) / (hi - lo || 1)) * 100))}%`;
+  return (
+    <div className="mt-3">
+      <div className="flex items-baseline justify-between text-[12px] font-bold">
+        <span className="text-muted">① 공공자료로 잡은 범위</span>
+        <span className="tabular text-subtle">{formatWon(lo)} ~ {formatWon(hi)}</span>
+      </div>
+      <div className="relative mt-2 h-2.5 rounded-full bg-gradient-to-r from-[#f0cabf] via-[#dacfcb] to-[#cf8a79]" role="img"
+        aria-label={`상태 점수 ${score}점, 범위 안 ${Math.round(((final - lo) / (hi - lo || 1)) * 100)}% 위치`}>
+        <span className="absolute top-1/2 h-4 w-0.5 -translate-y-1/2 bg-muted/50" style={{ left: pos(base) }} aria-hidden />
+        <span className="absolute top-1/2 grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-brand-strong shadow ring-2 ring-white transition-[left] duration-500" style={{ left: pos(final) }} aria-hidden />
+      </div>
+      <div className="mt-1 flex justify-between text-[11px] text-subtle"><span>상태 나쁨</span><span>기본값</span><span>상태 좋음</span></div>
+      <p className="mt-2 text-[12px] font-bold text-muted">② 답변으로 매긴 상태 점수 <span className="tabular text-[15px] text-brand-strong">{score}점</span><span className="font-normal text-subtle"> / 100 (50점 = 기본값)</span></p>
+    </div>
+  );
+}
+
+function ConditionBreakdown({ base, final, c, range }: { base: number; final: number; c: ConditionAssessment; range?: { min: number; max: number } }) {
   return (
     <div className="mt-3 rounded-xl bg-fill p-3.5">
       <p className="flex items-center justify-between text-[12px] font-bold text-subtle">
         <span>집 상태 반영</span><span>{SOURCE[c.source]}</span>
       </p>
+      {range && c.score != null && <ScoreBar lo={range.min} hi={range.max} base={base} final={final} score={c.score} />}
       <div className="mt-2 flex items-baseline justify-between text-[13px]">
         <span className="text-muted">공공자료 기본 예상가</span><span className="tabular font-semibold">{formatWon(base)}</span>
       </div>
@@ -272,7 +292,7 @@ function ConditionBreakdown({ base, final, c }: { base: number; final: number; c
         {c.items.length === 0 && <li className="text-[12px] text-subtle">가격에 영향을 줄 상태가 없었어요.</li>}
       </ul>
       <div className="mt-2 flex items-baseline justify-between border-t border-line pt-2 text-[14px]">
-        <b>최종 예상가 <span className={`tabular text-[12px] ${c.pct > 0 ? "text-good" : c.pct < 0 ? "text-bad" : "text-subtle"}`}>{c.pct > 0 ? "+" : ""}{c.pct}%{c.capped ? " (한도)" : ""}</span></b>
+        <b>{range ? "③ " : ""}확정 예상가 <span className={`tabular text-[12px] ${c.pct > 0 ? "text-good" : c.pct < 0 ? "text-bad" : "text-subtle"}`}>{(c.finalPct ?? c.pct) > 0 ? "+" : ""}{c.finalPct ?? c.pct}%{c.capped ? " (한도)" : ""}</span></b>
         <b className="tabular">{formatWon(final)}</b>
       </div>
       {!c.notes && <p className="mt-2 text-[12px] text-subtle">아래 ‘질문 답 바꾸기’에서 집 상태를 글로 적으면 더 정확해져요.</p>}
@@ -287,8 +307,8 @@ function RefCard({ r }: { r: Reference }) {
     <Card>
       <p className="text-[13px] font-bold text-subtle">{r.label} {est ? "추정가(중개사 방식)" : "참고가격"}</p>
       <p className="num-in tabular mt-1 text-[22px] font-extrabold">{r.value == null ? "산정 보류" : formatWon(r.value)}</p>
-      {r.condition && r.baseValue != null && <ConditionBreakdown base={r.baseValue} final={r.value!} c={r.condition} />}
-      {r.condition && r.range ? (
+      {r.condition && r.baseValue != null && <ConditionBreakdown base={r.baseValue} final={r.value!} c={r.condition} range={r.baseRange} />}
+      {r.condition && r.baseRange ? null : r.condition && r.range ? (
         <p className="text-[12px] text-subtle">상태 반영 범위 {formatWon(r.range.min)} ~ {formatWon(r.range.max)}</p>
       ) : est && v?.range ? (
         <p className="text-[12px] text-subtle">추정 범위 {formatWon(v.range.min)} ~ {formatWon(v.range.max)}

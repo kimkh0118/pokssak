@@ -32,11 +32,15 @@ def test_좋은_상태는_올라가고_보정에는_한도():
     assert bad["pct"] == condition.MIN_PCT and bad["capped"]
 
 
-def test_적용하면_기본값을_남기고_범위도_같이_보정():
-    house = {"value": 100_000_000, "range": {"min": 90_000_000, "max": 110_000_000}}
+def test_범위를_잡고_점수로_최종가_확정():
+    house = {"value": 100_000_000, "range": {"min": 90_000_000, "max": 130_000_000}}
     out = condition.apply(house, {"pct": -10.0, "items": []})
     assert out["baseValue"] == 100_000_000 and round(out["value"]) == 90_000_000
-    assert round(out["range"]["min"]) == 81_000_000
+    assert out["baseRange"] == {"min": 75_000_000, "max": 130_000_000} and out["range"] is None
+    assert out["condition"]["score"] == 30
+    best = condition.apply(house, {"pct": condition.MAX_PCT, "items": []})
+    assert round(best["value"]) == 130_000_000 and best["condition"]["score"] == 100
+    assert condition.apply(house, {"pct": 0.0, "items": []})["condition"]["score"] == 50
 
 
 def test_분석에_저장되고_답을_고치면_다시_계산():
@@ -53,3 +57,33 @@ def test_분석에_저장되고_답을_고치면_다시_계산():
         c.put(f"/api/analyses/{aid}", json={"answers": BASE | {"condition": "usable", "notes": "올수리 했어요"}})
         again = c.get(f"/api/analyses/{aid}").json()["answers"]["assessment"]
         assert again["pct"] > assess["pct"]
+
+
+def test_gemini_used_when_key(monkeypatch):
+    import json
+    from app.settings import settings
+
+    class R:
+        def raise_for_status(self): pass
+        def json(self):
+            items = [{"factor": "roof", "score": -5, "evidence": "슬레이트"}, {"factor": "bogus", "score": 1, "evidence": "x"}]
+            return {"candidates": [{"content": {"parts": [{"text": json.dumps({"items": items})}]}}]}
+
+    import httpx
+    monkeypatch.setattr(settings, "gemini_api_key", "test")
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: R())
+    a = condition.assess(BASE, "지붕이 슬레이트예요")
+    assert a["source"] == "ai"
+    roof = [i for i in a["items"] if i["key"] == "roof"][0]
+    assert roof["score"] == -2  # 범위로 잘림
+    assert all(i["key"] in condition.FACTORS for i in a["items"])
+
+
+def test_gemini_failure_falls_back_to_rules(monkeypatch):
+    from app.settings import settings
+    import httpx
+    monkeypatch.setattr(settings, "gemini_api_key", "test")
+    monkeypatch.setattr(settings, "anthropic_api_key", None)
+    def boom(*a, **k): raise httpx.ConnectError("x")
+    monkeypatch.setattr(httpx, "post", boom)
+    assert condition.assess(BASE, "지붕이 슬레이트예요")["source"] == "rules"

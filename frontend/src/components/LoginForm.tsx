@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api } from "@/lib/api";
-import { Button, Notice } from "./ui";
+import { Notice } from "./ui";
 import { LogoMark } from "./Logo";
 
 const ERRORS: Record<string, string> = {
@@ -21,31 +20,11 @@ export function LoginForm() {
   const params = useSearchParams();
   const next = safeNext(params.get("next"));
   const [google, setGoogle] = useState<boolean | null>(null);
-  const [showEmail, setShowEmail] = useState(false);
-  const [mode, setMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(() => ERRORS[params.get("error") ?? ""] ?? null);
-  const [busy, setBusy] = useState(false);
+  const [error] = useState<string | null>(() => ERRORS[params.get("error") ?? ""] ?? null);
 
   useEffect(() => {
     fetch("/api/auth/config").then((r) => r.json()).then((d) => setGoogle(!!d.google)).catch(() => setGoogle(false));
   }, []);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      if (mode === "signup") await api("/api/auth/signup", { method: "POST", body: { email, password } });
-      await api("/api/auth/login", { method: "POST", body: { email, password } });
-      router.push(next);
-      router.refresh();
-    } catch (err) {
-      setError((err as Error).message);
-      setBusy(false);
-    }
-  }
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#f5f2ed] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
@@ -80,25 +59,6 @@ export function LoginForm() {
       </a>
       {google === false && <p className="text-[12px] text-subtle">구글 로그인은 서버 설정 후 사용할 수 있어요.</p>}
 
-      <div>
-        <button type="button" className="text-[13px] font-bold text-subtle underline" onClick={() => setShowEmail((v) => !v)} aria-expanded={showEmail}>
-          {showEmail ? "이메일 로그인 닫기" : "이메일로 로그인"}
-        </button>
-        {showEmail && (
-          <form onSubmit={submit} className="mt-3 space-y-3">
-            <label className="block text-[14px] font-bold">이메일
-              <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 block h-12 w-full rounded-xl bg-fill px-4 text-[16px] outline-none focus:ring-2 focus:ring-brand" />
-            </label>
-            <label className="block text-[14px] font-bold">비밀번호(8자 이상)
-              <input type="password" required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block h-12 w-full rounded-xl bg-fill px-4 text-[16px] outline-none focus:ring-2 focus:ring-brand" />
-            </label>
-            <Button type="submit" size="lg" className="w-full" disabled={busy}>{busy ? "처리 중…" : mode === "login" ? "로그인" : "가입하고 로그인"}</Button>
-            <button type="button" className="text-[14px] font-bold text-brand-strong" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
-              {mode === "login" ? "처음이세요? 회원가입" : "이미 계정이 있어요"}
-            </button>
-          </form>
-        )}
-      </div>
       </div>
       </div>
     </div>

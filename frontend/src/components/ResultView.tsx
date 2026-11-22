@@ -11,7 +11,7 @@ import { LEGAL_KEYS, Verdict } from "./Verdict";
 import { LineChart } from "./LineChart";
 import { AddressPlate, plateTitle } from "./AddressSign";
 import { PublicInfo } from "./PublicInfo";
-import { Button, Card, Notice, Pill, SampleBanner } from "./ui";
+import { Button, Card, Notice, SampleBanner } from "./ui";
 
 const w = (v: number | null | undefined) => (v == null ? "미확인" : formatWon(v));
 const pair = (p: [number, number] | null | undefined) => (!p ? "미확인" : p[0] === p[1] ? w(p[0]) : `${w(p[0])} ~ ${w(p[1])}`);
@@ -43,9 +43,6 @@ export function ResultView({ id }: { id: string }) {
       <header className="space-y-2">
         <h1 className="sr-only">{data.address.roadAddr}</h1>
         <AddressPlate title={plateTitle(data.address.jibunAddr, data.address.roadAddr)} sub={data.address.roadAddr} />
-        <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
-          {Object.values(data.eligibility.labels).filter(Boolean).map((t) => <span key={t} className="shrink-0"><Pill>{t}</Pill></span>)}
-        </div>
       </header>
 
       <Verdict data={data} />
@@ -56,11 +53,11 @@ export function ResultView({ id }: { id: string }) {
       {tab === "summary" && (
         <div className="space-y-4">
           {!blocked && <section aria-labelledby="cmp" className="panel">
-            <h2 id="cmp" className="text-[18px] font-extrabold">두 판매 방식 비교</h2>
-            <p className="mt-1 text-[13px] text-subtle">예상값으로 계산했어요. 세금·관리비 등은 빠져 있어요.</p>
+            <h2 id="cmp" className="text-[18px] font-extrabold">남는 돈은 이렇게 계산했어요</h2>
             {cmp ? <CompareTable data={data} cmp={cmp} /> : <Notice>주변 거래 자료가 없어 비교할 수 없어요.</Notice>}
           </section>}
           {!blocked && cmp && <Breakeven cmp={cmp} known={!!r.calc?.demolitionKnown} costsComplete={!!r.calc?.costsComplete} />}
+          {!blocked && <NextSteps go={setTab} />}
           {(data.answers as { draft?: boolean }).draft && (
             <Notice tone="warn">아직 질문 4개에 답하지 않아 모르는 값으로 계산했어요. 아래에서 답하면 결과가 더 정확해져요.</Notice>
           )}
@@ -77,10 +74,10 @@ export function ResultView({ id }: { id: string }) {
         <div className="space-y-4">
           <section aria-labelledby="ref" className="panel">
             <h2 id="ref" className="text-[18px] font-extrabold">예상 집값·땅값</h2>
-            <p className="mt-1 text-[13px] text-subtle">공인중개사가 쓰는 세 가지 방법(비슷한 거래 비교 · 땅값+남은 건물값 · 공시가격 비율)을 함께 계산했어요. 감정평가가 아니에요.</p>
+            <p className="mt-1 text-[13px] text-subtle">공인중개사가 쓰는 방법으로 계산한 예상값이에요(감정평가 아님).</p>
             <div className="mt-3 space-y-3">
-              <RefCard r={data.reference.house} />
-              <RefCard r={data.reference.land} />
+              <RefCard r={data.reference.house} title="그대로 팔 때 예상가" />
+              <RefCard r={data.reference.land} title="철거 후 땅 예상가" />
             </div>
           </section>
           <PriceTrend data={data} />
@@ -98,12 +95,12 @@ export function ResultView({ id }: { id: string }) {
 
       {tab === "info" && (
         <section className="panel space-y-5">
-          <PublicInfo lookup={{ ...data.public, address: data.address, pnu: data.pnu, checks: data.checks, mode: data.mode,
+          <PublicInfo compact lookup={{ ...data.public, address: data.address, pnu: data.pnu, checks: data.checks, mode: data.mode,
             houseTrades: data.tradeStatus.houseTrades, landTrades: data.tradeStatus.landTrades } as never} />
           <div>
-            <h3 className="font-bold">추가 확인사항</h3>
+            <h3 className="font-bold">팔기 전에 확인할 것</h3>
             <ul className="mt-1 list-disc pl-5 text-[14px] text-muted">{data.eligibility.confirmations.map((c) => <li key={c}>{c}</li>)}</ul>
-            <p className="mt-2 text-[12px] text-subtle">{data.eligibility.notice} · 규칙 {r.ruleVersion} · {new Date(data.updatedAt).toLocaleString("ko-KR")}</p>
+            <p className="mt-2 text-[12px] text-subtle">{new Date(data.updatedAt).toLocaleDateString("ko-KR")} 기준으로 계산했어요.</p>
           </div>
         </section>
       )}
@@ -111,7 +108,7 @@ export function ResultView({ id }: { id: string }) {
   );
 }
 
-const TAB_LIST = [["summary", "요약"], ["price", "가격"], ["demolish", "철거"], ["broker", "중개사"], ["info", "정보"]] as const;
+const TAB_LIST = [["summary", "요약"], ["price", "가격"], ["demolish", "철거"], ["broker", "중개사"], ["info", "집 정보"]] as const;
 type Tab = (typeof TAB_LIST)[number][0];
 
 // 결과 화면 탭(위에 붙어 따라옴). 한 번에 한 구역만 보여 화면을 가볍게.
@@ -208,12 +205,7 @@ function CompareTable({ data, cmp }: { data: Analysis; cmp: Compare }) {
           </tr>
         </tbody>
       </table>
-      {known && (
-        <p className="mt-1 rounded-xl bg-fill px-3 py-2.5 text-[14px]">
-          {better === "H" ? "그대로 팔 때" : better === "L" ? "철거 후 땅으로 팔 때" : "두 방법이"} <b className="tabular">{better ? `${w(Math.abs(b.delta))} 더 남아요` : "비슷해요"}</b>
-          {cmp.overlap && <span className="block text-[12px] text-warn">예상 범위가 겹쳐서 실제로는 반대가 될 수도 있어요.</span>}
-        </p>
-      )}
+      {known && cmp.overlap && <p className="mt-1 text-[12px] text-warn">예상 범위가 겹쳐서 실제로는 결과가 반대가 될 수도 있어요.</p>}
       <div className="mt-2">
         <Explain title="계산식·범위·빠진 비용">
           <p>그대로 팔 때 = 예상 판매가 − 중개보수 (범위 {pair(cmp.ranges.N_H)})</p>
@@ -231,19 +223,43 @@ function Breakeven({ cmp, known }: { cmp: Compare; known: boolean; costsComplete
   const b = cmp.base;
   return (
     <section className="panel" aria-labelledby="be">
-      <p id="be" className="text-[13px] font-bold text-subtle">철거비 손익분기점</p>
+      <p id="be" className="text-[13px] font-bold text-subtle">철거비가 이 금액보다 적으면 철거가 이득이에요</p>
       {b.D_star <= 0 ? (
         <p className="mt-1 text-[15px] font-bold">이 가격대에서는 철거비가 0원이어도 그대로 파는 쪽이 더 남아요.</p>
       ) : (
         <>
           <p className="num-in tabular mt-1 text-[24px] font-extrabold">{formatWon(b.D_star)}</p>
-          <p className="text-[14px] text-muted">철거비가 이보다 적게 나오면 철거 후 땅으로 파는 게 더 남아요.{known && ` 예상 철거비는 ${formatWon(b.D)}이에요.`}</p>
+          {known && <p className="text-[14px] text-muted">이 집의 예상 철거비는 <b className="tabular text-ink">{formatWon(b.D)}</b>이에요.</p>}
         </>
       )}
       <Explain title="계산식">
-        <p>손익분기점 = 예상 땅값 − 예상 판매가 − (땅 중개보수 − 집 중개보수)</p>
+        <p>기준 금액 = 예상 땅값 − 예상 판매가 − (땅 중개보수 − 집 중개보수)</p>
         <p>= {formatWon(b.L)} − {formatWon(b.H)} − ({formatWon(b.M_L)} − {formatWon(b.M_H)})</p>
       </Explain>
+    </section>
+  );
+}
+
+function NextSteps({ go }: { go: (t: Tab) => void }) {
+  const steps: [string, string, Tab][] = [
+    ["동네 공인중개사에게 시세 묻기", "그대로 팔 때·땅으로 팔 때 가격을 둘 다 물어보세요", "broker"],
+    ["철거 견적·지원금 알아보기", "업체 2~3곳 견적과 구청 철거 지원을 확인하세요", "demolish"],
+  ];
+  return (
+    <section className="panel" aria-labelledby="next">
+      <h2 id="next" className="text-[18px] font-extrabold">다음에 할 일</h2>
+      <ol className="mt-3 space-y-2">
+        {steps.map(([t, d, tab], i) => (
+          <li key={t}>
+            <button type="button" onClick={() => { go(tab); window.scrollTo({ top: 380, behavior: "smooth" }); }}
+              className="press flex w-full items-center gap-3 rounded-xl bg-fill p-3.5 text-left">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand text-[13px] font-extrabold text-white">{i + 1}</span>
+              <span className="min-w-0 flex-1"><b className="block text-[15px]">{t}</b><span className="text-[13px] text-subtle">{d}</span></span>
+              <span aria-hidden className="text-[20px] text-subtle">›</span>
+            </button>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
@@ -253,21 +269,20 @@ const AGREE = { good: "세 방법이 비슷해요", check: "방법별 차이가 
 const SOURCE = { ai: "AI가 설명을 읽고 매긴 점수", rules: "설명 속 키워드로 매긴 점수", choices: "질문 답으로 매긴 점수" } as const;
 
 /** 상태 점수: 기본 예상가 → 항목별 +/− → 최종 예상가 */
-function ScoreBar({ lo, hi, base, final, score }: { lo: number; hi: number; base: number; final: number; score: number }) {
-  const pos = (x: number) => `${Math.max(0, Math.min(100, ((x - lo) / (hi - lo || 1)) * 100))}%`;
+function ScoreBar({ lo, hi, final, score }: { lo: number; hi: number; final: number; score: number }) {
   return (
     <div className="mt-3">
       <div className="flex items-baseline justify-between text-[12px] font-bold">
-        <span className="text-muted">① 공공자료로 잡은 범위</span>
-        <span className="tabular text-subtle">{formatWon(lo)} ~ {formatWon(hi)}</span>
+        <span className="shrink-0 text-muted">① 가능한 가격 범위</span>
+        <span className="tabular text-right text-subtle">{formatWon(lo)} ~ {formatWon(hi)}</span>
       </div>
       <div className="relative mt-2 h-2.5 rounded-full bg-gradient-to-r from-[#f0cabf] via-[#dacfcb] to-[#cf8a79]" role="img"
-        aria-label={`상태 점수 ${score}점, 범위 안 ${Math.round(((final - lo) / (hi - lo || 1)) * 100)}% 위치`}>
-        <span className="absolute top-1/2 h-4 w-0.5 -translate-y-1/2 bg-muted/50" style={{ left: pos(base) }} aria-hidden />
-        <span className="absolute top-1/2 grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-brand-strong shadow ring-2 ring-white transition-[left] duration-500" style={{ left: pos(final) }} aria-hidden />
+        aria-label={`상태 점수 ${score}점(100점 만점), 확정 예상가 ${formatWon(final)}`}>
+        <span className="absolute left-1/2 top-1/2 h-4 w-0.5 -translate-y-1/2 bg-muted/50" aria-hidden />
+        <span className="absolute top-1/2 grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-brand-strong shadow ring-2 ring-white transition-[left] duration-500" style={{ left: `${Math.max(0, Math.min(100, score))}%` }} aria-hidden />
       </div>
-      <div className="mt-1 flex justify-between text-[11px] text-subtle"><span>상태 나쁨</span><span>기본값</span><span>상태 좋음</span></div>
-      <p className="mt-2 text-[12px] font-bold text-muted">② 답변으로 매긴 상태 점수 <span className="tabular text-[15px] text-brand-strong">{score}점</span><span className="font-normal text-subtle"> / 100 (50점 = 기본값)</span></p>
+      <div className="mt-1 flex justify-between text-[11px] text-subtle"><span>상태 나쁨 0점</span><span>보통 50점</span><span>좋음 100점</span></div>
+      <p className="mt-2 text-[12px] font-bold text-muted">② 답변으로 매긴 상태 점수 <span className="tabular text-[15px] text-brand-strong">{score}점</span><span className="font-normal text-subtle"> / 100</span></p>
     </div>
   );
 }
@@ -278,15 +293,16 @@ function ConditionBreakdown({ base, final, c, range }: { base: number; final: nu
       <p className="flex items-center justify-between text-[12px] font-bold text-subtle">
         <span>집 상태 반영</span><span>{SOURCE[c.source]}</span>
       </p>
-      {range && c.score != null && <ScoreBar lo={range.min} hi={range.max} base={base} final={final} score={c.score} />}
+      {range && c.score != null && <ScoreBar lo={range.min} hi={range.max} final={final} score={c.score} />}
       <div className="mt-2 flex items-baseline justify-between text-[13px]">
         <span className="text-muted">공공자료 기본 예상가</span><span className="tabular font-semibold">{formatWon(base)}</span>
       </div>
+      <p className="mt-2 text-[12px] font-bold text-subtle">점수에 영향을 준 것</p>
       <ul className="stagger mt-1 space-y-1">
         {c.items.map((i) => (
           <li key={i.key} className="flex items-baseline justify-between gap-3 text-[13px]">
             <span className="min-w-0"><span className="font-semibold">{i.label}</span> <span className="text-[12px] text-subtle">{i.evidence}</span></span>
-            <span className={`tabular shrink-0 font-bold ${i.pct > 0 ? "text-good" : "text-bad"}`}>{i.pct > 0 ? "+" : ""}{i.pct}%</span>
+            <span className={`tabular shrink-0 font-bold ${i.score > 0 ? "text-good" : "text-bad"}`}>{i.score > 0 ? "+" : ""}{i.score}</span>
           </li>
         ))}
         {c.items.length === 0 && <li className="text-[12px] text-subtle">가격에 영향을 줄 상태가 없었어요.</li>}
@@ -300,12 +316,12 @@ function ConditionBreakdown({ base, final, c, range }: { base: number; final: nu
   );
 }
 
-function RefCard({ r }: { r: Reference }) {
+function RefCard({ r, title }: { r: Reference; title: string }) {
   const v = r.valuation;
   const est = r.estimated && v?.value != null;
   return (
     <Card>
-      <p className="text-[13px] font-bold text-subtle">{r.label} {est ? "추정가(중개사 방식)" : "참고가격"}</p>
+      <p className="text-[13px] font-bold text-subtle">{title}</p>
       <p className="num-in tabular mt-1 text-[22px] font-extrabold">{r.value == null ? "산정 보류" : formatWon(r.value)}</p>
       {r.condition && r.baseValue != null && <ConditionBreakdown base={r.baseValue} final={r.value!} c={r.condition} range={r.baseRange} />}
       {r.condition && r.baseRange ? null : r.condition && r.range ? (
@@ -318,7 +334,11 @@ function RefCard({ r }: { r: Reference }) {
           {r.range && ` · 관측 범위 ${formatWon(r.range.min)} ~ ${formatWon(r.range.max)}`}</p>
       )}
       {est && v && (
-        <div className="mt-3 space-y-2">
+        <details className="group mt-3 rounded-xl bg-fill px-3.5 py-3">
+          <summary className="flex cursor-pointer list-none items-center justify-between text-[13px] font-bold text-muted">
+            어떻게 계산했나요? <span aria-hidden className="transition-transform group-open:rotate-90">›</span>
+          </summary>
+        <div className="mt-2 space-y-2">
           <ul className="space-y-1.5 text-[13px]">
             {v.methods.filter((m) => m.value).map((m) => (
               <li key={m.key} className="rounded-lg bg-fill px-3 py-2">
@@ -331,13 +351,14 @@ function RefCard({ r }: { r: Reference }) {
             ))}
           </ul>
           <p className="text-[12px] text-muted">이 땅의 보정: {v.factors.map((f) => `${f.label} ${f.factor === 1 ? "±0%" : `${f.factor > 1 ? "+" : ""}${Math.round((f.factor - 1) * 100)}%`}`).join(", ")}</p>
-          <p className="text-[12px] text-subtle">{r.condition ? "알려 주신 집 상태까지 반영했어요." : "집 내부 상태는 반영하지 못했어요."} 실제로 팔기 전에는 공인중개사에게 시세를 확인하세요.</p>
+          {r.notes.map((n) => <p key={n} className="text-[12px] text-warn">{n}</p>)}
+          {r.extended && <p className="text-[12px] text-muted">{r.extended.note}: {r.extended.sampleSize}건 · {formatWon(r.extended.value)}</p>}
         </div>
+        </details>
       )}
-      {r.notes.map((n) => <p key={n} className="mt-1 text-[12px] text-warn">{n}</p>)}
-      {r.extended && <p className="mt-1 text-[12px] text-muted">{r.extended.note}: {r.extended.sampleSize}건 · {formatWon(r.extended.value)}</p>}
-      {r.decisions.length > 0 && (
-        <Explain title={`실거래 사례 ${r.decisions.length}건 선정·제외 사유`}>
+      {!est && r.notes.map((n) => <p key={n} className="mt-1 text-[12px] text-warn">{n}</p>)}
+      {r.decisions.some((d) => d.included) && (
+        <Explain title={`참고한 주변 거래 ${r.decisions.filter((d) => d.included).length}건 보기`}>
           <ul className="space-y-1">{r.decisions.map((d, i) => (
             <li key={i} className={d.included ? "text-ink" : ""}>{d.trade.dealDate} {d.trade.umdNm} {d.trade.jibunMasked} · {d.trade.landArea}㎡ · {formatWon(d.trade.amountWon)} — {d.included ? "사용" : `제외: ${d.reason}`}</li>
           ))}</ul>
@@ -352,8 +373,8 @@ function RefCard({ r }: { r: Reference }) {
 function Programs() {
   return (
     <section aria-labelledby="prog" className="panel">
-      <h2 id="prog" className="text-[18px] font-extrabold">철거 지원 신청</h2>
-      <p className="mt-1 text-[13px] text-subtle">빈집 철거비 지원은 구·군마다 금액과 조건이 달라요. 빈집애에서 신청하거나 구청 담당 부서에 올해 지원 여부를 물어보세요.</p>
+      <h2 id="prog" className="text-[18px] font-extrabold">철거비 지원 받기</h2>
+      <p className="mt-1 text-[14px] text-muted">구·군청이 빈집 철거비 일부를 지원해요. 금액과 조건은 구마다 달라요.</p>
       <BinzibeLink />
     </section>
   );
@@ -361,17 +382,12 @@ function Programs() {
 
 function BinzibeLink() {
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
-      <span className="min-w-0">
-        <span className="block text-[15px] font-extrabold">빈집 철거 지원은 &lsquo;빈집애&rsquo;에서 온라인 신청할 수 있어요</span>
-        <span className="block text-[13px] text-muted">국토교통부·농림축산식품부 빈집철거지원사업 통합 창구예요. 심사·지원은 관할 구·군청이 해요.</span>
-      </span>
-      <span className="flex shrink-0 flex-wrap gap-2">
-        <a href="https://www.binzibe.kr/main/" target="_blank" rel="noopener noreferrer"
-          className="rounded-lg bg-brand px-4 py-2 text-[14px] font-bold text-white hover:bg-brand-strong">빈집애 바로가기</a>
-        <a href="https://www.binzibe.kr/main/html/maintenance5.html" target="_blank" rel="noopener noreferrer"
-          className="rounded-lg bg-fill px-4 py-2 text-[14px] font-bold hover:bg-fill-strong">구청 담당 부서 찾기</a>
-      </span>
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <a href="https://www.binzibe.kr/main/" target="_blank" rel="noopener noreferrer"
+        className="press flex h-12 items-center justify-center rounded-xl bg-brand text-[15px] font-bold text-white">빈집애에서 신청</a>
+      <a href="https://www.binzibe.kr/main/html/maintenance5.html" target="_blank" rel="noopener noreferrer"
+        className="press flex h-12 items-center justify-center rounded-xl bg-fill-strong text-[15px] font-bold">구청 담당 찾기</a>
+      <p className="col-span-2 text-[12px] text-subtle">빈집애는 정부의 빈집 철거 지원 통합 창구예요. 심사·지원은 구·군청이 해요.</p>
     </div>
   );
 }
@@ -435,7 +451,7 @@ function DemolitionEstimate({ data }: { data: Analysis }) {
         <span className="text-[12px] font-bold text-subtle">견적 아님 · 개략 범위</span>
       </div>
       <p className="num-in tabular mt-1 text-[24px] font-extrabold">{formatWon(e.min)} ~ {formatWon(e.max)}</p>
-      <p className="mt-1 text-[13px] text-muted">위 결과는 이 범위로 계산했어요(가운데 값 {formatWon(e.mid)}).</p>
+      <p className="mt-1 text-[13px] text-muted">결과는 가운데 값 {formatWon(e.mid)}으로 계산했어요. 실제 금액은 현장 견적으로 정해져요.</p>
       <ul className="mt-3 space-y-1 text-[13px]">
         {e.items.map((i) => (
           <li key={i.label} className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-line pt-1.5 first:border-t-0">
@@ -485,9 +501,7 @@ function BrokerConnect({ data, user }: { data: Analysis; user: User | null }) {
   // 지도 검색: 이름+전체 주소는 너무 길어 결과가 안 나와서 '사무소 이름 + 구'로, 안 나오면 주소로 찾기
   const mapLinks = (o: Office) => {
     const byName = encodeURIComponent(`${o.name} ${list?.sgg ?? ""}`.trim());
-    const byAddr = encodeURIComponent(o.roadAddr || o.jibunAddr || "");
-    return [["네이버 지도", `https://map.naver.com/p/search/${byName}`], ["카카오맵", o.placeUrl || `https://map.kakao.com/?q=${byName}`],
-      ...(byAddr ? [["주소로 찾기", `https://map.naver.com/p/search/${byAddr}`]] : [])];
+    return [["네이버 지도", `https://map.naver.com/p/search/${byName}`], ["카카오맵", o.placeUrl || `https://map.kakao.com/?q=${byName}`]];
   };
   const Row = ({ o }: { o: Office }) => (
     <li className="flex flex-wrap items-center justify-between gap-2 border-t border-line py-2.5 first:border-t-0">
@@ -496,7 +510,7 @@ function BrokerConnect({ data, user }: { data: Analysis; user: User | null }) {
         {o.phone && <a href={`tel:${o.phone.replace(/[^0-9]/g, "")}`} className="tabular ml-2 text-[12px] text-muted underline-offset-2 hover:underline">{o.phone}</a>}
         <span className="block text-[12px] text-subtle">
           {o.distanceM != null && <span className="font-bold text-ink">집에서 {distText(o.distanceM)} · </span>}
-          {o.roadAddr || o.jibunAddr} · 등록번호 {o.regNo}
+          {o.roadAddr || o.jibunAddr}
         </span>
       </span>
       <span className="flex shrink-0 gap-1.5">
@@ -509,7 +523,7 @@ function BrokerConnect({ data, user }: { data: Analysis; user: User | null }) {
   return (
     <section aria-labelledby="broker" className="panel">
       <h2 id="broker" className="text-[18px] font-extrabold">공인중개사 연결</h2>
-      <p className="mt-1 text-[13px] text-subtle">매물을 내놓을 동네 공인중개사무소를 찾아 드려요. 국토교통부에 등록된 영업 중인 사무소예요. 이 서비스는 연결만 하고, 주소·연락처를 업체에 보내지 않아요.</p>
+      <p className="mt-1 text-[14px] text-muted">집을 내놓을 동네 공인중개사무소예요(국토교통부 등록). 폭싹은 내 정보를 업체에 보내지 않아요.</p>
       {state === "login" && (
         <div className="mt-3 rounded-xl bg-fill p-4">
           <p className="text-[14px] font-bold">로그인하고 이 집을 내 자산으로 저장하면 동네 공인중개사를 보여 드려요.</p>

@@ -6,7 +6,6 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { api, type User } from "@/lib/api";
 import { isStandalone } from "@/lib/device";
 import { toast } from "@/lib/toast";
-import { SITE } from "@/lib/site";
 import { DeviceGuide } from "./InstallGuide";
 
 function Row({ href, label }: { href: string; label: string }) {
@@ -56,14 +55,16 @@ export function More() {
 
 
       {!standalone && (
-        <section className="rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
-          <h2 className="text-[16px] font-extrabold">앱으로 설치</h2>
-          <p className="mt-0.5 text-[13px] text-subtle">{SITE.name}을 앱처럼 설치하면 바로 열 수 있고, 휴대폰으로 가격 알림을 받을 수 있어요.</p>
+        <details className="group rounded-2xl bg-surface p-4 shadow-sm ring-1 ring-line">
+          <summary className="flex cursor-pointer list-none items-center justify-between">
+            <span><b className="block text-[16px]">앱으로 설치하기</b><span className="text-[13px] text-subtle">홈 화면에서 바로 열고 가격 알림도 받아요</span></span>
+            <span aria-hidden className="text-[20px] text-subtle transition-transform group-open:rotate-90">›</span>
+          </summary>
           {install && (
             <button className="mt-3 h-11 w-full rounded-xl bg-brand text-[15px] font-bold text-white" onClick={async () => { await install.prompt(); setInstall(null); }}>지금 설치하기</button>
           )}
           <div className="mt-3"><DeviceGuide kind="install" /></div>
-        </section>
+        </details>
       )}
 
       <section className="divide-y divide-line overflow-hidden rounded-2xl bg-surface shadow-sm ring-1 ring-line">

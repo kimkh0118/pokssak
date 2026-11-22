@@ -20,11 +20,16 @@ def member(c, email="a@example.com"):
     c.post("/api/auth/login", json={"email": email, "password": "password1"})
 
 
-def test_비회원은_조회_못하고_공개_API는_됨():
+def test_비회원은_조회는_되고_내자산_문의는_못함():
     with TestClient(app) as c:
-        r = c.get("/api/address", params={"mode": "sample", "q": "예시"})
-        assert r.status_code == 401 and r.json()["code"] == "login_required"
-        assert c.post("/api/lookup", json={}).status_code == 401
+        assert c.get("/api/address", params={"mode": "sample", "q": "예시"}).status_code != 401
+        assert c.post("/api/lookup", json={}).status_code != 401
+        for path in ("/api/assets", "/api/inquiries", "/api/notifications"):
+            r = c.get(path)
+            assert r.status_code == 401 and r.json()["code"] == "login_required", path
+        assert c.post("/api/inquiries", json={}).status_code == 401
+        assert c.post("/api/lookups/x/watch", json={}).status_code == 401
+        assert c.post("/api/analyses/x/save", json={}).status_code == 401
         assert c.get("/api/status").status_code == 200
         assert c.get("/api/auth/me").json() == {"user": None}
         assert c.get("/api/push/key").status_code == 200
@@ -81,4 +86,4 @@ def test_탈퇴하면_기록이_모두_지워지고_다시_막힘():
         with dbm.connect() as db:
             for t, col in (("users", "id"), ("user_consents", "user_id"), ("sessions", "user_id")):
                 assert db.execute(f"SELECT COUNT(*) FROM {t} WHERE {col} = ?", (uid,)).fetchone()[0] == 0
-        assert c.get("/api/address", params={"mode": "sample", "q": "예시"}).status_code == 401
+        assert c.get("/api/assets").status_code == 401

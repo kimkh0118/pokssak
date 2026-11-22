@@ -62,15 +62,39 @@ def test_deleted_watch_is_not_checked(monkeypatch):
         assert pricewatch.check_all(refresh=False)["checked"] == 0
 
 
-def test_due_schedule():
+def test_due_schedule_9_and_21():
     from datetime import datetime
     from app.clock import KST
-    assert pricewatch.due(datetime(2026, 10, 27, 9, 30, tzinfo=KST))      # 09:30 — 오늘 아직 안 함
-    assert not pricewatch.due(datetime(2026, 10, 27, 8, 0, tzinfo=KST))   # 09시 전
     with dbm.connect() as c:
-        c.execute("INSERT INTO price_watch_runs (started_at) VALUES (?)", ("2026-10-27T09:00:00+09:00",))
-    assert not pricewatch.due(datetime(2026, 10, 27, 15, 0, tzinfo=KST))  # 오늘 이미 실행
-    assert pricewatch.due(datetime(2026, 10, 28, 9, 5, tzinfo=KST))       # 다음 날
+        c.execute("INSERT INTO price_watch_runs (started_at) VALUES (?)", ("2026-10-27T09:00:10+09:00",))
+    assert not pricewatch.due(datetime(2026, 10, 27, 15, 0, tzinfo=KST))  # 아침 회차 끝남
+    assert pricewatch.due(datetime(2026, 10, 27, 21, 5, tzinfo=KST))      # 밤 9시 회차
+    with dbm.connect() as c:
+        c.execute("INSERT INTO price_watch_runs (started_at) VALUES (?)", ("2026-10-27T21:05:00+09:00",))
+    assert not pricewatch.due(datetime(2026, 10, 28, 8, 0, tzinfo=KST))   # 다음 날 9시 전
+    assert pricewatch.due(datetime(2026, 10, 28, 9, 1, tzinfo=KST))       # 다음 날 아침
+
+
+def test_batch_fetches_each_district_once(monkeypatch):
+    import asyncio
+    from app.adapters import trades
+    calls = []
+
+    async def fake(kind, lawd, months):
+        calls.append((kind, lawd))
+        return {"ok": True, "data": []}
+
+    monkeypatch.setattr(trades, "_collect", fake)
+    trades.batch_cache = {}
+    try:
+        for _ in range(3):
+            asyncio.run(trades.collect("house", "26200", ["202610"]))
+        asyncio.run(trades.collect("house", "26110", ["202610"]))
+    finally:
+        trades.batch_cache = None
+    assert calls == [("house", "26200"), ("house", "26110")]
+    asyncio.run(trades.collect("house", "26200", ["202610"]))  # 일괄 확인 밖에서는 매번 새로
+    assert len(calls) == 3
 
 
 def test_brokers_only_for_saved_assets(monkeypatch):

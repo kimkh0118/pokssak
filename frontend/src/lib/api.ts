@@ -117,6 +117,10 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
     credentials: "same-origin",
   });
   const body = await res.json().catch(() => ({ error: "서버 응답을 읽지 못했습니다." }));
+  if (res.status === 401 && body?.code === "login_required" && typeof window !== "undefined") {
+    // 비회원이 내 자산 저장·문의 등을 누르면 로그인 화면으로(로그인 뒤 지금 화면으로 돌아옴)
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+  }
   if (typeof body?.error === "string") throw new Error(body.error);
   return body as T;
 }

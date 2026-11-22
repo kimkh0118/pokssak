@@ -8,8 +8,7 @@ export const SITE = {
 
 // 하단 탭(휴대폰)·상단 메뉴(넓은 화면) 공통
 export const TABS = [
-  { href: "/", label: "홈", icon: "home", match: (p: string) => p === "/" },
-  { href: "/analyze", label: "조회", icon: "search", match: (p: string) => p.startsWith("/analyze") || p.startsWith("/analyses") },
+  { href: "/", label: "홈", icon: "home", match: (p: string) => p === "/" || p.startsWith("/analyze") || p.startsWith("/analyses") },
   { href: "/my", label: "내 자산", icon: "asset", match: (p: string) => p.startsWith("/my") },
   { href: "/notifications", label: "알림", icon: "bell", match: (p: string) => p.startsWith("/notifications") },
   { href: "/more", label: "더보기", icon: "more", match: (p: string) => ["/more", "/about", "/faq", "/terms", "/privacy", "/login", "/inquiry", "/admin"].some((x) => p.startsWith(x)) },

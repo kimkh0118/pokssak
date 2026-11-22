@@ -30,15 +30,21 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 async def lifespan(_: FastAPI):
     dbm.connect().close()  # 마이그레이션
     keepalive.start()  # Render 무료 서버가 잠들지 않게 10분마다 자기 주소 열기
-    pricewatch.start_scheduler()  # 내 자산 예상 가격 매주 확인
+    pricewatch.start_scheduler()  # 내 자산 예상 가격 확인(09시·21시)
     yield
 
 
 app = FastAPI(title="부산 빈집 처리 비교 API", version="2.0", lifespan=lifespan)
 
 
-# 로그인·필수 동의 없이 열 수 있는 API(나머지는 회원 전용)
+# 로그인·필수 동의 없이 열 수 있는 API
 OPEN_API = ("/api/status", "/api/auth/", "/api/consents", "/api/push/key")
+# 비회원도 조회·분석은 가능. 아래(내 자산·문의·알림·관리자)는 회원 전용
+MEMBER_API = ("/api/assets", "/api/lookups/", "/api/inquiries", "/api/notifications", "/api/push/", "/api/admin/")
+
+
+def _member_path(path: str) -> bool:
+    return path.startswith(MEMBER_API) or (path.startswith("/api/analyses/") and path.endswith("/save"))
 
 
 @app.middleware("http")
@@ -47,8 +53,9 @@ async def member_only(request: Request, call_next):
     if settings.require_member and path.startswith("/api/") and not path.startswith(OPEN_API):
         u = user_of(request)
         if not u:
-            return JSONResponse({"error": "로그인이 필요해요.", "code": "login_required"}, 401)
-        if not consents.complete(u["id"]):
+            if _member_path(path):
+                return JSONResponse({"error": "로그인이 필요해요.", "code": "login_required"}, 401)
+        elif not consents.complete(u["id"]):
             return JSONResponse({"error": "필수 항목 동의가 필요해요.", "code": "consent_required"}, 403)
     return await call_next(request)
 
@@ -504,3 +511,4 @@ def admin_reply(inquiry_id: str, body: dict, request: Request):
         raise HTTPException(400, str(e))
     except LookupError as e:
         raise HTTPException(404, str(e))
+

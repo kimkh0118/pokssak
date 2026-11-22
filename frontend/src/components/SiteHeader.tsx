@@ -14,9 +14,13 @@ export function SiteHeader() {
   const [unread, setUnread] = useState(0);
   useEffect(() => {
     let alive = true;
-    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((d) => alive && setUser(d.user ?? null)).catch(() => alive && setUser(null));
-    const loadUnread = () => fetch("/api/notifications/unread", { cache: "no-store" }).then((r) => r.json()).then((d) => alive && setUnread(d.count ?? 0)).catch(() => {});
-    loadUnread();
+    // 알림 수는 회원만(비회원이면 부르지 않음)
+    const loadUnread = () => fetch("/api/notifications/unread", { cache: "no-store" }).then((r) => (r.ok ? r.json() : { count: 0 })).then((d) => alive && setUnread(d.count ?? 0)).catch(() => {});
+    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((d) => {
+      if (!alive) return;
+      setUser(d.user ?? null);
+      if (d.user) loadUnread();
+    }).catch(() => alive && setUser(null));
     window.addEventListener("notifications-read", loadUnread);
     return () => { alive = false; window.removeEventListener("notifications-read", loadUnread); };
   }, [path]);
@@ -56,7 +60,7 @@ export function SiteHeader() {
             {user.email[0]?.toUpperCase()}
           </Link>
         ) : (
-          <Link href="/welcome" className="rounded-full bg-fill px-3.5 py-1.5 text-[14px] font-bold md:hidden">시작하기</Link>
+          <Link href="/login" className="rounded-full bg-fill px-3.5 py-1.5 text-[14px] font-bold md:hidden">로그인</Link>
         )}
       </div>
       <div className="brick-strip" aria-hidden />

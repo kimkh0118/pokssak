@@ -24,7 +24,7 @@ def isolated(tmp_path, monkeypatch):
         monkeypatch.setattr(dbm, "_remote_migrated", False)
     else:
         monkeypatch.setattr(settings, "turso_url", None)
-    for k in ("juso_key", "data_go_kr_key", "vworld_key", "anthropic_api_key"):
+    for k in ("juso_key", "data_go_kr_key", "vworld_key", "anthropic_api_key", "gemini_api_key"):
         monkeypatch.setattr(settings, k, None)
     monkeypatch.setattr(settings, "sample_mode", True)
     monkeypatch.setattr(settings, "require_member", False)  # 계산·흐름 테스트는 잠금 없이(잠금은 test_consents.py)

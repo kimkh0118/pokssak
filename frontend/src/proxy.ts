@@ -1,15 +1,15 @@
-// 로그인 안 한 사람은 소개 화면(/welcome)으로 보낸다. 동의 여부는 서버만 알아서 화면(MemberGate)과 API에서 따로 확인한다.
+// 비회원도 조회·분석은 가능. 내 자산·알림·문의·관리자 화면만 로그인으로 보낸다(동의 여부는 MemberGate·API가 확인).
 import { NextRequest, NextResponse } from "next/server";
 
-const OPEN = ["/welcome", "/login", "/terms", "/privacy"];
+const MEMBER = ["/my", "/notifications", "/notify", "/inquiry", "/admin"];
 
 export function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
-  if (OPEN.some((p) => pathname === p || pathname.startsWith(p + "/"))) return NextResponse.next();
+  if (!MEMBER.some((p) => pathname === p || pathname.startsWith(p + "/"))) return NextResponse.next();
   if (req.cookies.get("hc_session")) return NextResponse.next();
   const url = req.nextUrl.clone();
-  url.pathname = "/welcome";
-  url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
+  url.pathname = "/login";
+  url.search = `?next=${encodeURIComponent(pathname + search)}`;
   return NextResponse.redirect(url);
 }
 

@@ -41,7 +41,8 @@ class Settings:
     # 예상 가격이 이 비율(%) 이상 바뀌고, 비교 거래가 최소 건수 이상일 때만 알림. 매일 이 시각(한국 시간) 이후 하루 1번 확인
     price_alert_pct: float = float(_env("PRICE_ALERT_PCT") or 3.0)
     price_alert_min_samples: int = int(_env("PRICE_ALERT_MIN_SAMPLES") or 3)
-    price_watch_hour: int = int(_env("PRICE_WATCH_HOUR") or 9)
+    # 내 자산 가격 확인 시각(한국 시간, 쉼표로 여러 개). 기본 아침 9시·밤 9시
+    price_watch_hours: tuple = tuple(int(h) for h in (_env("PRICE_WATCH_HOURS") or "9,21").split(","))
     # 웹 푸시(VAPID)
     vapid_public_key: str | None = _env("VAPID_PUBLIC_KEY")
     vapid_private_key: str | None = _env("VAPID_PRIVATE_KEY")
@@ -53,6 +54,9 @@ class Settings:
     # 구글 제미나이(우선 사용). aistudio.google.com 에서 발급한 키
     gemini_api_key: str | None = _env("GEMINI_API_KEY")
     gemini_model: str = _env("GEMINI_MODEL") or "gemini-2.5-flash"
+    # 무료 한도 안에서만 쓰기(넘으면 키워드 규칙). AI Studio > Rate limits 값에 맞춰 조정
+    gemini_daily_limit: int = int(_env("GEMINI_DAILY_LIMIT") or "200")
+    gemini_rpm_limit: int = int(_env("GEMINI_RPM_LIMIT") or "8")
     anthropic_api_key: str | None = _env("ANTHROPIC_API_KEY")
     llm_model: str = _env("LLM_MODEL") or "claude-sonnet-5-5"
     # 로그인 + 필수 동의를 마친 회원만 자료 조회·분석 가능(테스트에서만 끔)

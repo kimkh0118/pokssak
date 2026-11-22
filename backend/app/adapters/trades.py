@@ -68,7 +68,21 @@ def recent_months(n: int, today: date) -> list[str]:
     return out
 
 
+# 가격 일괄 확인 중에는 같은 구·같은 기간 실거래를 한 번만 받아 여러 집이 같이 쓴다(pricewatch.check_all 이 켜고 끔)
+batch_cache: dict | None = None
+
+
 async def collect(kind: str, lawd_cd: str, months: list[str]) -> dict:
+    key = (kind, lawd_cd, tuple(months))
+    if batch_cache is not None and key in batch_cache:
+        return batch_cache[key]
+    out = await _collect(kind, lawd_cd, months)
+    if batch_cache is not None and out.get("ok"):
+        batch_cache[key] = out
+    return out
+
+
+async def _collect(kind: str, lawd_cd: str, months: list[str]) -> dict:
     spec, mapper = (HOUSE, house_from_item) if kind == "house" else (LAND, land_from_item)
     if not settings.data_go_kr_key:
         return fail("not_configured", spec["source"], "DATA_GO_KR_SERVICE_KEY가 설정되지 않았습니다.")

@@ -62,19 +62,12 @@ export function Verdict({ data }: { data: Analysis }) {
               : `${OPTION_LABEL[better!]}가 약 ${formatWon(Math.abs(b.delta))} 더 남을 것으로 보여요`}
           </h2>
           <Numbers b={b} demolitionKnown={!!r.calc?.demolitionKnown} />
-          <p className="mt-3 text-[13px] text-white/70">예상 집값·땅값(중개사 방식)과 예상 철거비(가운데 값)로 계산했어요. 중개보수는 빼고, 세금·관리비는 빠져 있어요.</p>
+
         </>
       ) : (
         <h2 id="status" className="mt-3 text-[22px] font-extrabold leading-snug">주변 거래가 없어서 아직 금액을 계산할 수 없어요</h2>
       )}
-      <div className="mt-5 border-t border-white/20 pt-4 text-[14px]">
-        <p className="font-bold">실제로 팔기 전에</p>
-        <ul className="mt-1.5 space-y-1 text-white/85">
-          <li>· 공인중개사 1~2곳에 &lsquo;그대로 팔 때&rsquo;와 &lsquo;철거 후 땅으로 팔 때&rsquo; 가격을 물어보세요.</li>
-          <li>· 철거업체 2~3곳에서 견적을 받아 예상 철거비와 비교하세요.</li>
-        </ul>
-      </div>
-      <p className="mt-4 text-[12px] text-white/60">예상값으로 계산한 참고 결과예요. 실제 판매가격·거래 성사·지원금 수령을 보장하지 않아요.</p>
+      <p className="mt-4 text-[12px] leading-relaxed text-white/60">중개보수를 뺀 예상값이에요(세금 제외). 실제 금액은 중개사 상담·철거 견적으로 확인하세요.</p>
     </section>
   );
 }

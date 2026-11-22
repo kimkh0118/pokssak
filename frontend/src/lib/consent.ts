@@ -43,6 +43,10 @@ export function requiredDone(c: Partial<Choices>) {
 export const PUBLIC_PATHS = ["/welcome", "/login", "/terms", "/privacy"];
 export const isPublicPath = (p: string) => PUBLIC_PATHS.some((x) => p === x || p.startsWith(x + "/"));
 
+/** 회원만 쓸 수 있는 화면(내 자산·알림·문의·관리자). 나머지는 비회원도 조회 가능 */
+export const MEMBER_PATHS = ["/my", "/notifications", "/notify", "/inquiry", "/admin"];
+export const isMemberPath = (p: string) => MEMBER_PATHS.some((x) => p === x || p.startsWith(x + "/"));
+
 /** 처음 가입·동의를 마친 직후 한 번은 알림 안내 화면을 거친다(이미 '다음에'를 눌렀거나 봤으면 바로 이동) */
 export function afterConsent(next: string) {
   try {

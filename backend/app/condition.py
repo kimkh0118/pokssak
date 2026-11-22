@@ -103,9 +103,52 @@ def _collect(items) -> dict[str, dict]:
     return out
 
 
+class _Quota:
+    """제미나이 무료 한도 지키기(서버 1대 기준 메모리). 하루 한도는 구글처럼 미국 태평양 시간 자정에 초기화.
+    429(한도 초과)를 받으면 그날은 더 부르지 않는다."""
+
+    def __init__(self):
+        import threading
+        self.lock = threading.Lock()
+        self.day = None
+        self.count = 0
+        self.blocked = False
+        self.recent: list[float] = []
+
+    @staticmethod
+    def _today():
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("America/Los_Angeles")).date()
+
+    def take(self) -> bool:
+        import time
+        with self.lock:
+            d = self._today()
+            if d != self.day:
+                self.day, self.count, self.blocked = d, 0, False
+            now = time.monotonic()
+            self.recent = [t for t in self.recent if now - t < 60]
+            if self.blocked or self.count >= settings.gemini_daily_limit or len(self.recent) >= settings.gemini_rpm_limit:
+                return False
+            self.count += 1
+            self.recent.append(now)
+            return True
+
+    def exhausted(self):
+        with self.lock:
+            self.blocked = True
+
+
+gemini_quota = _Quota()
+
+
 def from_text_gemini(notes: str, answers: dict) -> dict[str, dict] | None:
     """구글 제미나이로 주관식 설명을 항목 점수로(JSON 스키마 고정 출력). 키가 없거나 실패하면 None."""
     if not settings.gemini_api_key:
+        return None
+    if not gemini_quota.take():
+        log.info("제미나이 한도 도달 → 키워드 규칙")
         return None
     try:
         import httpx
@@ -121,6 +164,10 @@ def from_text_gemini(notes: str, answers: dict) -> dict[str, dict] | None:
         }
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent"
         r = httpx.post(url, json=body, headers={"x-goog-api-key": settings.gemini_api_key}, timeout=30)
+        if r.status_code == 429:
+            gemini_quota.exhausted()
+            log.warning("제미나이 무료 한도 초과(429) → 오늘은 키워드 규칙")
+            return None
         r.raise_for_status()
         import json as _json
         text = r.json()["candidates"][0]["content"]["parts"][0]["text"]

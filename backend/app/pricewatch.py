@@ -1,6 +1,8 @@
 """내 자산 예상 가격 변동 알림(앱 알림함 + 웹 푸시).
 
-매일(기본 09:00 한국 시간 이후 하루 1번) 내 자산의 공공자료를 다시 조회해 중개사 방식 예상 가격을 새로 계산한다.
+하루 두 번(한국 시간 09:00·21:00, PRICE_WATCH_HOURS) 공공자료를 한꺼번에 받아 모든 내 자산의 예상 가격을 새로 계산한다.
+- 실거래가는 구(시군구)·기간별로 한 번만 받아 같은 구의 집들이 함께 쓴다(호출 수 절약)
+- 서버가 꺼져 있어 시각을 놓치면 켜진 뒤 그 회차를 한 번 실행
 - 예상 가격: 직전 기록보다 PRICE_ALERT_PCT(기본 3%) 이상 바뀌고, 비교 거래가 PRICE_ALERT_MIN_SAMPLES(기본 3)건 이상일 때만 알림
   (거래 한두 건 때문에 출렁이는 값은 알리지 않음)
 - 공시가격: 새 연도 개별주택가격이 나오면 변동률과 함께 따로 알림(1년에 한 번)
@@ -79,7 +81,16 @@ def _refresh_lookup(analysis_id: str) -> None:
 
 
 def check_all(refresh: bool = True) -> dict:
-    """모든 내 자산을 확인. 반환: {checked, alerts, failed}"""
+    """모든 내 자산을 한 번에 확인. 반환: {checked, alerts, failed}"""
+    from .adapters import trades as trades_adapter
+    trades_adapter.batch_cache = {}
+    try:
+        return _check_all(refresh)
+    finally:
+        trades_adapter.batch_cache = None
+
+
+def _check_all(refresh: bool) -> dict:
     out = {"checked": 0, "alerts": 0, "failed": 0}
     with dbm.connect() as c:
         watches = c.execute("SELECT w.id, w.user_id, w.asset_id, w.analysis_id, a.road_addr, a.jibun_addr FROM watched_assets w "
@@ -151,15 +162,22 @@ def run_once() -> dict:
         raise
 
 
-def due(at=None) -> bool:
-    """매일 정해진 시각이 지났고 오늘 실행 기록이 없으면 실행(서버가 꺼져 있었으면 켜진 뒤 실행)."""
+def current_slot(at=None):
+    """지금이 속한 확인 회차의 시작 시각(09:00 또는 21:00 한국 시간). 첫 회차 전이면 전날 마지막 회차."""
     at = (at or now()).astimezone(KST)
-    if at.hour < settings.price_watch_hour:
-        return False
-    today = at.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    hours = sorted(settings.price_watch_hours)
+    past = [h for h in hours if h <= at.hour]
+    if past:
+        return at.replace(hour=past[-1], minute=0, second=0, microsecond=0)
+    return (at - timedelta(days=1)).replace(hour=hours[-1], minute=0, second=0, microsecond=0)
+
+
+def due(at=None) -> bool:
+    """이번 회차(09시·21시)에 아직 실행 기록이 없으면 실행(서버가 꺼져 있었으면 켜진 뒤 실행)."""
+    slot = current_slot(at).isoformat()
     with dbm.connect() as c:
         last = c.execute("SELECT started_at FROM price_watch_runs ORDER BY id DESC LIMIT 1").fetchone()
-    return not last or last["started_at"] < today
+    return not last or last["started_at"] < slot
 
 
 def start_scheduler():
@@ -173,7 +191,7 @@ def start_scheduler():
                     log.info("내 자산 예상 가격 확인: %s", run_once())
             except Exception as e:  # noqa: BLE001
                 log.warning("내 자산 가격 확인 작업 실패: %s", type(e).__name__)
-            time.sleep(900)
+            time.sleep(300)
     threading.Thread(target=loop, name="price-watch", daemon=True).start()
 
 

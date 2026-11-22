@@ -64,6 +64,7 @@ def test_gemini_used_when_key(monkeypatch):
     from app.settings import settings
 
     class R:
+        status_code = 200
         def raise_for_status(self): pass
         def json(self):
             items = [{"factor": "roof", "score": -5, "evidence": "슬레이트"}, {"factor": "bogus", "score": 1, "evidence": "x"}]
@@ -87,3 +88,25 @@ def test_gemini_failure_falls_back_to_rules(monkeypatch):
     def boom(*a, **k): raise httpx.ConnectError("x")
     monkeypatch.setattr(httpx, "post", boom)
     assert condition.assess(BASE, "지붕이 슬레이트예요")["source"] == "rules"
+
+
+def test_gemini_quota(monkeypatch):
+    from app.settings import settings
+    import httpx
+    calls = []
+
+    class R:
+        status_code = 429
+        def raise_for_status(self): pass
+
+    monkeypatch.setattr(settings, "gemini_api_key", "test")
+    monkeypatch.setattr(settings, "anthropic_api_key", None)
+    monkeypatch.setattr(condition, "gemini_quota", condition._Quota())
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: calls.append(1) or R())
+    assert condition.assess(BASE, "지붕이 슬레이트예요")["source"] == "rules"
+    assert condition.assess(BASE, "지붕이 슬레이트예요")["source"] == "rules"
+    assert len(calls) == 1  # 429 뒤로는 그날 다시 안 부름
+
+    q = condition._Quota()
+    monkeypatch.setattr(settings, "gemini_daily_limit", 2)
+    assert q.take() and q.take() and not q.take()

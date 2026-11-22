@@ -11,7 +11,8 @@ type Asset = { id: string; analysis_id: string; road_addr: string; jibun_addr: s
 export function HomeWatchlist() {
   const [assets, setAssets] = useState<Asset[] | null>(null);
   useEffect(() => {
-    fetch("/api/assets", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => setAssets(d?.assets ?? null)).catch(() => {});
+    fetch("/api/auth/me", { cache: "no-store" }).then((r) => r.json()).then((m) => (m.user ? fetch("/api/assets", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)) : null))
+      .then((d) => setAssets(d?.assets ?? null)).catch(() => {});
   }, []);
   if (!assets?.length) return null;
   return (

@@ -102,7 +102,7 @@ def root():
 @app.get("/api/status")
 def status():
     return {"juso": bool(settings.juso_key), "dataGoKr": bool(settings.data_go_kr_key), "vworld": bool(settings.vworld_key),
-            "llm": bool(settings.anthropic_api_key)}
+            "llm": bool(settings.gemini_api_key or settings.anthropic_api_key), "gemini": bool(settings.gemini_api_key)}
 
 
 # ---------------------------------------------------------------- 회원

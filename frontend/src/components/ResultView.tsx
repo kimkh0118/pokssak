@@ -269,49 +269,52 @@ const AGREE = { good: "세 방법이 비슷해요", check: "방법별 차이가 
 const SOURCE = { ai: "AI가 설명을 읽고 매긴 점수", rules: "설명 속 키워드로 매긴 점수", choices: "질문 답으로 매긴 점수" } as const;
 
 /** 상태 점수: 기본 예상가 → 항목별 +/− → 최종 예상가 */
-function ScoreBar({ lo, hi, final, score }: { lo: number; hi: number; final: number; score: number }) {
+function ScoreBar({ lo, hi, base, score }: { lo: number; hi: number; base: number; score: number }) {
   return (
     <div className="mt-3">
-      <div className="flex items-baseline justify-between text-[12px] font-bold">
-        <span className="shrink-0 text-muted">① 가능한 가격 범위</span>
-        <span className="tabular text-right text-subtle">{formatWon(lo)} ~ {formatWon(hi)}</span>
-      </div>
-      <div className="relative mt-2 h-2.5 rounded-full bg-gradient-to-r from-[#f0cabf] via-[#dacfcb] to-[#cf8a79]" role="img"
-        aria-label={`상태 점수 ${score}점(100점 만점), 확정 예상가 ${formatWon(final)}`}>
+      <div className="relative h-2.5 rounded-full bg-gradient-to-r from-[#f0cabf] via-[#dacfcb] to-[#cf8a79]" role="img"
+        aria-label={`집 상태 점수 ${score}점(100점 만점)`}>
         <span className="absolute left-1/2 top-1/2 h-4 w-0.5 -translate-y-1/2 bg-muted/50" aria-hidden />
-        <span className="absolute top-1/2 grid h-5 w-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-brand-strong shadow ring-2 ring-white transition-[left] duration-500" style={{ left: `${Math.max(0, Math.min(100, score))}%` }} aria-hidden />
+        <span className="absolute top-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-strong shadow ring-2 ring-white transition-[left] duration-500"
+          style={{ left: `${Math.max(0, Math.min(100, score))}%` }} aria-hidden />
       </div>
-      <div className="mt-1 flex justify-between text-[11px] text-subtle"><span>상태 나쁨 0점</span><span>보통 50점</span><span>좋음 100점</span></div>
-      <p className="mt-2 text-[12px] font-bold text-muted">② 답변으로 매긴 상태 점수 <span className="tabular text-[15px] text-brand-strong">{score}점</span><span className="font-normal text-subtle"> / 100</span></p>
+      <div className="tabular mt-1.5 grid grid-cols-3 text-[11px] text-subtle">
+        <span>0점<br />{formatWon(lo)}</span>
+        <span className="text-center">50점(기본)<br />{formatWon(base)}</span>
+        <span className="text-right">100점<br />{formatWon(hi)}</span>
+      </div>
     </div>
   );
 }
 
 function ConditionBreakdown({ base, final, c, range }: { base: number; final: number; c: ConditionAssessment; range?: { min: number; max: number } }) {
+  const pct = c.finalPct ?? c.pct;
+  const pts = (i: ConditionAssessment["items"][number]) => i.points ?? i.score;
   return (
     <div className="mt-3 rounded-xl bg-fill p-3.5">
-      <p className="flex items-center justify-between text-[12px] font-bold text-subtle">
-        <span>집 상태 반영</span><span>{SOURCE[c.source]}</span>
-      </p>
-      {range && c.score != null && <ScoreBar lo={range.min} hi={range.max} final={final} score={c.score} />}
-      <div className="mt-2 flex items-baseline justify-between text-[13px]">
-        <span className="text-muted">공공자료 기본 예상가</span><span className="tabular font-semibold">{formatWon(base)}</span>
-      </div>
-      <p className="mt-2 text-[12px] font-bold text-subtle">점수에 영향을 준 것</p>
-      <ul className="stagger mt-1 space-y-1">
+      <p className="whitespace-nowrap text-[14px] font-extrabold">집 상태 점수 {c.score != null && <span className="tabular text-[18px] text-brand-strong">{c.score}점</span>}<span className="text-[12px] font-bold text-subtle"> / 100</span></p>
+      <p className="text-[11px] font-bold text-subtle">{SOURCE[c.source]}</p>
+      {range && c.score != null && <ScoreBar lo={range.min} hi={range.max} base={base} score={c.score} />}
+      <ul className="mt-3 space-y-1.5 border-t border-line pt-2.5 text-[13px]">
+        <li className="flex justify-between text-muted"><span>기본 점수</span><span className="tabular font-semibold">50점</span></li>
         {c.items.map((i) => (
-          <li key={i.key} className="flex items-baseline justify-between gap-3 text-[13px]">
+          <li key={i.key} className="flex items-baseline justify-between gap-3">
             <span className="min-w-0"><span className="font-semibold">{i.label}</span> <span className="text-[12px] text-subtle">{i.evidence}</span></span>
-            <span className={`tabular shrink-0 font-bold ${i.score > 0 ? "text-good" : "text-bad"}`}>{i.score > 0 ? "+" : ""}{i.score}</span>
+            <span className={`tabular shrink-0 font-bold ${pts(i) > 0 ? "text-good" : "text-bad"}`}>{pts(i) > 0 ? "+" : ""}{pts(i)}점</span>
           </li>
         ))}
         {c.items.length === 0 && <li className="text-[12px] text-subtle">가격에 영향을 줄 상태가 없었어요.</li>}
+        {c.score != null && <li className="flex justify-between border-t border-line pt-1.5 font-extrabold"><span>합계</span><span className="tabular">{c.score}점</span></li>}
       </ul>
-      <div className="mt-2 flex items-baseline justify-between border-t border-line pt-2 text-[14px]">
-        <b>{range ? "③ " : ""}확정 예상가 <span className={`tabular text-[12px] ${c.pct > 0 ? "text-good" : c.pct < 0 ? "text-bad" : "text-subtle"}`}>{(c.finalPct ?? c.pct) > 0 ? "+" : ""}{c.finalPct ?? c.pct}%{c.capped ? " (한도)" : ""}</span></b>
-        <b className="tabular">{formatWon(final)}</b>
+      <div className="mt-3 rounded-lg bg-surface px-3 py-2.5 text-[13px]">
+        <p className="flex justify-between text-muted"><span>공공자료 기본 예상가</span><span className="tabular">{formatWon(base)}</span></p>
+        <p className="mt-1 flex items-baseline justify-between text-[15px] font-extrabold">
+          <span>확정 예상가 <span className={`tabular text-[12px] ${pct > 0 ? "text-good" : pct < 0 ? "text-bad" : "text-subtle"}`}>{pct > 0 ? "+" : ""}{pct}%</span></span>
+          <span className="tabular">{formatWon(final)}</span>
+        </p>
       </div>
-      {!c.notes && <p className="mt-2 text-[12px] text-subtle">아래 ‘질문 답 바꾸기’에서 집 상태를 글로 적으면 더 정확해져요.</p>}
+      <p className="mt-2 text-[11px] text-subtle">50점이 공공자료 그대로의 값이에요. 1점 내려갈 때마다 0.5%, 올라갈 때마다 0.24% 바뀌어요(최저 −25%, 최고 +12%).</p>
+      {!c.notes && <p className="mt-1 text-[12px] text-subtle">아래 ‘질문 답 바꾸기’에서 집 상태를 글로 적으면 더 정확해져요.</p>}
     </div>
   );
 }

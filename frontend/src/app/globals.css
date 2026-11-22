@@ -146,8 +146,12 @@ html { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
   stroke-dashoffset: 1;
   animation: splash-draw 0.5s cubic-bezier(0.65, 0, 0.35, 1) forwards;
 }
-.splash-house path:nth-child(2) { animation-delay: 0.12s; }
-.splash-house path:nth-child(3) { animation-delay: 0.3s; }
+.splash-house g path:nth-child(2) { animation-delay: 0.12s; }
+.splash-house g path:nth-child(3) { animation-delay: 0.2s; }
+.splash-house g path:nth-child(4) { animation-delay: 0.3s; }
+.splash-house g path:nth-child(5) { animation-delay: 0.38s; }
+.splash-house .splash-leaf path { stroke-dasharray: none; stroke-dashoffset: 0; animation: none; }
+.splash-leaf { opacity: 0; transform: scale(0.4); transform-origin: 26px 34px; transform-box: view-box; animation: splash-rise 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.55s forwards; }
 .splash-bricks { display: flex; gap: 3px; margin-top: 6px; }
 .splash-bricks span {
   width: 14px;

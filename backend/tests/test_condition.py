@@ -32,16 +32,17 @@ def test_좋은_상태는_올라가고_보정에는_한도():
     assert bad["pct"] == condition.MIN_PCT and bad["capped"]
 
 
-def test_범위를_잡고_점수로_최종가_확정():
-    house = {"value": 100_000_000, "range": {"min": 90_000_000, "max": 130_000_000}}
-    out = condition.apply(house, {"pct": -10.0, "items": []})
-    assert out["baseValue"] == 100_000_000 and round(out["value"]) == 90_000_000
-    assert out["baseRange"] == {"min": 75_000_000, "max": 130_000_000} and out["range"] is None
-    assert out["condition"]["score"] == 30
-    best = condition.apply(house, {"pct": condition.MAX_PCT, "items": []})
-    assert round(best["value"]) == 130_000_000 and best["condition"]["score"] == 100
+def test_항목_점수_합이_총점이고_총점이_가격을_정한다():
+    house = {"value": 100_000_000, "range": {"min": 60_000_000, "max": 130_000_000}}
+    items = [{"key": "maintenance", "pct": -3.0}, {"key": "roof", "pct": -6.0}, {"key": "access", "pct": -3.0}]
+    out = condition.apply(house, {"pct": -12.0, "items": items})
+    pts = [i["points"] for i in out["condition"]["items"]]
+    assert pts == [-6, -12, -6] and out["condition"]["score"] == 50 + sum(pts) == 26
+    assert out["condition"]["finalPct"] == -12.0 and round(out["value"]) == 88_000_000
+    assert out["baseRange"] == {"min": 75_000_000, "max": 112_000_000} and out["range"] is None
+    best = condition.apply(house, {"pct": 12.0, "items": [{"key": "renovation", "pct": 12.0}]})
+    assert best["condition"]["score"] == 100 and round(best["value"]) == 112_000_000
     assert condition.apply(house, {"pct": 0.0, "items": []})["condition"]["score"] == 50
-
 
 def test_분석에_저장되고_답을_고치면_다시_계산():
     with TestClient(app) as c:

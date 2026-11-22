@@ -247,28 +247,37 @@ def assess(answers: dict, notes: str | None) -> dict:
             "capped": pct != total}
 
 
+# 점수 ↔ 보정률: 50점 = 공공자료 기본값. 나쁜 쪽 1점 = 0.5%(0점 = −25%), 좋은 쪽 1점 = 0.24%(100점 = +12%)
+NEG_PER_POINT = -MIN_PCT / 50
+POS_PER_POINT = MAX_PCT / 50
+
+
+def points_of(pct: float) -> int:
+    """항목 보정률을 점수로(−6% → −12점, +6% → +25점)."""
+    return round(pct / NEG_PER_POINT) if pct < 0 else round(pct / POS_PER_POINT)
+
+
+def pct_of_score(score: int) -> float:
+    return (score - 50) * (NEG_PER_POINT if score < 50 else POS_PER_POINT)
+
+
 def score_of(pct: float) -> int:
-    """보정률을 0~100점으로(50점 = 공공자료 기본값 그대로, 0점 = 범위 바닥, 100점 = 범위 꼭대기)."""
-    if pct < 0:
-        return round(50 - 50 * pct / MIN_PCT)
-    return round(50 + 50 * pct / MAX_PCT)
+    return max(0, min(100, 50 + points_of(pct)))
 
 
 def apply(house: dict, assessment: dict | None) -> dict:
-    """1) 공공자료로 대략 범위를 잡고 2) 답변 점수(0~100)로 그 범위 안의 자리를 골라 최종 예상가를 확정한다.
-    범위는 방법별 최소~최대에, 상태가 가장 나쁠 때(−25%)·좋을 때(+12%)까지 넓힌 것."""
+    """50점에서 시작해 항목 점수를 더한 총점(0~100)으로 최종 예상가를 확정한다.
+    최종가 = 기본 예상가 × (1 + 총점의 보정률). 범위는 0점(−25%)~100점(+12%)일 때의 값."""
     if not assessment or not house.get("value"):
         return house
     v = house["value"]
-    r = house.get("range") or {"min": v, "max": v}
-    lo = min(r["min"], v * (1 + MIN_PCT / 100))
-    hi = max(r["max"], v * (1 + MAX_PCT / 100))
-    pct = assessment["pct"]
-    final = v - (v - lo) * (pct / MIN_PCT) if pct < 0 else v + (hi - v) * (pct / MAX_PCT)
+    items = [i | {"points": points_of(i["pct"])} for i in assessment.get("items", [])]
+    score = max(0, min(100, 50 + sum(i["points"] for i in items)))
+    pct = round(pct_of_score(score), 1)
     out = dict(house)
     out["baseValue"] = v
-    out["baseRange"] = {"min": lo, "max": hi}
-    out["value"] = final
+    out["baseRange"] = {"min": round(v * (1 + MIN_PCT / 100)), "max": round(v * (1 + MAX_PCT / 100))}
+    out["value"] = v * (1 + pct / 100)
     out["range"] = None  # 점수로 확정했으므로 하나의 값
-    out["condition"] = assessment | {"score": score_of(pct), "finalPct": round((final / v - 1) * 100, 1)}
+    out["condition"] = assessment | {"items": items, "score": score, "finalPct": pct}
     return out

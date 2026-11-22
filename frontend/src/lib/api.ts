@@ -126,5 +126,5 @@ export async function api<T>(path: string, init?: { method?: string; body?: unkn
 }
 
 /** 집 상태 점수(서버 condition.py). 기본 예상가 × (1 + pct/100) = 최종 예상가 */
-export interface ConditionItem { key: string; label: string; score: number; pct: number; evidence: string }
+export interface ConditionItem { key: string; label: string; score: number; pct: number; evidence: string; points?: number }
 export interface ConditionAssessment { pct: number; items: ConditionItem[]; source: "ai" | "rules" | "choices"; notes: string | null; capped: boolean; score?: number; finalPct?: number }

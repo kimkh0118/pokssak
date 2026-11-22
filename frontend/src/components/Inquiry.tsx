@@ -79,7 +79,7 @@ export function InquiryList() {
         <h1 className="text-[24px] font-extrabold">문의하기</h1>
         <p className="mt-1 text-[14px] text-subtle">궁금한 점이나 오류를 남기면 운영자가 답해요. 답장이 오면 알림으로 알려드려요.</p>
       </div>
-      <Link href="/inquiry/new" className="press flex h-13 items-center justify-center rounded-2xl bg-brand py-3.5 text-[16px] font-bold text-white shadow-[0_8px_20px_-10px_rgba(169,93,46,.8)]">
+      <Link href="/inquiry/new" className="press flex h-13 items-center justify-center rounded-2xl bg-brand py-3.5 text-[16px] font-bold text-white shadow-[0_8px_20px_-10px_rgba(155,83,65,.8)]">
         새 문의 쓰기
       </Link>
       <section>
@@ -132,7 +132,7 @@ export function InquiryNew() {
         <div className="mt-2 flex flex-wrap gap-2">
           {CATEGORIES.map((c) => (
             <button key={c} type="button" aria-pressed={cat === c} onClick={() => setCat(c)}
-              className={`press rounded-full px-4 py-2 text-[14px] font-bold ring-1 ${cat === c ? "bg-ink text-white ring-ink" : "bg-surface text-muted ring-line"}`}>{c}</button>
+              className={`press rounded-full px-4 py-2 text-[14px] font-bold ring-1 ${cat === c ? "bg-brand-strong text-white ring-brand-strong" : "bg-surface text-muted ring-line"}`}>{c}</button>
           ))}
         </div>
         {cat === "기타" && (
@@ -226,7 +226,7 @@ function ReplyBox({ q, onDone }: { q: InquiryItem; onDone: (q: InquiryItem) => v
         className="block w-full resize-none rounded-xl bg-fill p-3 text-[15px] leading-relaxed outline-none focus:ring-2 focus:ring-brand" />
       {err && <p role="alert" className="text-[13px] font-bold text-bad">{err}</p>}
       <button type="submit" disabled={busy || text.trim().length < 2}
-        className="press h-12 w-full rounded-xl bg-ink text-[15px] font-bold text-white disabled:opacity-40">{busy ? "보내는 중…" : "답장 보내기"}</button>
+        className="press h-12 w-full rounded-xl bg-brand text-[15px] font-bold text-white disabled:opacity-40">{busy ? "보내는 중…" : "답장 보내기"}</button>
       <p className="text-[12px] text-subtle">보내면 문의한 사람에게 ‘{q.title}’ 문의 답장 알림이 가요.</p>
     </form>
   );

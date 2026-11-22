@@ -327,7 +327,7 @@ function YesNo({ label, value, onChange }: { label: string; value?: string; onCh
       <div className="mt-2 flex gap-2">
         {[["yes", "예"], ["no", "아니요"], ["unknown", "모름"]].map(([v, t]) => (
           <button key={v} type="button" aria-pressed={value === v} onClick={() => onChange(v)}
-            className={`rounded-full px-4 py-2 text-[14px] font-bold ${value === v ? "bg-ink text-white" : "bg-fill text-muted"}`}>{t}</button>
+            className={`rounded-full px-4 py-2 text-[14px] font-bold ${value === v ? "bg-brand-strong text-white" : "bg-fill-strong text-muted"}`}>{t}</button>
         ))}
       </div>
     </div>

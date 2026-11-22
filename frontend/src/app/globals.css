@@ -1,29 +1,29 @@
 @import "tailwindcss";
 
-/* 폭싹: 벽돌 담장 + 도로명 표지판(남색) + 살구빛 주황 버튼 */
+/* 폭싹(피그마 부스타나그라_디자인 Frame 4 팔레트): 벽돌 #cf8a79·#9b5341·#6a3c2f / 연한 #f0cabf·#dacfcb / 진한 #3d1b12 / 배경 #f5f2ed + 도로명 표지판 남색 */
 :root {
   color-scheme: light;
-  --bg: #ffffff;
+  --bg: #f5f2ed;
   --surface: #ffffff;
-  --fill: #f4f2ef;
-  --fill-strong: #e9e5df;
-  --ink: #0c0d11;
-  --muted: #4a5163;
-  --subtle: #8a92a6;
-  --line: #e6e1da;
-  --brand: #c97c4b;
-  --brand-strong: #a95d2e;
+  --fill: #f5f2ed;
+  --fill-strong: #e8dfda;
+  --ink: #2b1a14;
+  --muted: #5c4a43;
+  --subtle: #75645d;
+  --line: #e8dfda;
+  --brand: #a95b48;
+  --brand-strong: #9b5341;
   --brand-ink: #ffffff;
-  --brand-soft: #fbefe6;
-  --brand-2: #e9a87c;
-  --warn: #d97706;
+  --brand-soft: #f8e9e4;
+  --brand-2: #cf8a79;
+  --warn: #b45309;
   --warn-soft: #fff6e6;
   --bad: #ff4d52;
   --bad-soft: #fff0f0;
   --good: #12b76a;
   --sign: #3a3d9b;
   --sign-strong: #2c2f80;
-  --brick: #a5463a;
+  --brick: #9b5341;
   --sample: #7a5af8;
   --sample-soft: #f4f1ff;
 }
@@ -57,7 +57,7 @@
 
 html,
 body {
-  background-color: #f1eeea;
+  background-color: #f5f2ed;
   color: var(--ink);
 }
 
@@ -91,16 +91,18 @@ body {
 
 /* 옅은 벽돌 벽 배경 */
 .brick-wall {
-  background-color: #f1eeea;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='40'%3E%3Cg fill='none' stroke='%23e2ddd5' stroke-width='2'%3E%3Cpath d='M0 1h72M0 21h72M1 1v20M37 21v20'/%3E%3C/g%3E%3C/svg%3E");
+  background-color: #f5f2ed;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='40'%3E%3Cg fill='none' stroke='%23e8dfda' stroke-width='2'%3E%3Cpath d='M0 1h72M0 21h72M1 1v20M37 21v20'/%3E%3C/g%3E%3C/svg%3E");
 }
 /* 상단 바 아래 얇은 벽돌 띠(브랜드 포인트) */
 .brick-strip {
-  height: 8px;
-  background-color: #ffffff;
-  background-image: linear-gradient(90deg, var(--brick) 0 30px, transparent 30px 33px);
-  background-size: 33px 6px;
-  background-position: 0 1px;
+  height: 12px;
+  background-color: #f5f2ed;
+  background-image:
+    linear-gradient(90deg, #9b5341 0 22px, transparent 22px 24px, #cf8a79 24px 46px, transparent 46px 48px, #6a3c2f 48px 70px, transparent 70px 72px),
+    linear-gradient(90deg, #cf8a79 0 10px, transparent 10px 12px, #9b5341 12px 34px, transparent 34px 36px, #cf8a79 36px 58px, transparent 58px 60px, #9b5341 60px 72px);
+  background-size: 72px 5px, 72px 5px;
+  background-position: 0 0, 0 6px;
   background-repeat: repeat-x;
 }
 /* 도로명 표지판: 오른쪽 화살촉 모양 */
@@ -123,7 +125,7 @@ body {
 [id] { scroll-margin-top: 140px; }
 
 /* 앱 배경: 따뜻한 회색 단색(벽돌 무늬는 상단 띠에만) */
-.app-bg { background-color: #f4f1ec; }
+.app-bg { background-color: #f5f2ed; }
 /* 터치 기기: 탭 강조 제거, 스크롤 튕김 방지 */
 html { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
 
@@ -134,7 +136,7 @@ html { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
   z-index: 100;
   display: grid;
   place-items: center;
-  background: #f4f1ec;
+  background: #f5f2ed;
   animation: splash-out 0.35s ease-in 1.45s forwards;
 }
 .no-splash .splash { display: none; }
@@ -161,7 +163,7 @@ html { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
   font-size: 30px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #c9483b;
+  color: #9b5341;
   opacity: 0;
   transform: translateY(10px);
   animation: splash-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.85s forwards;

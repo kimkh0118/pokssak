@@ -40,7 +40,7 @@ export function SiteHeader() {
         )}
         <Link href="/" className="flex shrink-0 items-center gap-2 text-[18px] font-extrabold tracking-tight max-md:mr-auto">
           <LogoMark />
-          <span className="text-[#c9483b]">{SITE.name}</span>
+          <span className="text-[#9b5341]">{SITE.name}</span>
         </Link>
         <nav aria-label="주 메뉴" className="hidden items-center gap-1 md:flex">
           {TABS.slice(1).map((t) => (

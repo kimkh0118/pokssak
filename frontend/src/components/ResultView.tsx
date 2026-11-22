@@ -118,7 +118,7 @@ type Tab = (typeof TAB_LIST)[number][0];
 function ResultTabs({ tab, setTab, blocked }: { tab: Tab; setTab: (t: Tab) => void; blocked: boolean }) {
   const list = blocked ? TAB_LIST.filter(([k]) => k !== "price") : TAB_LIST;
   return (
-    <div role="tablist" aria-label="결과 보기" className="sticky top-[calc(64px+env(safe-area-inset-top))] z-20 -mx-4 bg-[#f4f1ec]/95 px-4 py-2 backdrop-blur">
+    <div role="tablist" aria-label="결과 보기" className="sticky top-[calc(64px+env(safe-area-inset-top))] z-20 -mx-4 bg-[#f5f2ed]/95 px-4 py-2 backdrop-blur">
       <div className="grid rounded-xl bg-fill-strong p-1" style={{ gridTemplateColumns: `repeat(${list.length}, minmax(0, 1fr))` }}>
         {list.map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => { setTab(k); window.scrollTo({ top: Math.min(window.scrollY, 380), behavior: "smooth" }); }}
@@ -357,7 +357,7 @@ function BinzibeLink() {
 }
 
 // 지금까지의 가격 변동(예측 아님). 단위가 다른 두 가지는 그래프를 나눈다.
-const SERIES_COLOR = { house: "#c4733f", land: "#4f54b5" };
+const SERIES_COLOR = { house: "#a95b48", land: "#4f54b5" };
 const won1 = (v: number) => (v >= 100_000_000 ? `${(v / 100_000_000).toFixed(1)}억` : `${Math.round(v / 10_000).toLocaleString("ko-KR")}만`);
 const pctText = (c: { from: number; to: number; pct: number } | null) => (c ? `${c.from}→${c.to}년 ${c.pct > 0 ? "+" : ""}${c.pct}%` : null);
 

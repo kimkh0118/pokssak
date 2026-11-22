@@ -24,7 +24,7 @@ export function WelcomeDone() {
     })();
   }, [router, next]);
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-[#f4f1ec]">
+    <div className="fixed inset-0 z-40 grid place-items-center bg-[#f5f2ed]">
       <div className="flex flex-col items-center gap-3 text-[15px] font-bold text-muted">
         <span className="animate-[pulse_1.6s_ease-in-out_infinite]"><LogoMark size={40} /></span>
         준비하고 있어요…

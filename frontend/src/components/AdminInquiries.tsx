@@ -33,7 +33,7 @@ export function AdminInquiries() {
       <div className="flex gap-1.5" role="tablist" aria-label="문의 상태">
         {FILTERS.map((f) => (
           <button key={f.key} type="button" role="tab" aria-selected={filter === f.key} onClick={() => { setItems(null); setFilter(f.key); }}
-            className={`press rounded-full px-4 py-2 text-[14px] font-bold ring-1 ${filter === f.key ? "bg-ink text-white ring-ink" : "bg-surface text-muted ring-line"}`}>
+            className={`press rounded-full px-4 py-2 text-[14px] font-bold ring-1 ${filter === f.key ? "bg-brand-strong text-white ring-brand-strong" : "bg-surface text-muted ring-line"}`}>
             {f.label}{f.key === "open" && openCount > 0 ? ` ${openCount}` : ""}
           </button>
         ))}

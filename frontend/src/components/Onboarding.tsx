@@ -36,7 +36,7 @@ function Art({ kind }: { kind: (typeof SLIDES)[number]["art"] }) {
     );
   return (
     <div className="relative grid h-40 w-40 place-items-center rounded-[40px] bg-surface shadow-[0_12px_30px_-10px_rgba(60,40,30,.25)] ring-1 ring-line">
-      <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#c9483b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="onb-ring">
+      <svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke="#9b5341" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="onb-ring">
         <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
       </svg>
       <span className="absolute -right-3 -top-3 rounded-full bg-bad px-2.5 py-1 text-[13px] font-extrabold text-white shadow">+3.4%</span>
@@ -68,9 +68,9 @@ export function Onboarding() {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-[#f4f1ec] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
+    <div className="fixed inset-0 z-40 flex flex-col bg-[#f5f2ed] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
       <div className="flex h-14 items-center justify-between px-5">
-        <span className="flex items-center gap-1.5 text-[17px] font-extrabold text-[#c9483b]"><LogoMark size={20} />폭싹</span>
+        <span className="flex items-center gap-1.5 text-[17px] font-extrabold text-[#9b5341]"><LogoMark size={20} />폭싹</span>
         {!last && <Link href={agreeHref} className="px-1 py-2 text-[14px] font-bold text-subtle">건너뛰기</Link>}
       </div>
 
@@ -89,12 +89,12 @@ export function Onboarding() {
 
       <div className="px-5 pb-5">
         <div className="mb-5 flex justify-center gap-1.5" aria-hidden>
-          {SLIDES.map((_, n) => <span key={n} className={`h-1.5 rounded-full transition-all duration-300 ${n === i ? "w-6 bg-ink" : "w-1.5 bg-fill-strong"}`} />)}
+          {SLIDES.map((_, n) => <span key={n} className={`h-1.5 rounded-full transition-all duration-300 ${n === i ? "w-6 bg-brand" : "w-1.5 bg-fill-strong"}`} />)}
         </div>
         {last ? (
-          <Link href={agreeHref} className="press flex h-14 w-full items-center justify-center rounded-2xl bg-brand text-[17px] font-bold text-white shadow-[0_8px_20px_-8px_rgba(169,93,46,.8)]">시작하기</Link>
+          <Link href={agreeHref} className="press flex h-14 w-full items-center justify-center rounded-2xl bg-brand text-[17px] font-bold text-white shadow-[0_8px_20px_-8px_rgba(155,83,65,.8)]">시작하기</Link>
         ) : (
-          <button type="button" onClick={() => go(i + 1)} className="press h-14 w-full rounded-2xl bg-ink text-[17px] font-bold text-white">다음</button>
+          <button type="button" onClick={() => go(i + 1)} className="press h-14 w-full rounded-2xl bg-brand text-[17px] font-bold text-white">다음</button>
         )}
         <p className="mt-3 text-center text-[13px] text-subtle">
           이미 계정이 있나요? <Link href={loginHref} className="font-bold text-ink underline underline-offset-2">로그인</Link>

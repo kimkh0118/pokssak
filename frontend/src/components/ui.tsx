@@ -16,7 +16,7 @@ export function Button({
   ...rest
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" | "dark"; size?: "md" | "lg" }) {
   const styles = {
-    primary: "bg-brand text-brand-ink shadow-[0_4px_10px_-4px_rgba(169,93,46,.7)] hover:bg-brand-strong",
+    primary: "bg-brand text-brand-ink shadow-[0_4px_10px_-4px_rgba(155,83,65,.7)] hover:bg-brand-strong",
     dark: "bg-ink text-white hover:opacity-90",
     secondary: "bg-fill text-ink hover:bg-fill-strong",
     ghost: "text-brand-strong hover:underline",

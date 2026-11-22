@@ -9,7 +9,7 @@ export function Splash() {
   return (
     <div id="splash" aria-hidden className="splash">
       <div className="splash-inner">
-        <svg className="splash-house" width="88" height="88" viewBox="0 0 24 24" fill="none" stroke="#c9483b" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round">
+        <svg className="splash-house" width="88" height="88" viewBox="0 0 24 24" fill="none" stroke="#9b5341" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round">
           <path pathLength={1} d="M3 11.5 12 4l9 7.5" />
           <path pathLength={1} d="M5.5 10v9.5h13V10" />
           <path pathLength={1} d="M10 19.5v-5h4v5" />

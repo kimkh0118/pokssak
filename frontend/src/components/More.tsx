@@ -60,7 +60,7 @@ export function More() {
           <h2 className="text-[16px] font-extrabold">앱으로 설치</h2>
           <p className="mt-0.5 text-[13px] text-subtle">{SITE.name}을 앱처럼 설치하면 바로 열 수 있고, 휴대폰으로 가격 알림을 받을 수 있어요.</p>
           {install && (
-            <button className="mt-3 h-11 w-full rounded-xl bg-ink text-[15px] font-bold text-white" onClick={async () => { await install.prompt(); setInstall(null); }}>지금 설치하기</button>
+            <button className="mt-3 h-11 w-full rounded-xl bg-brand text-[15px] font-bold text-white" onClick={async () => { await install.prompt(); setInstall(null); }}>지금 설치하기</button>
           )}
           <div className="mt-3"><DeviceGuide kind="install" /></div>
         </section>

@@ -31,7 +31,7 @@ export function Toaster() {
           className={`toast pointer-events-auto flex max-w-md items-center gap-3 rounded-2xl px-4 py-3 text-[14px] font-semibold text-white shadow-[0_10px_30px_-8px_rgba(12,13,17,.45)] ${msg.tone === "bad" ? "bg-bad" : "bg-ink/95"} ${leaving ? "toast-out" : ""}`}>
           <span className="min-w-0">{msg.text}</span>
           {msg.action && (
-            <button type="button" className="press -my-1 shrink-0 rounded-lg px-2 py-1 font-bold text-[#ffc89f]"
+            <button type="button" className="press -my-1 shrink-0 rounded-lg px-2 py-1 font-bold text-[#f0cabf]"
               onClick={async () => { const a = msg.action!; setLeaving(true); await a.run(); }}>{msg.action.label}</button>
           )}
         </div>

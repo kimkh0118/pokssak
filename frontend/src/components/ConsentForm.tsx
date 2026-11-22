@@ -49,7 +49,7 @@ export function ConsentForm() {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-[#f4f1ec] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
+    <div className="fixed inset-0 z-40 flex flex-col bg-[#f5f2ed] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
       <div className="flex h-14 items-center px-2">
         <button type="button" onClick={() => router.back()} aria-label="뒤로" className="press grid h-11 w-11 place-items-center rounded-full">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
@@ -87,7 +87,7 @@ export function ConsentForm() {
       </div>
       <div className="px-5 pb-5 pt-3">
         <button type="button" disabled={!ok || busy || loggedIn === null} onClick={() => void submit()}
-          className="press h-14 w-full rounded-2xl bg-brand text-[17px] font-bold text-white shadow-[0_8px_20px_-8px_rgba(169,93,46,.8)] transition-opacity disabled:opacity-40 disabled:shadow-none">
+          className="press h-14 w-full rounded-2xl bg-brand text-[17px] font-bold text-white shadow-[0_8px_20px_-8px_rgba(155,83,65,.8)] transition-opacity disabled:opacity-40 disabled:shadow-none">
           {busy ? "저장 중…" : loggedIn ? "동의하고 시작하기" : "동의하고 로그인하기"}
         </button>
       </div>
@@ -108,7 +108,7 @@ export function ConsentForm() {
             </dl>
             <Link href="/privacy" className="mt-3 inline-block text-[13px] font-bold text-subtle underline underline-offset-2">개인정보처리방침 전문 보기</Link>
             <button type="button" onClick={() => { setC({ ...c, privacy: true }); setOpen(null); }}
-              className="press mt-4 h-13 w-full rounded-2xl bg-ink py-4 text-[16px] font-bold text-white">동의하고 닫기</button>
+              className="press mt-4 h-13 w-full rounded-2xl bg-brand py-4 text-[16px] font-bold text-white">동의하고 닫기</button>
           </div>
         </div>
       )}

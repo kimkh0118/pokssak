@@ -48,7 +48,7 @@ export function LoginForm() {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#f4f1ec] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
+    <div className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#f5f2ed] pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
       <div className="flex h-14 shrink-0 items-center px-2">
         <button type="button" onClick={() => (window.history.length > 1 ? router.back() : router.replace("/welcome"))} aria-label="뒤로"
           className="press grid h-11 w-11 place-items-center rounded-full">

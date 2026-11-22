@@ -24,7 +24,7 @@ const LOSSES = [
 function Bell() {
   return (
     <div className="relative mx-auto grid h-28 w-28 place-items-center rounded-[32px] bg-surface shadow-[0_12px_30px_-12px_rgba(60,40,30,.3)] ring-1 ring-line">
-      <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#c9483b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="onb-ring">
+      <svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="#9b5341" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className="onb-ring">
         <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
       </svg>
       <span className="absolute -right-2 -top-2 grid h-7 min-w-7 place-items-center rounded-full bg-bad px-1.5 text-[13px] font-extrabold text-white shadow">3</span>
@@ -71,7 +71,7 @@ export function NotifyPrime() {
     leave();
   }
 
-  const primary = "press h-14 w-full rounded-2xl bg-brand text-[17px] font-bold text-white shadow-[0_8px_20px_-8px_rgba(169,93,46,.8)] disabled:opacity-50";
+  const primary = "press h-14 w-full rounded-2xl bg-brand text-[17px] font-bold text-white shadow-[0_8px_20px_-8px_rgba(155,83,65,.8)] disabled:opacity-50";
   const secondary = "press h-12 w-full rounded-2xl text-[15px] font-bold text-subtle";
 
   if (state === "loading") return <div className="mx-auto mt-10 h-60 max-w-md animate-pulse rounded-3xl bg-fill" />;

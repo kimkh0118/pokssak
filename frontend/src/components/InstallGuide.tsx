@@ -41,7 +41,7 @@ export function DeviceGuide({ kind }: { kind: "install" | "unblock" }) {
         <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="기기 선택">
           {ORDER.map((p) => (
             <button key={p} type="button" aria-pressed={shown === p} onClick={() => setShown(p)}
-              className={`rounded-full px-3 py-1.5 text-[12px] font-bold ring-1 ${shown === p ? "bg-ink text-white ring-ink" : "bg-surface text-muted ring-line"}`}>
+              className={`rounded-full px-3 py-1.5 text-[12px] font-bold ring-1 ${shown === p ? "bg-brand-strong text-white ring-brand-strong" : "bg-surface text-muted ring-line"}`}>
               {PLATFORM_LABEL[p]}{p === mine ? " (지금)" : ""}
             </button>
           ))}

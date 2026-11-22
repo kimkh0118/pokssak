@@ -71,7 +71,7 @@ export function AddressSign({
       <button
         type="submit"
         disabled={busy}
-        className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand text-[15px] font-bold text-white shadow-[0_4px_10px_-4px_rgba(169,93,46,.7)] transition hover:bg-brand-strong disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand text-[15px] font-bold text-white shadow-[0_4px_10px_-4px_rgba(155,83,65,.7)] transition hover:bg-brand-strong disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
         {busy && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
         {busy ? "찾는 중…" : cta}
